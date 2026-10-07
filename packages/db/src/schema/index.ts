@@ -3,6 +3,7 @@ export * from "./browser.ts";
 export * from "./canvas.ts";
 export * from "./data.ts";
 export * from "./docs.ts";
+export * from "./files.ts";
 export * from "./github.ts";
 export * from "./google.ts";
 export * from "./graph.ts";
