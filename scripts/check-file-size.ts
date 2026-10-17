@@ -8,7 +8,13 @@ const LIMIT = 400;
 const EXEMPT = new Set<string>([]);
 /** The Handy fork (apps/desktop/README.md): only Hearth's own files there are held to the limit. */
 const VENDORED = "apps/desktop/";
-const OURS = ["apps/desktop/src-tauri/src/hearth/", "apps/desktop/src/components/settings/Hearth"];
+const OURS = [
+  "apps/desktop/src-tauri/src/hearth/",
+  "apps/desktop/src-tauri/src/nook/",
+  "apps/desktop/src-tauri/crates/nook-restore/",
+  "apps/desktop/scripts/build-guard.ts",
+  "apps/desktop/src/components/settings/Hearth",
+];
 const SOURCE = /\.(ts|tsx|js|rs|css)$/;
 
 const files = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard"], {

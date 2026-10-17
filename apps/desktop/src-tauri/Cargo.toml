@@ -139,6 +139,9 @@ windows = { version = "0.61.3", features = [
   "Win32_UI_WindowsAndMessaging",
 ] }
 winreg = "0.55"
+# Puts back the windows Nook arranged (D75): the same journal and restore as the
+# --nook-restore-windows CLI and nook-guard.exe. Its own workspace, so the guard builds alone.
+nook-restore = { path = "crates/nook-restore" }
 
 # Whisper backend per Windows arch. x86_64 ships the Vulkan GPU backend and
 # keeps the dynamic-backends posture (loadable per-ISA CPU modules + Vulkan),
@@ -206,6 +209,13 @@ tempfile = "3"
 # Test-only tokio features for the local socket servers exercising the
 # resumable HTTP downloader; normal builds keep the leaner feature set.
 tokio = { version = "1.43.0", features = ["macros", "net", "io-util", "sync", "time", "rt-multi-thread"] }
+
+# Nook's "off means off" test (src/nook/off.rs) joins a private desktop and reads WinEvent hooks.
+[target.'cfg(windows)'.dev-dependencies]
+windows = { version = "0.61.3", features = [
+  "Win32_System_StationsAndDesktops",
+  "Win32_UI_Accessibility",
+] }
 
 [profile.release]
 lto = true

@@ -102,6 +102,8 @@ PROCESSES
 - Source: a new package apps/desktop/src-tauri/crates/nook-restore (lib + bin; deps: windows 0.61.3 subset, serde, serde_json; MIT). It has its own Cargo.lock and is Windows-only.
 - The lib is also a path dependency of `handy` ([target.'cfg(windows)'.dependencies]), so the WM, the CLI and the guard share one journal and restore implementation.
 - Build: a `build:guard` step (cargo build --release --manifest-path crates/nook-restore/Cargo.toml) runs before `tauri build`. It copies the exe to src-tauri/binaries/nook-guard-x86_64-pc-windows-msvc.exe, gitignored.
+  - tauri.windows.conf.json runs it first, as `beforeBuildCommand: bun run build:guard && bun run build`.
+  - tauri-build refuses to build without the file, so build.rs makes a stand-in for every other build (cargo test, cargo check, tauri dev, the bake-off). A production build (tauri's custom-protocol feature, which `tauri build` turns on) refuses the stand-in, so no installer ships without a working guard.
 - Shipping: tauri.windows.conf.json [V exists] gains bundle.externalBin ["binaries/nook-guard"]. The NSIS template already installs and deletes external binaries (installer.nsi L745-746, L895-896 [V]).
 - Launch, at enable: hearth copies $INSTDIR\nook-guard.exe to %LOCALAPPDATA%\app.hearth.desktop\nook\bin\nook-guard-<build8>.exe if that copy is missing, and runs the copy.
   - The installer can then always overwrite files in $INSTDIR.
@@ -213,7 +215,7 @@ EXISTING FILES TOUCHED
 - apps/web/src/lib/theme.ts [V localStorage key hearth.theme] and lib/desktop.ts [V closeMiniWindow pattern]: inside the desktop app, choose() and page load navigate to hearth://theme/<id>.
 - apps/web/src/views/DesktopSettings.tsx [V]: an 'Arrange windows (preview)' row with a hearth://nook-panel link.
 - nsis/hooks.nsh (new), wired with tauri.conf.json bundle.windows.nsis.installerHooks; the template includes it only when set [V installer.nsi L35-37].
-- apps/desktop/src/components/update-checker/UpdateChecker.tsx [V L143 downloadAndInstall]: invoke nook prepare_update first. The updater is dormant today (endpoints [] [V tauri.conf.json]), but this keeps it correct.
+- apps/desktop/src/components/update-checker/UpdateChecker.tsx [V L143 downloadAndInstall]: download, then invoke nook prepare_update, then install, so a failed or slow download never leaves the windows un-arranged. The updater is dormant today (endpoints [] [V tauri.conf.json]), but this keeps it correct.
 - capabilities/nook.json (new): windows nook_bar_*, nook_popover, nook_panel and nook_palette get only core:event:allow-listen and allow-unlisten.
 
 STATE OWNERSHIP
@@ -587,7 +589,7 @@ USER INTENT
 RESTORE JOURNAL (schema v2)
 Location: %LOCALAPPDATA%\app.hearth.desktop\nook\journal.json, UTF-8.
 
-{v: 2, hearth_version, session: uuid, epoch: u64, pid, proc_start: FILETIME u64, boot_time: unix ms (now - GetTickCount64), state: 'active'|'restoring'|'session-ending'|'clean-for-update'|'clean', resume: bool, seq, written_at, unclean: [unix ms...],
+{v: 2, hearth_version, session: uuid, epoch: u64, pid, proc_start: FILETIME u64, boot_time: unix ms (now - GetTickCount64, for people only), ticks: GetTickCount64 at the last write, state: 'active'|'restoring'|'session-ending'|'clean-for-update'|'clean', resume: bool, seq, written_at, unclean: [unix ms...],
  windows: [{hwnd: '0x..', pid, proc_start, exe, class,
    original: WINDOWPLACEMENT, hide_placement: WINDOWPLACEMENT|null,
    hidden: null|'minimized'|'cloaked', hidden_by: null|'nook'|'app_after_nook',
@@ -596,14 +598,16 @@ Location: %LOCALAPPDATA%\app.hearth.desktop\nook\journal.json, UTF-8.
  appbars: [{hwnd, edge, rect, monitor}],
  ring: {hwnd}|null}
 
-- Write: serialize, write journal.json.tmp, FlushFileBuffers, MoveFileExW(MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH), all under Local\Nook.Journal, with an epoch check.
+- Write: serialize, write a temp file of the writer's own (journal.json.<pid>-<n>.tmp), FlushFileBuffers, MoveFileExW(MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH), all under Local\Nook.Journal, with an epoch check. A rename that finds the journal busy for a moment is tried again for up to about 100 ms. Temp files left by a writer that died are removed after a minute.
+- A restorer that went on without the mutex reads the journal again after each of its writes, and writes its own again if a lower epoch replaced it: a window manager's write that began before the revoke may land after the restore's.
 - Write-ahead rules:
   - written before adopt, every hide, every border change and ABM_NEW;
   - cleared lazily after unhide;
   - last_set updated at most every 2 s;
   - a write failure refuses the action, sets journal_failed and toasts;
   - the file stays under 20 KB.
-- A journal from another Hearth version or schema is restored conservatively: un-minimize and reset DWM attributes only, no placement writes. A journal from another boot is dropped.
+- A journal from another Hearth version or schema is restored conservatively: un-minimize and reset DWM attributes only, no placement writes.
+- Another boot is told by the tick count alone: GetTickCount64 starts again only when Windows does, so a journal whose ticks are more than 60 s past now is another boot's. The wall clock (and so boot_time) moves with every time correction and decides nothing. A wrong "same boot" is harmless, because the identity check refuses every window; a wrong "other boot" would drop windows Nook still owes, so the slack leans that way. Another boot's entries are dropped, and the marker sweep runs, so a window still carrying the marker comes back either way.
 
 MARKER
 - SetPropW(hwnd, MAKEINTATOM(GlobalAddAtomW('Nook.State')), bits): 1 managed, 2 minimized by Nook, 4 cloaked by Nook, 8 border coloured. This is the stamping pattern FancyZones uses (FancyZonesWindowProperties.cpp L14-94 [S], MIT).
@@ -624,21 +628,25 @@ RECOVERY (nook_restore::restore_all; one implementation for every caller; idempo
 4. Placement, by policy:
    - originals (panic, Put back, crash, uninstall): SetWindowPlacement(original), with the same showCmd mapping. A window the user minimized after adoption stays minimized, but its rcNormalPosition is set back to the original, so restoring it later goes to its old place.
    - keep (plain disable, update, RDP, session end): no placement writes.
+   - Steps 3 and 4 are one SetWindowPlacement per window: the original by originals, the hide_placement by keep. A placement posted right behind an un-minimize is lost most of the time, because Windows finishes the un-minimize after it and puts back the rectangle the first write named (16 of 20 tries with real windows on a private desktop; a single write landed 20 of 20, maximized and app-hidden windows included).
 5. Reset DWMWA_BORDER_COLOR to DWMWA_COLOR_DEFAULT and DWMWA_TRANSITIONS_FORCEDISABLED to FALSE, only on windows whose journal says Nook set them. DWM can't report another app's own border colour, so an app's custom border is lost after a restore; such apps get no_ring.
 6. RemovePropW.
-7. State 'clean', or 'clean-for-update' with resume=true; fsync; set Local\Nook.Done.
-8. Second pass after 1 s: re-check steps 3-5 for each window and fix stragglers from late asynchronous messages. Messages queued to the same app thread run in order, so Nook's older moves land before the restore [I].
+7. State 'clean', or 'clean-for-update' with resume=true; fsync. A window whose writes failed (Windows refused, as for an elevated app's window) keeps its journal entry and its marker; the journal then still owes, no new run may claim it, and the next start tries those windows again, keeping positions. The marker sweep does the same for a window it couldn't put back: the window comes back as a journal entry.
+8. Second pass after 1 s: re-check steps 3-5 for each window and fix stragglers from late asynchronous messages. Messages queued to the same app thread run in order, so Nook's older moves land before the restore [I]. Under keep, a window Nook hid that doesn't read as minimized yet still gets its un-hide planned, since the minimize may be waiting behind a busy app; the second pass un-hides it if it landed.
+9. Set Local\Nook.Done, only now: the installer ends Hearth and the guard stops watching when they see it.
+10. A late pass about 4 s after Done, only while the journal's writer process still runs. The revocation check and the Win32 call are two steps, so a window manager preempted between them can still land one write after both passes; the check is repeated right after each call, which narrows that gap without closing it.
 
 WHO RUNS IT
 - Disable (keep policy, open question) and quit (originals).
 - Panic, tray, panel, CLI (originals).
 - A nook thread unwinding (originals).
 - The guard, when the parent dies with the journal not clean, or after missed heartbeats (originals).
-- Next start, if the journal is dirty and from the same boot (within 10 s) and the same session uuid is gone (originals).
+- Next start, if the journal is dirty and from the same boot (by the tick count) and the writer is gone (originals); or if it reads clean but still lists windows a restore couldn't put back (those windows only, keep).
 - WM_QUERYENDSESSION (steps 1-3 and 5 only).
 - Installer hooks:
   - PREINSTALL runs `hearth.exe --nook-restore-windows --reason=update --wait-ms=5000` through nsExec, so no window pops. Keep policy, then 'clean-for-update'.
-  - PREUNINSTALL runs it with --reason=uninstall (originals, Nook off).
+  - PREUNINSTALL runs it with --reason=uninstall (originals, Nook off), or with --reason=update when a newer installer removes the old version to install itself: installer.nsi runs the update's restore first and passes /NOOKUPDATE to the old uninstaller, which then also keeps nook\bin.
+  - The CLI and the guard each add a "restored by=cli|installer|guard" line to nook.log, when the folder already exists. hearth.exe is a windowed program: run by hand it attaches to the terminal's console to say what it did, and `start /wait` (cmd) or `Start-Process -Wait` (PowerShell) waits for its exit code.
   - Both run before CheckIfAppIsRunning kills hearth.exe [V installer.nsi L728-732, L880-884].
   - POSTUNINSTALL removes nook\bin with RMDir /r /REBOOTOK.
 
@@ -876,7 +884,7 @@ KILL SWITCH (layers; each puts the originals back and turns the WM off until re-
 
 GUARANTEED RESTORE
 - Write-ahead journal (atomic replace, epoch, version, boot time) plus a SetPropW marker on each window.
-- One idempotent restore_all in nook-restore, in a fixed order: revoke, ABM_REMOVE, uncloak, un-minimize Nook's windows (journaled placement keeps maximized state), placements by policy, DWM attributes on Nook-set windows only, props, clean, then a second pass at 1 s.
+- One idempotent restore_all in nook-restore, in a fixed order: revoke, ABM_REMOVE, uncloak, un-minimize Nook's windows (journaled placement keeps maximized state), placements by policy, DWM attributes on Nook-set windows only, props, clean, then a second pass at 1 s, Done, and a late pass while the journal's writer still runs.
 - Runs on every exit path:
   - disable; quit;
   - panic, tray, panel, CLI;
@@ -915,7 +923,7 @@ LOCAL SURFACE
 FAILURE REPORTING (local only)
 - nook.log (rotating, 1 MB x 3) records: recoveries and how many windows each restored, by whom (guard, CLI, installer, thread unwind); placement errors; Busy windows; fights; hotkey conflicts; gate changes; journal failures; revocations.
 - Window titles are never logged.
-- The panel shows them, and Hearth's toast module [V hearth/toast.rs] sends a Windows notification, for example 'Nook put 7 windows back after Hearth stopped unexpectedly. Arranging is off until you turn it on.' Windows notifications are used even when the bar is on, so safety messages don't depend on Nook chrome.
+- The panel shows them, and Hearth's toast module [V hearth/toast.rs] sends a Windows notification, for example 'Nook put 7 windows back after it stopped unexpectedly. Arranging is off until you turn it on.' Windows notifications are used even when the bar is on, so safety messages don't depend on Nook chrome.
 - Nothing leaves the PC.
 
 ## Performance budgets
@@ -1294,7 +1302,7 @@ The 300 ms budget is honest, but slower than tiling WMs that cloak.
 - A tray app hiding itself right after Nook's minimize makes it blink once before it becomes sticky. Known tray apps are pre-marked to avoid this; unknown ones learn after one occurrence.
 - Apps that fight placement (Electron minimum sizes, apps that restore their own saved bounds, launchers). Mitigated by learned minimum sizes, one retry, fight detection, and Busy for hung apps so slow apps such as Teams aren't mistaken for fights.
 - WinEvent volume: per-pid hooks may still deliver caret or cursor LOCATIONCHANGE from the foreground managed app while typing. WinEvent hooks may also make Chromium do accessibility work [I]. P1 measures both; the fallbacks are dropping F1 and relying on MOVESIZE plus the sweep.
-- Guard sidecar build: externalBin needs the guard built before `tauri build`, with a second Cargo.lock to keep in step (both pin windows 0.61.3). A missing guard binary must fail the build, never ship silently without a guard.
+- Guard sidecar build: externalBin needs the guard built before `tauri build`, with a second Cargo.lock to keep in step (both pin windows 0.61.3). A missing guard binary must fail the build, never ship silently without a guard. The guard links the C runtime statically (+crt-static), since its per-version copies run outside Hearth's folder and its bundled VC++ runtime; scripts/build-guard.ts reads the built program's imports and fails the build on any runtime DLL.
 - Detaching from Task Manager: whether End task on the Nook group also kills a double-spawned, breakaway guard is not documented [I]. P0 tests it. If it does, the next-start recovery and the minimize invariant still hold.
 - Installer tests: tauri-bundler kills every hearth.exe of the current user. CI installer tests must never run under the owner's account on the live PC; they run in Sandbox, a VM or under a different-SID runner.
 - Local pages can call any app command: Tauri 2.11.5 allows this for local origins without an app ACL manifest, as recording_overlay can today. Mitigation: CSP, textContent only, no titles, and one label-checked command. Rejected for now: adding an app ACL manifest, because it would gate every existing command and needs a capability audit of the main window. Recorded as a hardening follow-up.

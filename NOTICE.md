@@ -8,7 +8,7 @@ original notice at the top, and is listed here with where it came from.
 
 | Hearth path | Origin | Upstream path | License |
 |---|---|---|---|
-| `apps/desktop/` (all of it, except `src-tauri/src/hearth/` and `src/components/settings/HearthSettings.tsx`, which are Hearth's) | [Handy](https://github.com/cjpais/Handy) at `ffbc950`, changed where marked | the whole repository | MIT (`apps/desktop/LICENSE`) |
+| `apps/desktop/` (all of it, except `src-tauri/src/hearth/`, `src-tauri/src/nook/`, `src-tauri/crates/nook-restore/`, `src-tauri/nsis/hooks.nsh`, `scripts/build-guard.ts` and `src/components/settings/HearthSettings.tsx`, which are Hearth's) | [Handy](https://github.com/cjpais/Handy) at `ffbc950`, changed where marked | the whole repository | MIT (`apps/desktop/LICENSE`) |
 | `apps/web/src/components/icons.tsx` (the icons' SVG markup) | [Lucide](https://github.com/lucide-icons/lucide) v0.548.0 | `icons/*.svg` | ISC, with MIT for the parts from Feather (both in the file's header) |
 | `apps/web/src/components/brands.tsx` (the marks' paths) | [Simple Icons](https://github.com/simple-icons/simple-icons) | `icons/*.svg` | CC0 1.0; the marks are their owners' trademarks |
 

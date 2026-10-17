@@ -34,7 +34,87 @@ fn main() {
     // Must run after transcribe staging because that helper recreates transcribe-libs/.
     stage_vc_runtime_dlls();
 
+    // Hearth: Nook's restore CLI runs before Tauri can say which version this is (src/main.rs).
+    emit_hearth_version();
+    // Must run before tauri_build, which refuses to build without the external binary.
+    stage_nook_guard();
+
     tauri_build::build()
+}
+
+/// The version CI gives this build, as HEARTH_VERSION: tauri.conf.json's `version`, which CI
+/// replaces through `tauri build --config` (it reaches this script as TAURI_CONFIG). It is the
+/// same version the app reports, and Nook's journal records it so a restore can tell whether a
+/// journal is this version's.
+fn emit_hearth_version() {
+    println!("cargo:rerun-if-env-changed=TAURI_CONFIG");
+    println!("cargo:rerun-if-changed=tauri.conf.json");
+    let version_in = |json: &str| -> Option<String> {
+        let config: serde_json::Value = serde_json::from_str(json).ok()?;
+        let version = config.get("version")?.as_str()?;
+        // A version can also name a package.json to read it from; the crate's is used then.
+        (!version.ends_with(".json")).then(|| version.to_string())
+    };
+    let version = std::env::var("TAURI_CONFIG")
+        .ok()
+        .and_then(|config| version_in(&config))
+        .or_else(|| {
+            std::fs::read_to_string("tauri.conf.json")
+                .ok()
+                .and_then(|config| version_in(&config))
+        })
+        .unwrap_or_else(|| std::env::var("CARGO_PKG_VERSION").unwrap());
+    println!("cargo:rustc-env=HEARTH_VERSION={version}");
+}
+
+/// Hearth: nook-guard.exe ships beside hearth.exe (externalBin in tauri.windows.conf.json), and
+/// tauri_build refuses to build when the file isn't there. `bun run build:guard` builds the real
+/// guard into src-tauri/binaries, and `tauri build` runs it first. Any other build on a checkout
+/// without it (cargo test, cargo check, tauri dev, the bake-off) gets a stand-in that can't run,
+/// so a fresh checkout still builds. A production build, the kind `tauri build` makes (tauri's
+/// custom-protocol feature, so DEP_TAURI_DEV is false), refuses the stand-in, so an installer
+/// never ships without a working guard (docs/nook-wm.md, "Risks").
+fn stage_nook_guard() {
+    use std::io::Read;
+    use std::path::PathBuf;
+
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
+        return;
+    }
+    let target = std::env::var("TARGET").unwrap();
+    let path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
+        .join("binaries")
+        .join(format!("nook-guard-{target}.exe"));
+    println!("cargo:rerun-if-changed={}", path.display());
+
+    // Every Windows program starts with "MZ"; the stand-in is text.
+    let mut magic = [0u8; 2];
+    let is_program = std::fs::File::open(&path)
+        .and_then(|mut file| file.read_exact(&mut magic))
+        .is_ok()
+        && &magic == b"MZ";
+    if is_program {
+        return;
+    }
+    if std::env::var("DEP_TAURI_DEV").as_deref() == Ok("false") {
+        panic!(
+            "{} is missing or a stand-in. Run `bun run build:guard` in apps/desktop first \
+             (`tauri build` does), so the installer ships the real nook-guard.exe.",
+            path.display()
+        );
+    }
+    if !path.exists() {
+        std::fs::create_dir_all(path.parent().unwrap()).expect("create src-tauri/binaries");
+        std::fs::write(
+            &path,
+            "A stand-in for nook-guard.exe, made by build.rs so a build without the guard works. \
+             Run `bun run build:guard` in apps/desktop for the real one.\n",
+        )
+        .unwrap_or_else(|e| panic!("write {}: {e}", path.display()));
+        println!(
+            "cargo:warning=Made a stand-in for nook-guard.exe; run `bun run build:guard` for the real one"
+        );
+    }
 }
 
 /// Stage the MSVC runtime DLLs into `transcribe-libs/` for app-local deployment.

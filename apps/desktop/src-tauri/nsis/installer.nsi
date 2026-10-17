@@ -410,6 +410,13 @@ Function PageLeaveReinstall
     ${Else}
       ReadRegStr $4 SHCTX "${MANUPRODUCTKEY}" ""
       ReadRegStr $R1 SHCTX "${UNINSTKEY}" "UninstallString"
+      ; Nook (hooks.nsh): the old version goes only so that this one can be installed, so the
+      ; installed hearth.exe shows the windows Nook hid and keeps them where they are, as an update
+      ; does, and /NOOKUPDATE tells the old uninstaller the same.
+      !ifmacrodef NOOK_RESTORE_WINDOWS_IN
+        !insertmacro NOOK_RESTORE_WINDOWS_IN "$4" "update"
+        StrCpy $R1 "$R1 /NOOKUPDATE"
+      !endif
       ${IfThen} $UpdateMode = 1 ${|} StrCpy $R1 "$R1 /UPDATE" ${|} ; append /UPDATE
       ${IfThen} $PassiveMode = 1 ${|} StrCpy $R1 "$R1 /P" ${|} ; append /P
       StrCpy $R1 "$R1 _?=$4" ; append uninstall directory
