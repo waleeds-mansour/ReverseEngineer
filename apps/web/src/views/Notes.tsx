@@ -187,7 +187,7 @@ export function NoteView(props: { id: string; pane: number }) {
                   queueMicrotask(() => el.focus());
                 }
               }}
-              class="w-full bg-transparent text-2xl font-semibold outline-none"
+              class="w-full bg-transparent text-2xl font-semibold"
               aria-label="Note title"
               value={savedTitle() === "Untitled" ? "" : savedTitle()}
               placeholder="Untitled"

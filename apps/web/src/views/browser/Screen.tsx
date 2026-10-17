@@ -60,7 +60,7 @@ export function Screen(props: { b: LiveBrowser }) {
       aria-label="Live view of a Chrome tab. Click to use it; keys go to the page."
       // biome-ignore lint/a11y/noNoninteractiveTabindex: it takes your keys for the page it shows.
       tabIndex={0}
-      class="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-sunk outline-none focus:ring-2 focus:ring-jarvis/40"
+      class="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-sunk focus:ring-2 focus:ring-focus focus:ring-inset focus-visible:outline-none"
       on:keydown={(e) => key("keyDown", e)}
       on:keyup={(e) => key("keyUp", e)}
       on:paste={(e) => {

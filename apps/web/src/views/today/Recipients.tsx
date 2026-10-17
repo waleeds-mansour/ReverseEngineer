@@ -4,7 +4,7 @@
 // new, so each says that. With the text under it, that's all of what a yes sends (D33).
 
 import { For, Show } from "solid-js";
-import { Pill } from "../../components/kit/Pill.tsx";
+import { Badge } from "../../components/kit/Badge.tsx";
 import type { MailAddress } from "../../lib/types.ts";
 
 /** How a recipient is marked: not in the conversation, on a new email, or neither. */
@@ -63,10 +63,10 @@ function Row(props: {
                     <span class={mark() === "stranger" ? "" : "text-muted"}>{a.name}</span>
                   </Show>
                   <Show when={mark() === "stranger"}>
-                    <Pill tone="bad">not in this conversation</Pill>
+                    <Badge tone="danger">not in this conversation</Badge>
                   </Show>
                   <Show when={mark() === "new"}>
-                    <Pill tone="warn">new email — check who it goes to</Pill>
+                    <Badge tone="warning">new email — check who it goes to</Badge>
                   </Show>
                 </span>
               );

@@ -56,7 +56,7 @@ export function TestChrome(props: { onDone?: () => void }) {
                 {(s) => (
                   <li>
                     <div class="flex items-center gap-2">
-                      <Badge tone={s.ok ? "ok" : "bad"}>{s.ok ? "Done" : "Failed"}</Badge>
+                      <Badge tone={s.ok ? "positive" : "danger"}>{s.ok ? "Done" : "Failed"}</Badge>
                       <span class="flex-1">{s.label}</span>
                       <span class="font-mono text-xs text-muted">{seconds(s.ms)}</span>
                     </div>

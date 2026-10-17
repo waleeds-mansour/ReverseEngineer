@@ -11,14 +11,14 @@ const ICON: Record<Toast["tone"], IconName> = { info: "info", ok: "ok", error: "
 export function Toasts() {
   return (
     <div
-      class="pointer-events-none fixed bottom-16 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col items-center gap-2 md:bottom-4"
+      class="pointer-events-none fixed bottom-16 left-1/2 z-(--z-toast) flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col items-center gap-2 md:bottom-4"
       role="status"
       aria-live="polite"
     >
       <For each={toast.toasts()}>
         {(t) => (
           <div
-            class={`flex animate-enter items-center gap-2.5 rounded-lg px-4 py-2 text-sm shadow-pop ${t.tone === "error" ? "bg-bad text-on-fill" : "bg-ink text-bg"}`}
+            class={`flex animate-enter items-center gap-2.5 rounded-lg px-4 py-2 text-sm shadow-4 ${t.tone === "error" ? "bg-bad text-on-fill" : "bg-ink text-bg"}`}
           >
             <Icon name={ICON[t.tone]} size={16} class="-ml-1" />
             <span>{t.text}</span>

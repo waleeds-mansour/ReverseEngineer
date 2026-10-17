@@ -75,12 +75,13 @@ export function TaskRow(props: { task: Task; active: boolean; onOpen: (beside: b
         <Badge>{t().status === "in_progress" ? "In progress" : "In review"}</Badge>
       </Show>
       <Show when={t().priority === "urgent" || t().priority === "high"}>
-        <Badge tone={t().priority === "urgent" ? "bad" : "warn"}>
+        {/* A priority, not a status: the word says it, so no dot. */}
+        <Badge tone={t().priority === "urgent" ? "danger" : "warning"} dot={false}>
           {PRIORITY_LABEL[t().priority]}
         </Badge>
       </Show>
       <Show when={t().assignee === "jarvis"}>
-        <Badge tone="jarvis">Pip</Badge>
+        <Badge>Pip</Badge>
       </Show>
       <Show when={d() && !closed()}>
         <span
@@ -199,7 +200,7 @@ export function Tasks(props: { pane: number }) {
       >
         <input
           ref={input}
-          class="min-w-0 flex-1 bg-transparent py-1 outline-none placeholder:text-faint"
+          class="min-w-0 flex-1 bg-transparent py-1 placeholder:text-faint"
           placeholder={narrow() ? "New task…" : "New task… (press c)"}
           value={title()}
           onInput={(e) => setTitle(e.currentTarget.value)}
@@ -218,7 +219,7 @@ export function Tasks(props: { pane: number }) {
           For Pip
         </label>
         <span class="hidden md:inline">
-          <Kbd>Enter</Kbd>
+          <Kbd keys="enter" />
         </span>
       </form>
       <div class="flex-1 overflow-auto">

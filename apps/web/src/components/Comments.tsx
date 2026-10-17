@@ -17,7 +17,8 @@ export function JarvisWorking(props: { subjectId: string }) {
   return (
     <Show when={working()}>
       <p class="flex items-center gap-2 text-sm text-jarvis">
-        <span class="inline-block size-2 animate-pulse rounded-full bg-jarvis" />
+        {/* A still dot: in Nook nothing loops but Pip itself. */}
+        <span class="inline-block size-2 rounded-full bg-jarvis" />
         Pip is on it…
       </p>
     </Show>

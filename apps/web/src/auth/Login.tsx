@@ -110,7 +110,7 @@ export function Login(props: {
 
   return (
     <div class="flex h-full items-center justify-center p-6">
-      <div class="w-full max-w-sm space-y-5 rounded-xl border border-line bg-panel p-6 shadow-sm">
+      <div class="w-full max-w-sm space-y-5 rounded-xl border border-line bg-panel p-6 shadow-1">
         <div>
           <h1 class="text-xl font-semibold">Nook</h1>
           <p class="text-sm text-muted">
@@ -133,7 +133,7 @@ export function Login(props: {
                   Setup code from <code class="font-mono">hearth setup</code>
                 </span>
                 <input
-                  class="w-full rounded-md border border-line bg-panel px-3 py-2 font-mono tracking-widest uppercase outline-none focus:border-accent"
+                  class="w-full rounded-md border border-line bg-panel px-3 py-2 font-mono tracking-widest uppercase focus:border-accent"
                   value={code()}
                   onInput={(e) => setCode(e.currentTarget.value)}
                   autocomplete="one-time-code"

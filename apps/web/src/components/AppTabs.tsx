@@ -3,11 +3,13 @@
 // one you're on is its title. Shift-click opens one beside, like the sidebar. Today's Updates says
 // how many you haven't seen, as Today's own badge counts only what Today shows.
 
-import { For, Show } from "solid-js";
+import { For } from "solid-js";
 import { appOf, placeOf } from "../lib/apps.ts";
+import { keyLabel } from "../lib/keys.ts";
 import { layout } from "../lib/panes.ts";
 import type { ListView } from "../lib/routes.ts";
 import { useUnseenUpdates } from "../lib/waiting.ts";
+import { Badge } from "./kit/Badge.tsx";
 
 /** The lists of the sub-product this one belongs to, when it has more than one. */
 export const tabsFor = (view: ListView): readonly ListView[] | null => {
@@ -30,19 +32,14 @@ export function AppTabs(props: { view: ListView; pane: number }) {
               type="button"
               class={`inline-flex min-h-11 items-center rounded-md px-2 py-0.5 text-title whitespace-nowrap md:min-h-0 ${on() ? "text-ink" : "font-medium text-faint hover:bg-sunk hover:text-muted"}`}
               aria-current={on() ? "page" : undefined}
-              title={`${place.label} (${place.keys})`}
+              title={`${place.label} (${keyLabel(place.keys)})`}
               onClick={(e) => {
                 if (!on() || e.shiftKey)
                   layout.open({ view }, { pane: props.pane, beside: e.shiftKey });
               }}
             >
               {place.label}
-              <Show when={count(view)}>
-                <span class="ml-1.5 inline-block rounded-full bg-accent px-1.5 align-[3px] text-micro font-semibold text-on-fill tabular-nums">
-                  {count(view)}
-                  <span class="sr-only"> new</span>
-                </span>
-              </Show>
+              <Badge tone="accent" count={count(view)} countLabel="new" class="ml-1.5" />
             </button>
           );
         }}

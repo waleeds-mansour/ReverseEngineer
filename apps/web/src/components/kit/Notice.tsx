@@ -44,7 +44,7 @@ export function Notice(props: {
   const look = () =>
     props.strip
       ? `border-b border-line px-4 py-1.5 ${tone() === "neutral" ? "bg-sunk" : BACK[tone()]}`
-      : `max-w-[min(36rem,calc(100vw-2rem))] animate-enter rounded-lg px-3 py-2 shadow-pop ${BACK[tone()]}`;
+      : `max-w-[min(36rem,calc(100vw-2rem))] animate-enter rounded-lg px-3 py-2 shadow-4 ${BACK[tone()]}`;
   return (
     <div
       role={props.role ?? (props.strip ? undefined : "status")}

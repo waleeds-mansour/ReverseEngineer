@@ -53,7 +53,7 @@ export function Tabs(props: { sheet: Sheet; tab: number; onTab: (i: number) => v
         {(s, i) => (
           <span
             class="group flex shrink-0 items-center rounded"
-            classList={{ "bg-panel shadow-sm": i() === props.tab }}
+            classList={{ "bg-panel shadow-1": i() === props.tab }}
           >
             <button
               type="button"

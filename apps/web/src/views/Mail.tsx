@@ -8,7 +8,6 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import { Icon } from "../components/icons.tsx";
 import { IconButton } from "../components/kit/IconButton.tsx";
-import { Pill } from "../components/kit/Pill.tsx";
 import { Skeleton } from "../components/kit/Skeleton.tsx";
 import { Badge, Button, Empty, PaneHeader } from "../components/ui.tsx";
 import { debounced } from "../lib/debounce.ts";
@@ -320,24 +319,20 @@ export function Mail(props: { pane: number }) {
                           </span>
                         </Show>
                         <Show when={view() !== "inbox" && t.inInbox}>
-                          <Badge tone="muted">inbox</Badge>
+                          <Badge>inbox</Badge>
                         </Show>
                         <Show when={drafted().get(t.id)}>
                           {(by) => (
-                            <Pill
-                              tone={by() === "jarvis" ? "jarvis" : "neutral"}
-                              icon="reply"
-                              class="self-center"
-                            >
+                            <Badge icon="reply" class="self-center">
                               {by() === "jarvis" ? "Pip drafted" : "Draft"}
-                            </Pill>
+                            </Badge>
                           )}
                         </Show>
                         <Show when={t.waiting === "you" && lane() !== "reply"}>
-                          <Badge tone="jarvis">reply</Badge>
+                          <Badge>reply</Badge>
                         </Show>
                         <Show when={t.waiting === "them" && lane() === "waiting"}>
-                          <Badge tone="muted">no answer yet</Badge>
+                          <Badge>no answer yet</Badge>
                         </Show>
                         <span class="shrink-0 text-xs text-faint md:group-hover:hidden">
                           {ago(t.lastMessageAt)}

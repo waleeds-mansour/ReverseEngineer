@@ -71,7 +71,9 @@ export function RoutineSettings() {
             <li class="space-y-1 rounded-md bg-sunk px-3 py-2 text-sm">
               <div class="flex items-center gap-3">
                 <span class="font-medium">{r.title}</span>
-                <Badge tone={r.active ? "ok" : "muted"}>{r.active ? r.when : "paused"}</Badge>
+                <Badge tone={r.active ? "positive" : "neutral"}>
+                  {r.active ? r.when : "paused"}
+                </Badge>
                 <span class="flex-1 text-xs text-faint">
                   {r.lastRunAt ? `last ran ${ago(r.lastRunAt)}` : "hasn't run yet"}
                   <Show when={outcomeLabel(r.lastOutcome)}>

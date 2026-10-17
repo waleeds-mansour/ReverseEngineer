@@ -13,7 +13,7 @@ export function Shortcuts(props: { onClose: () => void }) {
   useDialogFocus(() => sheet);
   return (
     <div
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+      class="fixed inset-0 z-(--z-palette) flex items-center justify-center bg-black/30"
       onClick={props.onClose}
     >
       <div
@@ -21,7 +21,7 @@ export function Shortcuts(props: { onClose: () => void }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="shortcuts-title"
-        class="max-h-[80vh] w-[min(520px,92vw)] overflow-auto rounded-xl border border-line bg-panel p-5 shadow-2xl"
+        class="max-h-[80vh] w-[min(520px,92vw)] glass-strong overflow-auto rounded-xl p-5 shadow-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div class="mb-3 flex items-center">
@@ -42,7 +42,7 @@ export function Shortcuts(props: { onClose: () => void }) {
             {(h) => (
               <>
                 <dt>
-                  <Kbd>{h.keys}</Kbd>
+                  <Kbd keys={h.keys} />
                 </dt>
                 <dd class="text-muted">{h.label}</dd>
               </>
@@ -63,10 +63,10 @@ export function MenuDrawer(props: {
   let drawer: HTMLDivElement | undefined;
   useDialogFocus(() => drawer);
   return (
-    <div class="fixed inset-0 z-40 flex" onClick={props.onClose}>
+    <div class="fixed inset-0 z-(--z-bar) flex" onClick={props.onClose}>
       <div
         ref={drawer}
-        class="h-full bg-bg pt-[env(safe-area-inset-top)] shadow-2xl"
+        class="h-full bg-bg pt-[env(safe-area-inset-top)] shadow-4"
         role="dialog"
         aria-modal="true"
         aria-label="Menu"

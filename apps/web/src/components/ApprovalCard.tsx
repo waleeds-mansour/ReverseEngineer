@@ -181,7 +181,7 @@ export function Decide(props: {
       >
         Deny{" "}
         <Show when={props.keys}>
-          <Kbd hint>d</Kbd>
+          <Kbd hint keys="d" />
         </Show>
       </Button>
       <Show when={props.always}>
@@ -206,7 +206,7 @@ export function Decide(props: {
       >
         Approve{" "}
         <Show when={props.keys}>
-          <Kbd hint>a</Kbd>
+          <Kbd hint keys="a" />
         </Show>
       </Button>
     </div>

@@ -76,7 +76,7 @@ export function AppearanceSettings() {
                 checked={theme.choice() === o.id}
                 onChange={() => theme.choose(o.id)}
               />
-              <span class="flex overflow-hidden rounded-lg border border-line transition-shadow duration-(--duration-fast) peer-checked:border-accent peer-checked:ring-2 peer-checked:ring-accent peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus">
+              <span class="flex overflow-hidden rounded-lg border border-line transition-shadow duration-fast peer-checked:border-accent peer-checked:ring-2 peer-checked:ring-accent peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus">
                 <For each={o.looks}>{(c) => <Look colours={c} />}</For>
               </span>
               <span class="block text-sm font-medium">{o.name}</span>

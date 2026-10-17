@@ -39,7 +39,7 @@ export function GoogleSettings() {
           <For each={setup.data?.accounts ?? []}>
             {(a) => (
               <li class="flex flex-wrap items-center gap-3 rounded-md bg-sunk px-3 py-2 text-sm">
-                <Badge tone={a.status === "ok" ? "ok" : "bad"}>
+                <Badge tone={a.status === "ok" ? "positive" : "danger"}>
                   {a.status === "ok" ? "connected" : a.status}
                 </Badge>
                 <span class="flex-1 font-medium">{a.email}</span>
@@ -77,7 +77,9 @@ export function GoogleSettings() {
                 <li class="flex items-center gap-3">
                   <Badge tone={syncLine(m).tone}>{syncLine(m).badge}</Badge>
                   <span class="flex-1">{m.address}</span>
-                  <span class={`text-xs ${syncLine(m).tone === "bad" ? "text-bad" : "text-faint"}`}>
+                  <span
+                    class={`text-xs ${syncLine(m).tone === "danger" ? "text-bad" : "text-faint"}`}
+                  >
                     {syncLine(m).text}
                     {m.setAside > 0
                       ? ` · ${m.setAside} message${m.setAside === 1 ? "" : "s"} couldn't be brought in`

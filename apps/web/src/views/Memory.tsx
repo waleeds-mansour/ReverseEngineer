@@ -21,7 +21,7 @@ import { view } from "../shell/loadView.tsx";
 const DocEditor = view(() => import("../components/DocEditor.tsx").then((m) => m.default));
 
 function ScopeBadge(props: { scope: MemoryNote["scope"] }) {
-  return props.scope === "always" ? <Badge tone="jarvis">always</Badge> : <Badge>by topic</Badge>;
+  return props.scope === "always" ? <Badge>always</Badge> : <Badge>by topic</Badge>;
 }
 
 export function Memory(props: { pane: number }) {
@@ -58,7 +58,7 @@ export function Memory(props: { pane: number }) {
         }}
       >
         <input
-          class="w-full bg-transparent py-1 outline-none placeholder:text-faint"
+          class="w-full bg-transparent py-1 placeholder:text-faint"
           placeholder="Add something for Pip to remember…"
           value={title()}
           onInput={(e) => setTitle(e.currentTarget.value)}

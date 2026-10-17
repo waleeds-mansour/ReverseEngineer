@@ -84,7 +84,7 @@ export function TaskView(props: { id: string; pane: number }) {
           </PaneHeader>
           <div class="flex-1 space-y-5 overflow-auto px-5 py-4">
             <input
-              class="w-full bg-transparent text-xl font-semibold outline-none"
+              class="w-full bg-transparent text-xl font-semibold"
               value={savedTitle()}
               onChange={(e) => {
                 const title = e.currentTarget.value.trim();
@@ -184,7 +184,7 @@ export function TaskView(props: { id: string; pane: number }) {
                 }}
               >
                 <input
-                  class="w-full bg-transparent py-1 text-sm outline-none placeholder:text-faint"
+                  class="w-full bg-transparent py-1 text-sm placeholder:text-faint"
                   placeholder="Add a subtask…"
                   value={subtask()}
                   onInput={(e) => setSubtask(e.currentTarget.value)}

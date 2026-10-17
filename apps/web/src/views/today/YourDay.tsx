@@ -7,7 +7,7 @@
 import { For, Show } from "solid-js";
 import { InviteAnswers } from "../../components/InviteAnswers.tsx";
 import { Icon } from "../../components/icons.tsx";
-import { Pill } from "../../components/kit/Pill.tsx";
+import { Badge } from "../../components/kit/Badge.tsx";
 import type { QueryRead } from "../../components/QueryView.tsx";
 import { day, plural, time } from "../../lib/format.ts";
 import { meetingState, nextMeeting, unanswered } from "../../lib/today.ts";
@@ -98,10 +98,10 @@ function Meeting(props: {
       end={
         <>
           <Show when={props.state === "now"}>
-            <Pill tone="accent">Now</Pill>
+            <Badge tone="accent">Now</Badge>
           </Show>
           <Show when={props.state === "next"}>
-            <Pill>{soon(e(), props.now)}</Pill>
+            <Badge>{soon(e(), props.now)}</Badge>
           </Show>
           <Show when={e().meetUrl && props.state !== "past"}>
             <Join url={e().meetUrl!} strong={props.state === "now" || props.state === "next"} />

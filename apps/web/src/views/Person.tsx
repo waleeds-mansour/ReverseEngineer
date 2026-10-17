@@ -108,13 +108,13 @@ function Fields(props: { id: string; fields: Record<string, string> }) {
         }}
       >
         <input
-          class="w-28 bg-transparent outline-none placeholder:text-faint"
+          class="w-28 bg-transparent placeholder:text-faint"
           placeholder="Add a field…"
           value={key()}
           onInput={(e) => setKey(e.currentTarget.value)}
         />
         <input
-          class="flex-1 bg-transparent outline-none placeholder:text-faint"
+          class="flex-1 bg-transparent placeholder:text-faint"
           placeholder="Value"
           value={value()}
           onInput={(e) => setValue(e.currentTarget.value)}

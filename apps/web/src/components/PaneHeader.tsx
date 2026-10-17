@@ -6,6 +6,7 @@
 import type { JSX } from "solid-js";
 import { createContext, Show, useContext } from "solid-js";
 import { listFor } from "../lib/apps.ts";
+import { keyLabel } from "../lib/keys.ts";
 import { layout } from "../lib/panes.ts";
 import { HOME, LIST_VIEWS, type ListView, type PaneRoute } from "../lib/routes.ts";
 import { moveToTrash, restore, TRASHABLE } from "../lib/trash.ts";
@@ -128,7 +129,7 @@ export function PaneHeader(props: {
           <IconButton
             icon="x"
             label="Close pane"
-            title="Close pane (Alt+W)"
+            title={`Close pane (${keyLabel("alt+w")})`}
             class="-mr-2"
             onClick={(e) => {
               e.stopPropagation();

@@ -64,7 +64,7 @@ function Pairing() {
                       ? "Paired, not connected"
                       : "Not paired"}
                   <Show when={s().connected}>
-                    <Badge tone="ok">extension {s().version}</Badge>
+                    <Badge tone="positive">extension {s().version}</Badge>
                   </Show>
                 </p>
                 <p class="text-sm text-muted">

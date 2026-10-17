@@ -1,5 +1,5 @@
-// Small shared pieces: empty, loading and failed states, badges and keys. The pane header
-// (PaneHeader.tsx) and the kit's Button are re-exported from here, as they always were.
+// Small shared pieces: empty, loading and failed states. The pane header (PaneHeader.tsx) and the
+// kit's Badge, Button and Kbd are re-exported, so views import them from here as they always did.
 
 import type { JSX } from "solid-js";
 import { Show } from "solid-js";
@@ -9,7 +9,9 @@ import { EmptyState } from "./kit/EmptyState.tsx";
 import { Skeleton } from "./kit/Skeleton.tsx";
 import { PaneHeader } from "./PaneHeader.tsx";
 
+export { Badge } from "./kit/Badge.tsx";
 export { Button } from "./kit/Button.tsx";
+export { Kbd } from "./kit/Kbd.tsx";
 export { ForRecord, PaneContext, PaneHeader, type PaneRecord } from "./PaneHeader.tsx";
 
 /** A screen with nothing in it, said in a sentence; EmptyState adds a tile, title and button. */
@@ -58,34 +60,5 @@ export function Placeholder(props: { query: Read; what: string }) {
         </Show>
       </Show>
     </div>
-  );
-}
-
-export function Badge(props: {
-  children: JSX.Element;
-  tone?: "jarvis" | "warn" | "bad" | "ok" | "muted";
-}) {
-  const tone = () =>
-    ({
-      jarvis: "bg-jarvis-soft text-jarvis",
-      warn: "bg-warn-soft text-warn",
-      bad: "bg-bad-soft text-bad",
-      ok: "bg-ok-soft text-ok",
-      muted: "bg-sunk text-muted",
-    })[props.tone ?? "muted"];
-  return <span class={`rounded-sm px-1.5 py-0.5 text-micro ${tone()}`}>{props.children}</span>;
-}
-
-/**
- * A key. A `hint` beside what it does (a and d on Approve and Deny) isn't shown on a touch
- * screen, which has no keys to press.
- */
-export function Kbd(props: { children: JSX.Element; hint?: boolean }) {
-  return (
-    <kbd
-      class={`rounded-sm border border-line bg-sunk px-1 font-mono text-micro text-muted ${props.hint ? "pointer-coarse:hidden" : ""}`}
-    >
-      {props.children}
-    </kbd>
   );
 }

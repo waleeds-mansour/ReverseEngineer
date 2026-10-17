@@ -1,0 +1,116 @@
+/* Nook's motion: every keyframe the web app animates with, and its animate-* utility. Made by hand
+   (the rest of styles/ is generated from tokens.json). Things arrive at dur-base on the standard
+   ease and leave sooner, at dur-fast on the exit ease. The spring is only for what answers you: a
+   badge arriving, the dock, a switch's knob, Pip and its island. When the system asks for less
+   motion every animation ends in 1ms (index.css), and nothing here loops. */
+@theme {
+  /* A notice, a toast or a section's detail coming in. */
+  --animate-enter: enter var(--duration-base) var(--ease-standard);
+  /* A menu or a popover opening, and closing. */
+  --animate-pop-in: pop-in var(--duration-base) var(--ease-standard);
+  --animate-pop-out: pop-out var(--duration-fast) var(--ease-exit) forwards;
+  /* The launcher and the phone's sheets move on the slow step. */
+  --animate-palette-in: palette-in var(--duration-slow) var(--ease-standard);
+  --animate-sheet-up: sheet-up var(--duration-slow) var(--ease-standard);
+  /* Toasts come in from the right, where Nook puts them, and go back that way. */
+  --animate-toast-in: toast-in var(--duration-base) var(--ease-standard);
+  --animate-toast-out: toast-out var(--duration-fast) var(--ease-exit) forwards;
+  /* A badge or a count appearing answers something that happened, so it springs. */
+  --animate-badge-in: badge-in var(--duration-base) var(--ease-spring);
+  --animate-fade-in: fade-in var(--duration-base) var(--ease-standard);
+  --animate-fade-out: fade-out var(--duration-fast) var(--ease-exit) forwards;
+  /* Charts draw in once: a line (pathLength="1" with stroke-dasharray 1), and bars grow from
+     their base (the chart sets transform-origin). */
+  --animate-draw: draw var(--duration-slow) var(--ease-standard) both;
+  --animate-grow: grow var(--duration-slow) var(--ease-standard) both;
+
+  @keyframes enter {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: scale(0.92) translateY(-4px);
+    }
+  }
+
+  @keyframes pop-out {
+    to {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+  }
+
+  @keyframes palette-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96) translateY(-8px);
+    }
+  }
+
+  @keyframes sheet-up {
+    from {
+      transform: translateY(100%);
+    }
+  }
+
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateX(24px);
+    }
+  }
+
+  @keyframes toast-out {
+    to {
+      opacity: 0;
+      transform: translateX(24px);
+    }
+  }
+
+  @keyframes badge-in {
+    from {
+      opacity: 0;
+      transform: scale(0.6);
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes draw {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @keyframes grow {
+    from {
+      scale: 1 0;
+    }
+  }
+}
+
+/* Something on its way out (lib/presence.ts keeps it for dur-fast) fades, unless it says how it
+   leaves with a utility, such as data-[state=closed]:animate-pop-out. */
+@layer base {
+  [data-state="closed"] {
+    animation: fade-out var(--duration-fast) var(--ease-exit) forwards;
+  }
+}

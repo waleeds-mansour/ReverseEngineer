@@ -1,7 +1,8 @@
-// What a screen shows while its read is on the way: grey bars the shape of what's coming, so the
+// What a screen shows while its read is on the way: still bars the shape of what's coming, so the
 // page doesn't jump when it lands. They wait a moment before showing, since most reads answer
-// sooner and a flash of bars is worse than a blank moment. A screen reader hears "Loading…" at
-// once, as it always did.
+// sooner and a flash of bars is worse than a blank moment, then fade in once; nothing loops but
+// Pip. They're surface-3, which shows on a pane and on a card alike. A screen reader hears
+// "Loading…" at once, as it always did.
 
 import { createSignal, For, onCleanup, Show } from "solid-js";
 
@@ -27,24 +28,26 @@ export function Skeleton(props: {
     <div class={props.class}>
       <span class="sr-only">Loading…</span>
       <Show when={shown()}>
-        <div aria-hidden="true" class="animate-pulse">
+        <div aria-hidden="true" class="animate-fade-in">
           <Show
             when={props.kind === "record"}
             fallback={
               <For each={lines()}>
                 {(width) => (
                   <div class="flex min-h-14 items-center gap-3 border-b border-line px-4 md:min-h-10">
-                    <span class="size-4 shrink-0 rounded-sm bg-line" />
-                    <span class="h-3 rounded-full bg-line" style={{ width: `${width}%` }} />
+                    <span class="size-4 shrink-0 rounded-sm bg-surface-3" />
+                    <span class="h-3 rounded-full bg-surface-3" style={{ width: `${width}%` }} />
                   </div>
                 )}
               </For>
             }
           >
             <div class="space-y-3 p-4">
-              <div class="h-5 w-2/5 rounded-full bg-line" />
+              <div class="h-5 w-2/5 rounded-full bg-surface-3" />
               <For each={lines()}>
-                {(width) => <div class="h-3 rounded-full bg-line" style={{ width: `${width}%` }} />}
+                {(width) => (
+                  <div class="h-3 rounded-full bg-surface-3" style={{ width: `${width}%` }} />
+                )}
               </For>
             </div>
           </Show>

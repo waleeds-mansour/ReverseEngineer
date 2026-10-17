@@ -8,6 +8,7 @@ import { ago } from "../lib/format.ts";
 import { jarvisLiveness } from "../lib/jarvis-health.ts";
 import { setPaused } from "../lib/pause.ts";
 import { act, useAction } from "../lib/query.ts";
+import { healthTone, healthWord } from "../lib/status.ts";
 import type { StandingRule, SystemStatus } from "../lib/types.ts";
 import { AppearanceSettings } from "./AppearanceSettings.tsx";
 import { ChromeSettings } from "./ChromeSettings.tsx";
@@ -25,7 +26,6 @@ import { Anchor, SettingsNav } from "./SettingsNav.tsx";
 import { SignInSettings } from "./SignInSettings.tsx";
 import { SlackSettings } from "./SlackSettings.tsx";
 
-const TONE = { ok: "ok", degraded: "warn", failing: "bad" } as const;
 /** Health components by a name you'd use; any other goes by its own. */
 const PART: Record<string, string> = {
   "sync.google": "Google",
@@ -176,7 +176,7 @@ export function Settings() {
               >
                 {([name, h]) => (
                   <li class="flex items-center gap-3 text-sm">
-                    <Badge tone={TONE[h.status]}>{h.status}</Badge>
+                    <Badge tone={healthTone(h.status)}>{healthWord(h.status)}</Badge>
                     <span class="w-20 shrink-0 font-medium capitalize">{PART[name] ?? name}</span>
                     <span class="flex-1 text-muted">{h.detail}</span>
                     <span class="text-xs text-faint">{ago(h.at)}</span>

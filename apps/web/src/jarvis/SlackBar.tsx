@@ -54,10 +54,10 @@ export function SlackBar(props: {
               {(ch) => <Badge>{`Channel: ${TIER_LABEL[ch().tier]}`}</Badge>}
             </Show>
             <Show when={pausedNow(conv())}>
-              <Badge tone="warn">Paused</Badge>
+              <Badge tone="warning">Paused</Badge>
             </Show>
             <Show when={conv().heldReplies > 0}>
-              <Badge tone="jarvis">A reply waits for your yes</Badge>
+              <Badge tone="warning">A reply waits for your yes</Badge>
             </Show>
             <span class="flex-1" />
             <Button small onClick={() => setReplying(!replying())}>

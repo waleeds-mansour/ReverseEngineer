@@ -1,8 +1,9 @@
 // Turns Nook's design-system tokens (design/nook/tokens.json) into the stylesheets the web app
 // loads: styles/nook.css (the Tailwind @theme, light values, every variable emitted even if no
 // utility uses it, since views and canvases read them by name), one styles/themes/<id>.css per
-// other theme, and styles/themes.ts, each theme's name and the colours a swatch of it shows.
-// scripts/nook-themes.ts writes them; lib/tokens.test.ts checks they're current.
+// other theme, and styles/themes.ts, each theme's name and the colours a swatch of it shows, and
+// the durations for code that waits on a transition. scripts/nook-themes.ts writes them;
+// lib/tokens.test.ts checks they're current.
 
 export interface NookTokens {
   color: {
@@ -115,11 +116,29 @@ function shadowLines(tokens: NookTokens, theme: string): string[] {
   });
 }
 
+/** Tailwind's own shadow scales, cleared so the only shadows are Nook's five levels: a view can't
+ * pick shadow-lg, which isn't Nook's and doesn't turn into an outline in High contrast. They come
+ * first, since a reset clears whatever in its namespace is set before it. */
+export const SHADOW_RESETS = [
+  "--shadow-*: initial;",
+  "--inset-shadow-*: initial;",
+  "--drop-shadow-*: initial;",
+];
+
+/** The transition steps (dur-fast, dur-base, dur-slow); dur-ambient is for loops only. */
+const steps = (tokens: NookTokens) =>
+  tokens.timing.tokens.filter((t) => t.name.startsWith("dur-") && t.name !== "dur-ambient");
+
+/** A duration token in milliseconds. */
+const ms = (value: string) =>
+  value.endsWith("ms") ? Number.parseFloat(value) : Number.parseFloat(value) * 1000;
+
 /** Every generated stylesheet, by its path under apps/web/src/styles/. */
 export function renderNook(tokens: NookTokens): Record<string, string> {
   const first = tokens.color.themes[0]!.id;
   const theme: string[] = [
     "@theme static {",
+    ...SHADOW_RESETS.map((r) => `  ${r}`),
     ...colourLines(tokens, first),
     ...hearthLines(tokens, first),
   ];
@@ -140,7 +159,17 @@ export function renderNook(tokens: NookTokens): Record<string, string> {
   for (const t of tokens.timing.tokens) {
     theme.push(`  --${t.name.replace(/^dur-/, "duration-")}: ${t.value};`);
   }
-  theme.push("}");
+  // Tailwind's duration-* reads --transition-duration-*, which gives duration-fast and friends;
+  // and a bare `transition` takes Nook's fast step and standard ease instead of Tailwind's own.
+  for (const t of steps(tokens)) {
+    const step = t.name.replace(/^dur-/, "");
+    theme.push(`  --transition-duration-${step}: var(--duration-${step});`);
+  }
+  theme.push(
+    "  --default-transition-duration: var(--duration-fast);",
+    "  --default-transition-timing-function: var(--ease-standard);",
+    "}",
+  );
   const root = [":root {", "  color-scheme: light;", ...shadowLines(tokens, first)];
   for (const t of tokens.zIndex.tokens) root.push(`  --${t.name}: ${t.value};`);
   root.push("}");
@@ -164,8 +193,13 @@ export function renderNook(tokens: NookTokens): Record<string, string> {
     const colours = `canvas: ${c("canvas")}, surface: ${c("surface-1")}, ink: ${c("ink")}, accent: ${c("accent")}`;
     return `  { id: "${id}", name: "${name}", dark: ${DARK_THEMES.has(id)}, ${colours} },`;
   });
+  const durations = tokens.timing.tokens
+    .filter((t) => t.name.startsWith("dur-"))
+    .map((t) => `${t.name.replace(/^dur-/, "")}: ${ms(t.value)}`);
   files["themes.ts"] =
-    `${HEADER("Nook's themes, with the colours a swatch of each shows").replace("/*", "/**")}` +
-    `export const NOOK_THEMES = [\n${swatches.join("\n")}\n] as const;\n`;
+    `${HEADER("Nook's themes, with the colours a swatch of each shows, and its durations").replace("/*", "/**")}` +
+    `export const NOOK_THEMES = [\n${swatches.join("\n")}\n] as const;\n\n` +
+    "/** Nook's durations in milliseconds, for code that waits on a transition to end. */\n" +
+    `export const DURATIONS = { ${durations.join(", ")} } as const;\n`;
   return files;
 }

@@ -1,12 +1,10 @@
 // The due date a quick-add box read from what you typed, shown in full before you add it: "Due Fri,
-// Oct 16, 3 p.m." Clicking it leaves the date off this entry, so a misread never sticks
-// (lib/when.ts).
+// Oct 16, 3 p.m." Its x leaves the date off this entry, so a misread never sticks (lib/when.ts).
 
 import { createEffect, createMemo, createSignal, Show } from "solid-js";
 import { dueInFull } from "../lib/format.ts";
 import { readWhen, taskFields } from "../lib/when.ts";
-import { Icon } from "./icons.tsx";
-import { Pill } from "./kit/Pill.tsx";
+import { Badge } from "./kit/Badge.tsx";
 
 /** A box's date: what it read, taking it off, and what to make on Enter. */
 export function useWhen(text: () => string) {
@@ -34,15 +32,15 @@ export function WhenChip(props: { box: ReturnType<typeof useWhen> }) {
   return (
     <Show when={props.box.when()}>
       {(w) => (
-        <Pill
+        <Badge
           tone="accent"
           icon="calendar"
-          title="Read from what you typed. Click to leave the date off."
-          onClick={() => props.box.takeOff()}
+          title="Read from what you typed."
+          onRemove={() => props.box.takeOff()}
+          removeLabel="Leave the date off"
         >
           Due {dueInFull(w().dueAt, w().dueIsDate)}
-          <Icon name="x" size={12} label="Leave the date off" />
-        </Pill>
+        </Badge>
       )}
     </Show>
   );

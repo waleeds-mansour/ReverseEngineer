@@ -126,7 +126,7 @@ export function Samples() {
           Line {at() + 1} of {lines().length}
           <Show when={has(at())}>
             {" "}
-            <Badge tone="ok">recorded</Badge>
+            <Badge tone="positive">recorded</Badge>
           </Show>
         </p>
         <p class="text-lg">{lines()[at()]}</p>

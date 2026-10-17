@@ -2,6 +2,10 @@
 // registered later win, so a pane's keys override the app's while that pane has focus.
 
 import { onCleanup } from "solid-js";
+import { IS_MAC } from "./keys.ts";
+
+// lib/keys.ts says what keys are called; both stay importable from here, where MOD always was.
+export { IS_MAC, MOD } from "./keys.ts";
 
 export interface Binding {
   /** "j", "shift+enter", "mod+k" (Ctrl on Windows, Cmd on Mac), "g i" for a sequence. */
@@ -14,9 +18,6 @@ export interface Binding {
   inInputs?: boolean;
 }
 
-const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
-/** What "mod" is called on this computer, for hints: ⌘ on a Mac, Ctrl elsewhere. */
-export const MOD = IS_MAC ? "⌘" : "Ctrl";
 const stack: Binding[][] = [];
 let pending: string | null = null;
 let pendingTimer: number | undefined;
@@ -88,7 +89,7 @@ export function useHotkeys(bindings: Binding[]) {
   });
 }
 
-/** Every labelled binding, for the shortcuts sheet. */
+/** Every labelled binding, for the shortcuts sheet, with its keys as bound: Kbd names them. */
 export function listHotkeys(): { keys: string; label: string }[] {
   const seen = new Set<string>();
   const out: { keys: string; label: string }[] = [];
@@ -96,7 +97,7 @@ export function listHotkeys(): { keys: string; label: string }[] {
     for (const b of group) {
       if (!b.label || seen.has(b.keys + b.label)) continue;
       seen.add(b.keys + b.label);
-      out.push({ keys: b.keys.replace("mod", MOD), label: b.label });
+      out.push({ keys: b.keys, label: b.label });
     }
   }
   return out;

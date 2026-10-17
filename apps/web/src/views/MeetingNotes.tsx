@@ -53,7 +53,7 @@ export function MeetingNotes(props: { id: string; notes: string; revision: numbe
           // Set once: after this, what's typed here is the copy on screen, not the page's data.
           el.value = props.notes;
         }}
-        class="min-h-32 w-full resize-y rounded-md border border-line bg-panel px-3 py-2 text-sm outline-none"
+        class="min-h-32 w-full resize-y rounded-md border border-line bg-panel px-3 py-2 text-sm"
         placeholder="What matters in this meeting…"
         // Until the first read (Hearth's notes, or a copy kept here), what's here is the page's
         // copy, which that read replaces. One that fails or is turned down says so below.

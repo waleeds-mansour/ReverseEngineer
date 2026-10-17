@@ -6,8 +6,9 @@ import { describe, expect, it } from "vitest";
 import tokensJson from "../../../../design/nook/tokens.json?raw";
 import css from "../index.css?raw";
 import nookCss from "../styles/nook.css?raw";
+import { DURATIONS } from "../styles/themes.ts";
 import { APPS } from "./apps.ts";
-import { type NookTokens, over, renderNook, rgba } from "./nookTokens.ts";
+import { type NookTokens, over, renderNook, rgba, SHADOW_RESETS } from "./nookTokens.ts";
 
 const tokens = JSON.parse(tokensJson) as NookTokens;
 const styles = import.meta.glob<string>("../styles/**/*.{css,ts}", {
@@ -134,6 +135,27 @@ describe("the generated stylesheets", () => {
       for (const name of colours) expect(own.has(name), `${name} in ${id}`).toBe(true);
     }
   });
+
+  // A reset clears whatever in its namespace comes before it, so Tailwind's own scales go and
+  // Nook's five levels, set after, stay.
+  it("clear Tailwind's own shadows first, then set Nook's five levels", () => {
+    const lines = inside(strip(nookCss), "@theme")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    expect(lines.slice(0, SHADOW_RESETS.length)).toEqual(SHADOW_RESETS);
+    for (let n = 1; n <= 5; n++) expect(nook.get(`--shadow-${n}`)).toBe(`var(--elevation-${n})`);
+    expect([...nook.keys()].filter((k) => /^--(?:inset-|drop-)?shadow-/.test(k))).toHaveLength(5);
+  });
+
+  it("give transitions Nook's timing: duration-fast, -base and -slow, and a fast standard default", () => {
+    for (const step of ["fast", "base", "slow"]) {
+      expect(nook.get(`--transition-duration-${step}`)).toBe(`var(--duration-${step})`);
+    }
+    expect(nook.get("--default-transition-duration")).toBe("var(--duration-fast)");
+    expect(nook.get("--default-transition-timing-function")).toBe("var(--ease-standard)");
+    expect(DURATIONS).toEqual({ fast: 140, base: 220, slow: 360, ambient: 2800 });
+  });
 });
 
 describe("colours", () => {
@@ -165,6 +187,16 @@ describe("colours", () => {
         `--color-${t}-soft`,
       ]),
     );
+  });
+
+  it("keep each of Badge's tones readable (components/kit/Badge.tsx)", () => {
+    reads([
+      ["--color-ink", "--color-surface-3"],
+      ["--color-accent-ink", "--color-accent-soft"],
+      ["--color-positive", "--color-ok-soft"],
+      ["--color-warning", "--color-warn-soft"],
+      ["--color-danger", "--color-bad-soft"],
+    ]);
   });
 
   it("keep text readable on a solid fill", () => {

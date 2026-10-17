@@ -73,7 +73,7 @@ export function People(props: { pane: number }) {
           }}
         >
           <input
-            class="w-full bg-transparent py-1 outline-none placeholder:text-faint"
+            class="w-full bg-transparent py-1 placeholder:text-faint"
             placeholder="Add a person…"
             value={name()}
             onInput={(e) => setName(e.currentTarget.value)}

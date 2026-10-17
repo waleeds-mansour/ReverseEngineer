@@ -7,20 +7,20 @@ import { ago } from "../lib/format.ts";
 import { toast } from "../lib/live.ts";
 import { layout } from "../lib/panes.ts";
 import { act, useAction } from "../lib/query.ts";
+import type { Tone } from "../lib/status.ts";
 import { lineDiff } from "../lib/text.ts";
 import type { PageWatch } from "../lib/types.ts";
 
-const STATUS: Record<PageWatch["status"], { text: string; tone: "ok" | "warn" | "bad" | "muted" }> =
-  {
-    new: { text: "first check soon", tone: "muted" },
-    ok: { text: "watching", tone: "ok" },
-    waiting: { text: "waiting for Chrome", tone: "warn" },
-    failing: { text: "can't check", tone: "bad" },
-  };
+const STATUS: Record<PageWatch["status"], { text: string; tone: Tone }> = {
+  new: { text: "first check soon", tone: "neutral" },
+  ok: { text: "watching", tone: "positive" },
+  waiting: { text: "waiting for Chrome", tone: "warning" },
+  failing: { text: "can't check", tone: "danger" },
+};
 
 function StatusBadge(props: { w: PageWatch }) {
   const s = () =>
-    props.w.active ? STATUS[props.w.status] : { text: "paused", tone: "muted" as const };
+    props.w.active ? STATUS[props.w.status] : { text: "paused", tone: "neutral" as const };
   return <Badge tone={s().tone}>{s().text}</Badge>;
 }
 

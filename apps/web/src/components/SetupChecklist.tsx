@@ -52,7 +52,7 @@ export function SetupChecklist(props: { pane: number; class?: string }) {
         {/* The words beside it say the same, so it's only for the eye. */}
         <div aria-hidden="true" class="mt-3 h-1.5 overflow-hidden rounded-full bg-sunk">
           <div
-            class="h-full rounded-full bg-ok transition-[width] duration-(--duration-slow) ease-out"
+            class="h-full rounded-full bg-ok transition-[width] duration-slow ease-out"
             style={{ width: `${(finished() / steps().length) * 100}%` }}
           />
         </div>
