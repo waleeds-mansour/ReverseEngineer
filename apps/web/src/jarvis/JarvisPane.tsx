@@ -157,7 +157,7 @@ export function JarvisPane() {
         />
         <span class="font-semibold text-jarvis">Pip</span>
         <Show when={status.data?.jarvisPaused}>
-          <Badge tone="warn">Paused</Badge>
+          <Badge tone="warning">Paused</Badge>
         </Show>
         <Show
           when={renaming() !== null && renaming() === current()?.id}
@@ -236,7 +236,7 @@ export function JarvisPane() {
       <Show when={picking()}>
         <div class="border-b border-line">
           <input
-            class="w-full border-b border-line bg-transparent px-3 py-2 text-sm outline-none placeholder:text-faint"
+            class="w-full border-b border-line bg-transparent px-3 py-2 text-sm placeholder:text-faint"
             type="search"
             aria-label="Find a conversation"
             placeholder="Find a conversation…"

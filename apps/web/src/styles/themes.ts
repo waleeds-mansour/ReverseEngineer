@@ -1,4 +1,4 @@
-/** Nook's themes, with the colours a swatch of each shows: generated from design/nook/tokens.json by scripts/nook-themes.ts.
+/** Nook's themes, with the colours a swatch of each shows, and its durations: generated from design/nook/tokens.json by scripts/nook-themes.ts.
    Don't edit by hand; change tokens.json and run `node scripts/nook-themes.ts`. */
 export const NOOK_THEMES = [
   { id: "light", name: "Light", dark: false, canvas: "#e8e8ed", surface: "#ffffff", ink: "#1d1d1f", accent: "#0a60c8" },
@@ -8,3 +8,6 @@ export const NOOK_THEMES = [
   { id: "paper", name: "Paper", dark: false, canvas: "#e6dfd0", surface: "#fbf7ef", ink: "#2a241c", accent: "#9a4a1c" },
   { id: "contrast", name: "High contrast", dark: false, canvas: "#ffffff", surface: "#ffffff", ink: "#000000", accent: "#0030b8" },
 ] as const;
+
+/** Nook's durations in milliseconds, for code that waits on a transition to end. */
+export const DURATIONS = { fast: 140, base: 220, slow: 360, ambient: 2800 } as const;

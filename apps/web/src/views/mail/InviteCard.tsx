@@ -35,7 +35,7 @@ export function InviteCard(props: { invite: MailInvite }) {
                 <span class="font-medium">{e().title}</span>
                 <span class="text-muted">{when()}</span>
                 <Show when={e().cancelled}>
-                  <Badge tone="bad">cancelled</Badge>
+                  <Badge tone="danger">cancelled</Badge>
                 </Show>
                 <span class="flex-1" />
                 <Show when={!e().cancelled && !e().selfOrganizer}>

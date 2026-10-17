@@ -201,7 +201,7 @@ export function SheetGrid(props: { id: string; pane: number }) {
       <PaneHeader
         title={
           <input
-            class="w-full bg-transparent outline-none"
+            class="w-full bg-transparent"
             aria-label="Spreadsheet name"
             value={s.title()}
             placeholder="Untitled spreadsheet"
@@ -220,7 +220,7 @@ export function SheetGrid(props: { id: string; pane: number }) {
         <span class="w-14 shrink-0 text-center font-mono text-xs text-muted">{curRef()}</span>
         <span class="text-faint">ƒx</span>
         <input
-          class="min-w-0 flex-1 rounded bg-sunk px-2 py-1 font-mono text-xs outline-none"
+          class="min-w-0 flex-1 rounded bg-sunk px-2 py-1 font-mono text-xs"
           aria-label="Cell contents"
           value={editing() ? draft() : raw(curRef())}
           // Before the first read the screen is a blank workbook, not Hearth's: nothing to edit.
@@ -304,7 +304,7 @@ export function SheetGrid(props: { id: string; pane: number }) {
                             <Show when={here()}>
                               <input
                                 ref={keys}
-                                class="absolute inset-0 h-full w-full bg-panel px-1 outline-none"
+                                class="absolute inset-0 h-full w-full bg-panel px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset"
                                 classList={{
                                   "pointer-events-none opacity-0": editing() !== "cell",
                                 }}

@@ -32,7 +32,7 @@ export function Segmented<T extends string>(props: {
             type="button"
             aria-pressed={props.value === option.value}
             // A fingertip needs 44 px; a pointer needs 28.
-            class="inline-flex min-h-11 items-center gap-1.5 rounded-[6px] px-3 text-sm font-medium text-muted transition-colors duration-(--duration-fast) hover:text-ink aria-pressed:bg-raised aria-pressed:text-ink aria-pressed:shadow-card md:min-h-7 md:px-2.5"
+            class="inline-flex min-h-11 items-center gap-1.5 rounded-[6px] px-3 text-sm font-medium text-muted transition-colors duration-fast hover:text-ink aria-pressed:bg-raised aria-pressed:text-ink aria-pressed:shadow-1 md:min-h-7 md:px-2.5"
             onClick={() => props.onChange(option.value)}
           >
             <Show when={option.icon}>{(name) => <Icon name={name()} size={16} />}</Show>

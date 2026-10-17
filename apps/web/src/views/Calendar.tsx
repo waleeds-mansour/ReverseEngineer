@@ -7,7 +7,6 @@ import { createMemo, createSignal, For, Show } from "solid-js";
 import { Body } from "../components/Body.tsx";
 import { InviteAnswers } from "../components/InviteAnswers.tsx";
 import { Icon } from "../components/icons.tsx";
-import { Pill } from "../components/kit/Pill.tsx";
 import { OutsideMark } from "../components/OutsideMark.tsx";
 import { Badge, Button, Empty, PaneHeader } from "../components/ui.tsx";
 import { hours, plural, span, time } from "../lib/format.ts";
@@ -59,7 +58,7 @@ function NewEvent() {
       }}
     >
       <input
-        class="min-w-0 flex-1 bg-transparent py-1 outline-none placeholder:text-faint"
+        class="min-w-0 flex-1 bg-transparent py-1 placeholder:text-faint"
         aria-label="New event"
         placeholder="New event… “Dentist Fri 3pm 1h”"
         value={text()}
@@ -67,9 +66,9 @@ function NewEvent() {
       />
       <Show when={read()}>
         {(ev) => (
-          <Pill tone="accent" icon="calendar">
+          <Badge tone="accent" icon="calendar">
             {planned(ev())}
-          </Pill>
+          </Badge>
         )}
       </Show>
     </form>
@@ -138,10 +137,10 @@ export function Calendar(props: { pane: number }) {
                           {e.title}
                         </span>
                         <Show when={e.taskId}>
-                          <Badge tone="jarvis">focus</Badge>
+                          <Badge>focus</Badge>
                         </Show>
                         <Show when={e.prepId}>
-                          <Pill tone="ok">Prep ready</Pill>
+                          <Badge tone="positive">Prep ready</Badge>
                         </Show>
                         <Show when={e.attendees.filter((a) => !a.self).length > 0}>
                           <span class="text-xs text-faint">
@@ -262,7 +261,7 @@ function Prep(props: { id: string }) {
   return (
     <Show when={rec.data}>
       {(p) => (
-        <section aria-labelledby={`prep-${p().id}`} class="rounded-lg bg-raised p-4 shadow-card">
+        <section aria-labelledby={`prep-${p().id}`} class="rounded-lg bg-raised p-4 shadow-1">
           <div class="mb-2 flex flex-wrap items-center gap-2">
             <h2 id={`prep-${p().id}`} class="text-heading">
               Prep

@@ -9,7 +9,6 @@ import { PLACES, type Place, paletteLabel, placeOf } from "../lib/apps.ts";
 import { TYPING_PAUSE_MS } from "../lib/debounce.ts";
 import { useDialogFocus } from "../lib/focus.ts";
 import { dueInFull, TYPE_LABEL } from "../lib/format.ts";
-import { MOD } from "../lib/hotkeys.ts";
 import { toast } from "../lib/live.ts";
 import { askNewTask } from "../lib/newTask.ts";
 import { arrange, type PaletteItem } from "../lib/palette.ts";
@@ -230,7 +229,7 @@ export function CommandPalette(props: { onClose: () => void }) {
 
   return (
     <div
-      class="fixed inset-0 z-50 flex items-start justify-center bg-black/30 pt-[12vh]"
+      class="fixed inset-0 z-(--z-palette) flex items-start justify-center bg-black/30 pt-[12vh]"
       onClick={props.onClose}
     >
       <div
@@ -238,7 +237,7 @@ export function CommandPalette(props: { onClose: () => void }) {
         role="dialog"
         aria-modal="true"
         aria-label="Search, commands and Pip"
-        class="w-[min(640px,92vw)] overflow-hidden rounded-xl border border-line bg-panel shadow-2xl"
+        class="w-[min(640px,92vw)] glass-strong overflow-hidden rounded-xl shadow-4"
         onClick={(e) => e.stopPropagation()}
       >
         <input
@@ -246,7 +245,7 @@ export function CommandPalette(props: { onClose: () => void }) {
             input = el;
             queueMicrotask(() => input.focus());
           }}
-          class="w-full border-b border-line bg-transparent px-4 py-3 text-base outline-none"
+          class="w-full border-b border-line bg-transparent px-4 py-3 text-base focus-visible:outline-none"
           placeholder="Search, run a command, or ask Pip…"
           role="combobox"
           aria-expanded="true"
@@ -301,16 +300,16 @@ export function CommandPalette(props: { onClose: () => void }) {
         </div>
         <div class="hidden gap-4 border-t border-line px-4 py-2 text-xs text-muted md:flex">
           <span>
-            <Kbd>Enter</Kbd> open
+            <Kbd keys="enter" /> open
           </span>
           <span>
-            <Kbd>Shift+Enter</Kbd> open beside
+            <Kbd keys="shift+enter" /> open beside
           </span>
           <span>
-            <Kbd>{MOD}+Enter</Kbd> ask Pip
+            <Kbd keys="mod+enter" /> ask Pip
           </span>
           <span>
-            <Kbd>Esc</Kbd> close
+            <Kbd keys="escape" /> close
           </span>
         </div>
       </div>

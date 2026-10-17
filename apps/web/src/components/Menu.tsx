@@ -108,13 +108,14 @@ export function Overflow(props: {
         {props.children ?? <Icon name="ellipsis" size={18} />}
       </button>
       <Show when={open()}>
-        {/* Drawn over everything, so a scrolling list can't cut it off. */}
+        {/* Drawn over everything, so a scrolling list can't cut it off, and over a toast's Undo
+            (index.css, --z-popup). */}
         <Portal>
           <div
             ref={menu}
             role="menu"
             aria-label={props.label ?? "More actions"}
-            class="fixed z-50 min-w-44 rounded-lg border border-line bg-panel py-1 text-sm shadow-xl"
+            class="glass-strong fixed z-(--z-popup) min-w-44 rounded-lg py-1 text-sm shadow-4"
             style={where()}
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => {
@@ -134,13 +135,15 @@ export function Overflow(props: {
           >
             {/* By place, not by object: a row's items are made afresh each time the list is read
                 again, and an open menu keeps its buttons through that, so a tap never lands on
-                one being replaced. A tap runs what the button shows then. */}
+                one being replaced. A tap runs what the button shows then. The row the keys are
+                on gets a ring of its own, drawn inside the menu's edge, since its fill is the
+                same as the row under the pointer (1d gives it a solid accent instead). */}
             <Index each={props.items}>
               {(item) => (
                 <button
                   type="button"
                   role="menuitem"
-                  class={`flex min-h-11 w-full items-center gap-2.5 px-3 text-left hover:bg-sunk focus:bg-sunk focus:outline-none md:min-h-8 ${item().danger ? "text-bad" : ""}`}
+                  class={`flex min-h-11 w-full items-center gap-2.5 px-3 text-left hover:bg-sunk focus:bg-sunk focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset md:min-h-8 ${item().danger ? "text-bad" : ""}`}
                   onClick={() => {
                     const run = item().run;
                     close(true);

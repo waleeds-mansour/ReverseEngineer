@@ -6,11 +6,12 @@ import { createRoot, createSignal, For, type JSX, Show } from "solid-js";
 import { Icon } from "../components/icons.tsx";
 import { NookMark } from "../components/Mark.tsx";
 import { Overflow } from "../components/Menu.tsx";
+import { Badge, Kbd } from "../components/ui.tsx";
 import { JarvisStatusMark, jarvis } from "../jarvis/JarvisPane.tsx";
 import { authPost } from "../lib/api.ts";
 import { APPS, type App, type AppId, appOf } from "../lib/apps.ts";
 import { okToSignOut } from "../lib/docStore.ts";
-import { MOD } from "../lib/hotkeys.ts";
+import { keyLabel } from "../lib/keys.ts";
 import { live } from "../lib/live.ts";
 import { layout } from "../lib/panes.ts";
 import { useAction } from "../lib/query.ts";
@@ -39,6 +40,29 @@ export const sidebar = createRoot(() => {
   };
 });
 
+/** What a place's count is of, said after the number to a screen reader. */
+const COUNTED: Partial<Record<AppId, string>> = { today: "waiting for you", mail: "to reply" };
+
+/** Whether the live connection is up, in a word. */
+const liveWord = () => (live.connected() ? "Live" : "Reconnecting…");
+
+/** Whether the live connection is up, as a dot: its colour, and its title for a pointer. */
+function LiveDot(props: { class?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      class={`size-1.5 rounded-full ${live.connected() ? "bg-ok" : "bg-faint"} ${props.class ?? ""}`}
+      title={liveWord()}
+    />
+  );
+}
+
+/**
+ * The dot's word for a screen reader, so its colour isn't the only sign. It goes beside the dot,
+ * never inside a button with a name of its own, which a screen reader says in its place.
+ */
+const LiveWord = () => <span class="sr-only">{liveWord()}</span>;
+
 /** A button in the sidebar's corner that shows only an icon. */
 const CORNER =
   "flex size-7 items-center justify-center rounded-md text-muted hover:bg-panel hover:text-ink";
@@ -51,15 +75,13 @@ export function SidebarRail() {
         type="button"
         class={CORNER}
         aria-label="Show the sidebar"
-        title={`Show the sidebar (${MOD}+B)`}
+        title={`Show the sidebar (${keyLabel("mod+b")})`}
         onClick={() => sidebar.toggle(false)}
       >
         <Icon name="panel-left-open" size={18} />
       </button>
-      <span
-        class={`mt-3 size-1.5 rounded-full ${live.connected() ? "bg-ok" : "bg-faint"}`}
-        title={live.connected() ? "Live" : "Reconnecting…"}
-      />
+      <LiveDot class="mt-3" />
+      <LiveWord />
     </div>
   );
 }
@@ -82,9 +104,9 @@ export function Sidebar(props: {
 
   // Today counts what it shows needing you (approvals, drafts ready to send); Mail, replies you owe.
   const count = (id: AppId) => {
-    if (id === "today") return waiting() || null;
-    if (id === "mail") return mail.data?.toReply || null;
-    return null;
+    if (id === "today") return waiting();
+    if (id === "mail") return mail.data?.toReply ?? 0;
+    return 0;
   };
 
   /** Opens a place at its home, beside on shift-click; on a phone, in place of what's there. */
@@ -109,7 +131,7 @@ export function Sidebar(props: {
       type="button"
       // Its icon takes its sub-product's colour while it's the place you're in.
       data-product={app.hue ? app.id : undefined}
-      class={`group flex min-h-11 w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm md:min-h-0 ${current() === app.id ? "bg-panel font-medium shadow-sm" : "text-muted hover:text-ink"}`}
+      class={`group flex min-h-11 w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm md:min-h-0 ${current() === app.id ? "bg-panel font-medium shadow-1" : "text-muted hover:text-ink"}`}
       aria-current={current() === app.id ? "page" : undefined}
       onClick={(e) => go(app, e.shiftKey)}
     >
@@ -122,11 +144,7 @@ export function Sidebar(props: {
         />
       )}
       <span class="flex-1">{app.label}</span>
-      <Show when={count(app.id)}>
-        <span class="rounded-full bg-accent px-1.5 text-micro font-semibold text-on-fill tabular-nums">
-          {count(app.id)}
-        </span>
-      </Show>
+      <Badge tone="accent" count={count(app.id)} countLabel={COUNTED[app.id]} />
     </button>
   );
 
@@ -155,19 +173,17 @@ export function Sidebar(props: {
         >
           <NookMark size={20} />
           <span class="font-semibold">Nook</span>
-          <span
-            class={`size-1.5 rounded-full ${live.connected() ? "bg-ok" : "bg-faint"}`}
-            title={live.connected() ? "Live" : "Reconnecting…"}
-          />
+          <LiveDot />
           <Icon name="chevron-down" size={14} class="text-faint" />
         </Overflow>
+        <LiveWord />
         <span class="flex-1" />
         <Show when={!props.onPicked}>
           <button
             type="button"
             class={`-mr-1 ${CORNER}`}
             aria-label="Hide the sidebar"
-            title={`Hide the sidebar (${MOD}+B)`}
+            title={`Hide the sidebar (${keyLabel("mod+b")})`}
             onClick={() => sidebar.toggle(true)}
           >
             <Icon name="panel-left-close" size={18} />
@@ -180,8 +196,12 @@ export function Sidebar(props: {
         onClick={props.onPalette}
       >
         <Icon name="search" />
-        <span class="flex-1">Search or ask…</span>
-        <span class="hidden text-xs md:inline">{MOD === "⌘" ? "⌘K" : "Ctrl K"}</span>
+        {/* "Search or ask…" doesn't fit beside the caps at this width, and Ask Pip has its own row
+            below. Truncating keeps a longer label from pushing every row down. */}
+        <span class="min-w-0 flex-1 truncate">Search…</span>
+        <span class="hidden shrink-0 md:inline">
+          <Kbd keys="mod+k" />
+        </span>
       </button>
       <ul class="min-h-0 space-y-0.5 overflow-y-auto">
         <For each={APPS.filter((a) => !a.utility)}>{(app) => <li>{row(app)}</li>}</For>
@@ -199,7 +219,9 @@ export function Sidebar(props: {
         {/* Jarvis's chat, at the side: the Jarvis row above is what it did and knows. */}
         <Icon name="panel-right" class="text-faint" />
         <span class="flex-1">{jarvis.open() ? "Hide Pip" : "Ask Pip"}</span>
-        <span class="hidden text-xs text-faint md:inline">{MOD === "⌘" ? "⌘J" : "Ctrl J"}</span>
+        <span class="hidden md:inline">
+          <Kbd keys="mod+j" />
+        </span>
       </button>
     </nav>
   );

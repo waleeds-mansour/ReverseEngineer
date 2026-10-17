@@ -15,7 +15,7 @@ const PAUSED_BAD_MS = 2 * 3600_000;
 export interface SyncLine {
   badge: string;
   text: string;
-  tone: "ok" | "muted" | "bad";
+  tone: "positive" | "neutral" | "danger";
 }
 
 /** One account's sync in a few words, and how loudly to show it. */
@@ -23,7 +23,7 @@ export function syncLine(a: MailAccount): SyncLine {
   if (a.state === "failing")
     return {
       badge: "mail failing",
-      tone: "bad",
+      tone: "danger",
       text: a.reconnect
         ? `Google stopped accepting Nook's access to ${a.address}. Connect it again in Settings.`
         : a.syncedAt
@@ -37,7 +37,7 @@ export function syncLine(a: MailAccount): SyncLine {
     const resuming = at.endsWith(".") ? at : `${at}.`;
     return {
       badge: "mail paused",
-      tone: quiet >= PAUSED_BAD_MS ? "bad" : "muted",
+      tone: quiet >= PAUSED_BAD_MS ? "danger" : "neutral",
       text:
         a.syncedAt && quiet >= PAUSED_LONG_MS
           ? `Gmail keeps asking Nook to slow down; last synced ${ago(a.syncedAt)}. Trying again at ${resuming}`
@@ -47,7 +47,7 @@ export function syncLine(a: MailAccount): SyncLine {
   if (a.state === "catching_up" || !a.firstSyncDone)
     return {
       badge: "catching up",
-      tone: "muted",
+      tone: "neutral",
       text: a.backfill
         ? `Catching up: ${count(a.backfill.fetched)} of ~${count(a.backfill.target)}`
         : a.waiting > 0
@@ -57,7 +57,7 @@ export function syncLine(a: MailAccount): SyncLine {
   // Mail that failed and waits to be tried again (6.2): the rest is in, but not all of it.
   const waiting = a.waiting > 0 ? `${count(a.waiting)} waiting to come in` : "";
   const synced = a.syncedAt ? `synced ${ago(a.syncedAt)}` : "";
-  return { badge: "mail", tone: "ok", text: [synced, waiting].filter(Boolean).join(" · ") };
+  return { badge: "mail", tone: "positive", text: [synced, waiting].filter(Boolean).join(" · ") };
 }
 
 const LOUDEST: MailAccount["state"][] = ["failing", "paused", "catching_up"];
@@ -75,7 +75,7 @@ export function MailSyncBanner(props: { accounts: MailAccount[] }) {
     <Show when={account()}>
       {(a) => (
         <p
-          class={`border-b border-line bg-sunk px-4 py-2 text-sm ${syncLine(a()).tone === "bad" ? "text-bad" : "text-muted"}`}
+          class={`border-b border-line bg-sunk px-4 py-2 text-sm ${syncLine(a()).tone === "danger" ? "text-bad" : "text-muted"}`}
         >
           {syncLine(a()).text}
         </p>

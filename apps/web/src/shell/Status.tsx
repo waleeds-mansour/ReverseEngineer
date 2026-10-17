@@ -45,7 +45,7 @@ export function useAutoRetry(state: () => "failed" | "trying" | "ok", retry: () 
 function Centered(props: { title: string; text: string; children: JSX.Element }) {
   return (
     <div class="flex h-full items-center justify-center p-6" role="alert">
-      <div class="w-full max-w-sm space-y-4 rounded-xl border border-line bg-panel p-6 shadow-sm">
+      <div class="w-full max-w-sm space-y-4 rounded-xl border border-line bg-panel p-6 shadow-1">
         <div>
           <h1 class="text-xl font-semibold">{props.title}</h1>
           <p class="mt-1 text-sm text-muted">{props.text}</p>
@@ -162,7 +162,7 @@ function Reconnecting() {
  */
 export function Notices() {
   return (
-    <div class="pointer-events-none fixed left-1/2 top-[calc(env(safe-area-inset-top)+0.5rem)] z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col items-center gap-2">
+    <div class="pointer-events-none fixed left-1/2 top-[calc(env(safe-area-inset-top)+0.5rem)] z-(--z-toast) flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col items-center gap-2">
       <Reconnecting />
       <Degraded />
       <UpdateNotice />

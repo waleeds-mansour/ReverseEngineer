@@ -118,7 +118,7 @@ export function AskBar(props: { go: Go; now: Date; class?: string }) {
   return (
     <div class={props.class}>
       <form
-        class="flex items-center gap-2.5 rounded-xl border border-line bg-panel py-1.5 pr-1.5 pl-3 shadow-card focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/25"
+        class="flex items-center gap-2.5 rounded-xl border border-line bg-panel py-1.5 pr-1.5 pl-3 shadow-1 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/25"
         onSubmit={(e) => {
           e.preventDefault();
           void ask();
@@ -127,7 +127,7 @@ export function AskBar(props: { go: Go; now: Date; class?: string }) {
         <JarvisMark size={18} />
         <input
           ref={input}
-          class="min-h-9 min-w-0 flex-1 bg-transparent outline-none placeholder:text-faint"
+          class="min-h-9 min-w-0 flex-1 bg-transparent placeholder:text-faint focus-visible:outline-none"
           aria-label="Ask Pip or add a task"
           placeholder="Ask Pip or add a task…"
           enterkeyhint="send"

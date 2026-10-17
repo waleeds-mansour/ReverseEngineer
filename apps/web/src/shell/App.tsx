@@ -323,9 +323,9 @@ export function App() {
               }}
             />
             {/* Over the guess, not instead of it: what you'd started typing is there after.
-                Above z-50, where an open menu's portal sits outside the shell. */}
+                On the cover layer, over the toasts and an open menu's portal outside the shell. */}
             <Show when={unreachable()}>
-              <div class="fixed inset-0 z-[60] bg-bg">
+              <div class="fixed inset-0 z-(--z-cover) bg-bg">
                 <Unreachable trying={me.loading} retry={retryNow} />
               </div>
             </Show>

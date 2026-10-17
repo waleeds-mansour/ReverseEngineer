@@ -50,7 +50,7 @@ export function InboxItem(props: {
                 if (o) props.onSnoozeUntil(o.until);
               }}
             >
-              <Kbd hint>{j() + 1}</Kbd> {label}
+              <Kbd hint keys={String(j() + 1)} /> {label}
             </Button>
           )}
         </For>
@@ -79,10 +79,10 @@ export function InboxItem(props: {
                   {n().title}
                 </span>
                 <Show when={n().urgency === "interrupt"}>
-                  <Badge tone="bad">Urgent</Badge>
+                  <Badge tone="danger">Urgent</Badge>
                 </Show>
                 <Show when={n().kind === "brief"}>
-                  <Badge tone="jarvis">Brief</Badge>
+                  <Badge>Brief</Badge>
                 </Show>
               </div>
               <Show when={n().body && n().kind !== "brief"}>

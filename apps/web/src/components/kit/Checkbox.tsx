@@ -29,7 +29,7 @@ export function Checkbox(props: {
       <span class="relative flex size-[18px] shrink-0">
         <input
           type="checkbox"
-          class={`peer size-[18px] cursor-pointer appearance-none border-[1.5px] border-faint bg-panel transition-colors duration-(--duration-fast) checked:border-accent checked:bg-accent disabled:cursor-default ${props.round ? "rounded-full" : "rounded-sm"}`}
+          class={`peer size-[18px] cursor-pointer appearance-none border-[1.5px] border-faint bg-panel transition-colors duration-fast checked:border-accent checked:bg-accent disabled:cursor-default ${props.round ? "rounded-full" : "rounded-sm"}`}
           aria-label={props.label}
           checked={props.checked}
           disabled={props.disabled}

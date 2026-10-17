@@ -2,6 +2,7 @@
 
 import { For, type JSX, Match, Show, Switch } from "solid-js";
 import { Icon } from "../components/icons.tsx";
+import { Badge } from "../components/ui.tsx";
 import { JarvisStatusMark, jarvis } from "../jarvis/JarvisPane.tsx";
 import { type Place, phoneTabs, productOf } from "../lib/apps.ts";
 import { layout } from "../lib/panes.ts";
@@ -33,17 +34,6 @@ function TabIcon(props: { active: boolean; red?: boolean; children: JSX.Element 
     >
       {props.children}
     </span>
-  );
-}
-
-/** A count on the icon's corner, read after the tab's name by a screen reader. */
-function Badge(props: { count: number }) {
-  return (
-    <Show when={props.count > 0}>
-      <span class="absolute top-0.5 left-1/2 ml-2 min-w-4 rounded-full bg-accent px-1 text-center text-micro text-on-fill tabular-nums">
-        {props.count}
-      </span>
-    </Show>
   );
 }
 
@@ -110,6 +100,8 @@ export function TabBar(props: { waiting: number; onMenu: () => void }) {
   // Today shows what's waiting for you; Mail, the replies you owe.
   const count = (p: Place) =>
     p.view === "today" ? props.waiting : p.view === "mail" ? (mail.data?.toReply ?? 0) : 0;
+  const counted = (p: Place) =>
+    p.view === "today" ? "waiting for you" : p.view === "mail" ? "to reply" : undefined;
   return (
     <nav
       class="flex shrink-0 border-t border-line bg-panel pb-[env(safe-area-inset-bottom)]"
@@ -134,7 +126,14 @@ export function TabBar(props: { waiting: number; onMenu: () => void }) {
                 <Icon name={t.icon} size={24} />
               </TabIcon>
               {t.label}
-              <Badge count={count(t)} />
+              {/* On the icon's corner, and read after the tab's name by a screen reader. The soft
+                  pill lets what's under it through, so it sits on the bar's own colour and the icon
+                  doesn't show through the number. */}
+              <Show when={count(t)}>
+                <span class="absolute top-0.5 left-1/2 ml-2 rounded-pill bg-panel ring-2 ring-panel">
+                  <Badge tone="accent" count={count(t)} countLabel={counted(t)} />
+                </span>
+              </Show>
             </button>
           )
         }

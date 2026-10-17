@@ -18,7 +18,7 @@ export function OutsideNote(props: { source: string | null | undefined }) {
       class="flex items-center gap-2 text-xs text-muted"
       title="Text from outside Nook could try to steer Pip, so for the rest of this conversation it checks with you before acting outside it. A new conversation starts fresh."
     >
-      <Badge tone="warn">Read {props.source || "outside content"}</Badge>
+      <Badge tone="warning">Read {props.source || "outside content"}</Badge>
       <span>Pip checks with you before acting here. A new conversation starts fresh.</span>
     </p>
   );

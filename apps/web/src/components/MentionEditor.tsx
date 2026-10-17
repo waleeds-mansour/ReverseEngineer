@@ -101,7 +101,7 @@ export function MentionEditor(props: Props) {
     <div class="relative">
       <textarea
         ref={el}
-        class={`w-full resize-y rounded-md border border-line bg-panel px-3 py-2 leading-relaxed outline-none focus:border-accent ${props.class ?? ""}`}
+        class={`w-full resize-y rounded-md border border-line bg-panel px-3 py-2 leading-relaxed focus:border-accent ${props.class ?? ""}`}
         rows={props.rows ?? 4}
         value={props.value}
         placeholder={props.placeholder}
@@ -120,7 +120,7 @@ export function MentionEditor(props: Props) {
         }}
       />
       <Show when={query() && hits().length > 0}>
-        <ul class="absolute z-30 mt-1 max-h-64 w-80 overflow-auto rounded-md border border-line bg-panel py-1 shadow-lg">
+        <ul class="glass-strong absolute z-(--z-menu) mt-1 max-h-64 w-80 overflow-auto rounded-md py-1 shadow-4">
           <For each={hits()}>
             {(hit, i) => (
               <li>

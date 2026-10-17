@@ -3,7 +3,7 @@
 // (styles/themes/). public/theme-boot.js sets it before the page draws; this keeps it current.
 
 import { createEffect, createRoot, createSignal } from "solid-js";
-import { NOOK_THEMES } from "../styles/themes.ts";
+import { DURATIONS, NOOK_THEMES } from "../styles/themes.ts";
 
 export type ThemeId = (typeof NOOK_THEMES)[number]["id"];
 export type ThemeChoice = ThemeId | "system";
@@ -30,8 +30,8 @@ function stored(): ThemeChoice {
   }
 }
 
-/** How long a theme change crossfades (Nook's dur-base). */
-const FADE_MS = 220;
+/** How long a theme change crossfades: Nook's base step, as index.css's crossfade runs. */
+const FADE_MS = DURATIONS.base;
 
 export const theme = createRoot(() => {
   const media = window.matchMedia("(prefers-color-scheme: dark)");

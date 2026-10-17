@@ -11,7 +11,7 @@ import { Icon } from "../components/icons.tsx";
 import { JarvisMark } from "../components/Mark.tsx";
 import { MentionEditor } from "../components/MentionEditor.tsx";
 import { Button, PaneHeader } from "../components/ui.tsx";
-import { MOD } from "../lib/hotkeys.ts";
+import { keyLabel } from "../lib/keys.ts";
 import { live } from "../lib/live.ts";
 import { type Looking, startersFor } from "../lib/looking.ts";
 import { narrow } from "../lib/narrow.ts";
@@ -230,7 +230,7 @@ export function Conversation(props: {
         <div class="pointer-events-none relative">
           <button
             type="button"
-            class="pointer-events-auto absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-line bg-panel px-3 py-1 text-xs font-medium shadow-pop"
+            class="pointer-events-auto absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1 glass-strong rounded-full px-3 py-1 text-xs font-medium shadow-4"
             onClick={toBottom}
           >
             <Icon name="arrow-down" size={14} />
@@ -260,7 +260,7 @@ export function Conversation(props: {
           placeholder={
             narrow()
               ? "Ask Pip anything, or @ a task or note"
-              : `Ask Pip anything, or @ a task or note (${MOD}+Enter to send)`
+              : `Ask Pip anything, or @ a task or note (${keyLabel("mod+enter")} to send)`
           }
         />
         <div class="mt-2 flex justify-end gap-2">

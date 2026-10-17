@@ -4,16 +4,17 @@ import type { CanvasNode } from "@hearth/core";
 import { createSignal, For, Show } from "solid-js";
 import { Icon, type IconName } from "../components/icons.tsx";
 import { action } from "../lib/api.ts";
+import { keyLabel } from "../lib/keys.ts";
 import type { SearchHit } from "../lib/types.ts";
 import type { Board, Tool } from "./state.ts";
 
-/** Each tool is an icon; its name is its tooltip, with its key. */
+/** Each tool is an icon; its name is its tooltip, with the key Board.tsx binds to it. */
 const TOOLS: { tool: Tool; label: string; key: string; icon: IconName }[] = [
-  { tool: "select", label: "Select", key: "V", icon: "mouse-pointer-2" },
-  { tool: "text", label: "Text", key: "T", icon: "type" },
-  { tool: "rectangle", label: "Box", key: "R", icon: "square" },
-  { tool: "ellipse", label: "Circle", key: "O", icon: "circle" },
-  { tool: "arrow", label: "Arrow", key: "A", icon: "move-up-right" },
+  { tool: "select", label: "Select", key: "v", icon: "mouse-pointer-2" },
+  { tool: "text", label: "Text", key: "t", icon: "type" },
+  { tool: "rectangle", label: "Box", key: "r", icon: "square" },
+  { tool: "ellipse", label: "Circle", key: "o", icon: "circle" },
+  { tool: "arrow", label: "Arrow", key: "a", icon: "move-up-right" },
 ];
 
 const FILLS = ["#fff7ed", "#fef3c7", "#dcfce7", "#dbeafe", "#f3e8ff", "#fee2e2", "transparent"];
@@ -49,14 +50,14 @@ export function Toolbar(props: {
   return (
     <div
       data-toolbar
-      class="absolute top-3 left-3 z-10 flex flex-wrap items-center gap-1 rounded-lg border border-line bg-panel p-1 shadow-md"
+      class="absolute top-3 left-3 z-10 flex flex-wrap items-center gap-1 glass rounded-lg p-1 shadow-3"
     >
       <For each={TOOLS}>
         {(t) => (
           <button
             type="button"
             class={btn(b.tool() === t.tool)}
-            title={`${t.label} (${t.key})`}
+            title={`${t.label} (${keyLabel(t.key)})`}
             aria-label={t.label}
             aria-pressed={b.tool() === t.tool}
             onClick={() => b.setTool(t.tool)}
@@ -82,9 +83,9 @@ export function Toolbar(props: {
           Record
         </button>
         <Show when={picking()}>
-          <div class="absolute top-9 left-0 w-64 rounded-md border border-line bg-panel p-2 shadow-lg">
+          <div class="absolute top-9 left-0 w-64 glass-strong rounded-md p-2 shadow-4">
             <input
-              class="mb-1 w-full rounded border border-line bg-panel px-2 py-1 text-sm outline-none"
+              class="mb-1 w-full rounded border border-line bg-panel px-2 py-1 text-sm"
               placeholder="Find a record…"
               aria-label="Find a record"
               ref={(el) => queueMicrotask(() => el.focus())}
@@ -138,7 +139,7 @@ export function Toolbar(props: {
       <button
         type="button"
         class={btn(false)}
-        title="Undo (Ctrl+Z)"
+        title={`Undo (${keyLabel("mod+z")})`}
         aria-label="Undo"
         onClick={() => b.undo()}
       >

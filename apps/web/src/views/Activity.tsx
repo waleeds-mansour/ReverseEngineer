@@ -9,6 +9,7 @@ import { ago } from "../lib/format.ts";
 import { layout, routeFor } from "../lib/panes.ts";
 import { act, useAction } from "../lib/query.ts";
 import { isSlackTurn } from "../lib/slack.ts";
+import type { Tone } from "../lib/status.ts";
 import { toolsSaid } from "../lib/today.ts";
 import { plainReply, turnResult } from "../lib/turns.ts";
 import type { Observation, Turn, Watch } from "../lib/types.ts";
@@ -33,11 +34,11 @@ const triggerOf = (t: Turn) =>
     ? "You asked in Slack"
     : (TRIGGER_LABEL[t.trigger] ?? t.trigger);
 
-function outcomeTone(t: Turn): "ok" | "bad" | "jarvis" | "muted" {
-  if (t.status === "failed") return "bad";
-  if (t.status === "queued" || t.status === "running") return "jarvis";
-  if (t.status === "skipped") return "muted";
-  return "ok";
+function outcomeTone(t: Turn): Tone {
+  if (t.status === "failed") return "danger";
+  // Still going, or skipped: neither is how it ended well or badly, so neither is a status.
+  if (t.status === "queued" || t.status === "running" || t.status === "skipped") return "neutral";
+  return "positive";
 }
 
 export function Activity() {
@@ -104,7 +105,7 @@ export function Activity() {
               <For each={notes.data}>
                 {(o) => (
                   <li class="flex gap-2">
-                    <Badge tone={o.kind === "risk" ? "warn" : "muted"}>{o.kind}</Badge>
+                    <Badge tone={o.kind === "risk" ? "warning" : "neutral"}>{o.kind}</Badge>
                     <span>{o.text}</span>
                   </li>
                 )}
@@ -137,7 +138,7 @@ export function Activity() {
                       <span class="flex items-center gap-2 text-sm">
                         <span class="font-medium">{triggerOf(t)}</span>
                         <Show when={t.mode === "proactive"}>
-                          <Badge tone="jarvis">On its own</Badge>
+                          <Badge>On its own</Badge>
                         </Show>
                         <Badge tone={outcomeTone(t)}>{turnResult(t)}</Badge>
                         <span class="flex-1" />

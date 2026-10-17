@@ -34,10 +34,10 @@ export function SlackConversations() {
                 >
                   <span class="flex-1 font-medium">{placeOf(c)}</span>
                   <Show when={pausedNow(c)}>
-                    <Badge tone="warn">Paused</Badge>
+                    <Badge tone="warning">Paused</Badge>
                   </Show>
                   <Show when={c.heldReplies > 0}>
-                    <Badge tone="jarvis">Needs your yes</Badge>
+                    <Badge tone="warning">Needs your yes</Badge>
                   </Show>
                   <Show when={c.waiting > 0}>
                     <Badge>{`${c.waiting} waiting`}</Badge>

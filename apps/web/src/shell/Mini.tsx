@@ -82,7 +82,7 @@ function Capture() {
     <div class="flex h-full flex-col gap-2 p-3">
       <textarea
         ref={box}
-        class="min-h-0 flex-1 resize-none rounded-md border border-line bg-panel px-3 py-2 text-base outline-none focus:border-accent"
+        class="min-h-0 flex-1 resize-none rounded-md border border-line bg-panel px-3 py-2 text-base focus:border-accent"
         placeholder="What do you need to remember?"
         value={text()}
         onInput={(e) => setText(e.currentTarget.value)}
@@ -194,11 +194,11 @@ export function MiniApp(props: { page: MiniPage }) {
           </Show>
         </Match>
       </Switch>
-      <div class="pointer-events-none fixed bottom-3 left-1/2 z-50 flex -translate-x-1/2 flex-col items-center gap-2">
+      <div class="pointer-events-none fixed bottom-3 left-1/2 z-(--z-toast) flex -translate-x-1/2 flex-col items-center gap-2">
         <For each={toast.toasts()}>
           {(t) => (
             <div
-              class={`rounded-lg px-4 py-2 text-sm shadow-lg ${t.tone === "error" ? "bg-bad text-on-fill" : "bg-ink text-bg"}`}
+              class={`rounded-lg px-4 py-2 text-sm shadow-4 ${t.tone === "error" ? "bg-bad text-on-fill" : "bg-ink text-bg"}`}
             >
               {t.text}
             </div>

@@ -37,7 +37,7 @@ export function NodeView(props: {
 
   const editor = () => (
     <textarea
-      class="h-full w-full resize-none bg-transparent p-2 outline-none"
+      class="h-full w-full resize-none bg-transparent p-2"
       style={{ color: "inherit", "text-align": n().type === "shape" ? "center" : undefined }}
       value={text()}
       ref={(el) => queueMicrotask(() => el.focus())}
@@ -55,7 +55,7 @@ export function NodeView(props: {
       data-node={n().id}
       class={`absolute overflow-hidden ${ring()}`}
       classList={{
-        "rounded-md border border-line bg-panel shadow-sm": n().type !== "shape",
+        "rounded-md border border-line bg-panel shadow-1": n().type !== "shape",
         "rounded-md border-2 border-ink/60":
           n().type === "shape" &&
           "shape" in n() &&

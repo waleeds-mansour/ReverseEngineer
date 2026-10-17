@@ -8,6 +8,9 @@
 @import "./styles/themes/dusk.css";
 @import "./styles/themes/paper.css";
 @import "./styles/themes/contrast.css";
+/* Hand-written: every keyframe and the animate-* utilities (styles/kit is made by hand; the rest of
+   styles/ is generated). */
+@import "./styles/kit/motion.css";
 
 /* Hearth's own names for Nook's tokens, so every view reads the theme without knowing it. New
    code uses Nook's names (surface-1, ink-muted, hairline, positive…); these stay until the views
@@ -76,43 +79,46 @@
   --text-micro--line-height: var(--text-caption--line-height);
   --text-micro--font-weight: var(--text-caption--font-weight);
 
-  /* Two older depth names: a card, and anything that floats (menus, the palette, toasts). */
-  --shadow-card: var(--elevation-1);
-  --shadow-pop: var(--elevation-4);
-
-  /* Things animate in and leave at once (Nook's standard ease and timings, nook.css). */
+  /* Hearth's older name for Nook's standard ease. */
   --ease-out: var(--ease-standard);
-  --animate-enter: enter var(--duration-base) var(--ease-standard);
-  --animate-sheet-up: sheet-up var(--duration-slow) var(--ease-standard);
-
-  @keyframes enter {
-    from {
-      opacity: 0;
-      transform: translateY(4px);
-    }
-  }
-
-  @keyframes sheet-up {
-    from {
-      transform: translateY(100%);
-    }
-  }
 }
 
 /* Chrome is vibrant glass with a lit top edge: the bar, sidebar, dock and toolbars use glass;
    menus, popovers, alerts, the palette and toasts glass-strong. The contrast theme makes both
-   opaque. Content is never glass. */
+   opaque. Content is never glass. Its depth is a class of its own (glass shadow-3, glass-strong
+   shadow-4): only shadow-N sets --tw-shadow and glass only --tw-inset-shadow, so the lit edge
+   stays whichever order Tailwind writes them in. Asked for less see-through, glass is solid. */
 @utility glass {
   background-color: var(--color-glass);
+  -webkit-backdrop-filter: blur(var(--blur-chrome)) saturate(1.8);
   backdrop-filter: blur(var(--blur-chrome)) saturate(1.8);
-  box-shadow: inset 0 0.5px 0 var(--color-glass-edge);
+  border: 0.5px solid var(--color-hairline);
+  --tw-inset-shadow: inset 0 1px 0 var(--color-glass-edge);
+  box-shadow:
+    var(--tw-inset-shadow), var(--tw-inset-ring-shadow, 0 0 #0000),
+    var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000),
+    var(--tw-shadow, 0 0 #0000);
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--color-surface-2);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 @utility glass-strong {
   background-color: var(--color-glass-strong);
+  -webkit-backdrop-filter: blur(var(--blur-menu)) saturate(1.8);
   backdrop-filter: blur(var(--blur-menu)) saturate(1.8);
+  border: 0.5px solid var(--color-hairline);
+  --tw-inset-shadow: inset 0 1px 0 var(--color-glass-edge);
   box-shadow:
-    inset 0 0.5px 0 var(--color-glass-edge),
-    var(--elevation-4);
+    var(--tw-inset-shadow), var(--tw-inset-ring-shadow, 0 0 #0000),
+    var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000),
+    var(--tw-shadow, 0 0 #0000);
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--color-surface-1);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 /* A theme change crossfades (lib/theme.ts sets this for one beat). */
@@ -177,14 +183,34 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-:focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 1px;
-}
+/* In the base layer, so a utility can change them: a grid cell's inset ring, a selected row's
+   solid accent. Unlayered, they would beat every class. */
+@layer base {
+  :root {
+    /* Native checkboxes, radios, sliders and the text caret take the accent. */
+    accent-color: var(--color-accent);
+    caret-color: var(--color-accent);
+    /* An open "…" menu, over the toasts and notices at the screen's centre, so their Undo or Try
+       again never lands on a menu row. Until 1e moves toasts to the top right; then menus go
+       back to z-menu. */
+    --z-popup: calc(var(--z-toast) + 50);
+    /* The Unreachable cover: over everything, toasts and an open menu's portal included. */
+    --z-cover: calc(var(--z-toast) + 100);
+  }
 
-/* The row the keyboard is on. */
-[data-active="true"] {
-  background: var(--color-accent-soft);
+  ::selection {
+    background-color: var(--color-accent-soft);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  /* The row the keyboard is on. */
+  [data-active="true"] {
+    background-color: var(--color-accent-soft);
+  }
 }
 
 .mention {

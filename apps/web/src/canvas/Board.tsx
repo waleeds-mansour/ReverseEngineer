@@ -274,7 +274,7 @@ export function CanvasBoard(props: { id: string; pane: number }) {
       <PaneHeader
         title={
           <input
-            class="w-full bg-transparent outline-none"
+            class="w-full bg-transparent"
             aria-label="Board name"
             value={b.title()}
             placeholder="Untitled board"
@@ -291,7 +291,7 @@ export function CanvasBoard(props: { id: string; pane: number }) {
       />
       <div
         ref={el}
-        class="relative min-h-0 flex-1 touch-none overflow-hidden outline-none select-none"
+        class="relative min-h-0 flex-1 touch-none overflow-hidden select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset"
         classList={{ "cursor-crosshair": b.tool() !== "select" }}
         style={{
           "background-image": "radial-gradient(var(--color-line) 1px, transparent 1px)",
