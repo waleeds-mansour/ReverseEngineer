@@ -118,11 +118,11 @@
   --chart-8: #a0a0aa; --seq-1: #16365e; --seq-2: #235a99; --seq-3: #357fd0; --seq-4: #5ba3f5;
   --seq-5: #a6cdfa; --pip-body: #d2e8ff; --pip-glow: #8fd4ff73; --pip-glow-ink: #9fdcff;
   --ok-soft: #1f3426; --warn-soft: #3c3123; --bad-soft: #3c2929;
-  --shadow-1: 0 0.5px 1px #00000099, 0 0 0 0.5px #ffffff1a;
-  --shadow-2: 0 2px 6px #00000080, 0 0 0 0.5px #ffffff1f;
-  --shadow-3: 0 6px 20px #00000099, 0 0 0 0.5px #ffffff1f;
-  --shadow-4: 0 10px 40px #000000c0, 0 0 0 0.5px #ffffff26;
-  --shadow-5: 0 22px 70px 4px #000000bf, 0 2px 6px #00000080, 0 0 0 0.5px #ffffff2e;
+  --shadow-1: 0 0.5px 1px #00000099, 0 0 0 1px #ffffff1f;
+  --shadow-2: 0 2px 6px #00000080, 0 0 0 1px #ffffff1f;
+  --shadow-3: 0 6px 20px #00000099, 0 0 0 1px #ffffff1f;
+  --shadow-4: 0 10px 40px #000000c0, 0 0 0 1px #ffffff26;
+  --shadow-5: 0 22px 70px 4px #000000bf, 0 2px 6px #00000080, 0 0 0 1px #ffffff2e;
 }
 :root[data-theme="midnight"] {
   color-scheme: dark;
@@ -136,11 +136,11 @@
   --chart-8: #a0a0aa; --seq-1: #16365e; --seq-2: #235a99; --seq-3: #357fd0; --seq-4: #5ba3f5;
   --seq-5: #a6cdfa; --pip-body: #d2e8ff; --pip-glow: #8fd4ff73; --pip-glow-ink: #9fdcff;
   --ok-soft: #112618; --warn-soft: #2c2316; --bad-soft: #2c1b1b;
-  --shadow-1: 0 0.5px 1px #00000099, 0 0 0 0.5px #ffffff1a;
-  --shadow-2: 0 2px 6px #00000080, 0 0 0 0.5px #ffffff1f;
-  --shadow-3: 0 6px 20px #00000099, 0 0 0 0.5px #ffffff1f;
-  --shadow-4: 0 10px 40px #000000c0, 0 0 0 0.5px #ffffff26;
-  --shadow-5: 0 22px 70px 4px #000000bf, 0 2px 6px #00000080, 0 0 0 0.5px #ffffff2e;
+  --shadow-1: 0 0.5px 1px #00000099, 0 0 0 1px #ffffff1f;
+  --shadow-2: 0 2px 6px #00000080, 0 0 0 1px #ffffff1f;
+  --shadow-3: 0 6px 20px #00000099, 0 0 0 1px #ffffff1f;
+  --shadow-4: 0 10px 40px #000000c0, 0 0 0 1px #ffffff26;
+  --shadow-5: 0 22px 70px 4px #000000bf, 0 2px 6px #00000080, 0 0 0 1px #ffffff2e;
 }
 :root[data-theme="dusk"] {
   color-scheme: dark;
@@ -154,11 +154,11 @@
   --chart-8: #a0a0aa; --seq-1: #ffe0c2; --seq-2: #ffbe80; --seq-3: #ff9640; --seq-4: #e07a1e;
   --seq-5: #b8581c; --pip-body: #d2e8ff; --pip-glow: #8fd4ff73; --pip-glow-ink: #9fdcff;
   --ok-soft: #31392c; --warn-soft: #443826; --bad-soft: #442e2a;
-  --shadow-1: 0 0.5px 1px #00000099, 0 0 0 0.5px #ffffff1a;
-  --shadow-2: 0 2px 6px #00000080, 0 0 0 0.5px #ffffff1f;
-  --shadow-3: 0 6px 20px #00000099, 0 0 0 0.5px #ffffff1f;
-  --shadow-4: 0 10px 40px #000000c0, 0 0 0 0.5px #ffffff26;
-  --shadow-5: 0 22px 70px 4px #000000bf, 0 2px 6px #00000080, 0 0 0 0.5px #ffffff2e;
+  --shadow-1: 0 0.5px 1px #00000099, 0 0 0 1px #ffffff1f;
+  --shadow-2: 0 2px 6px #00000080, 0 0 0 1px #ffffff1f;
+  --shadow-3: 0 6px 20px #00000099, 0 0 0 1px #ffffff1f;
+  --shadow-4: 0 10px 40px #000000c0, 0 0 0 1px #ffffff26;
+  --shadow-5: 0 22px 70px 4px #000000bf, 0 2px 6px #00000080, 0 0 0 1px #ffffff2e;
 }
 :root[data-theme="paper"] {
   color-scheme: light;
