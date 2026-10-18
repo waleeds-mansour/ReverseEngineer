@@ -21,8 +21,8 @@ export function ReminderSettings() {
               <span class="min-w-0 flex-1 basis-40 break-words">{reminderLabel(r)}</span>
               <span class="text-muted">{r.when}</span>
               <Button
-                small
-                kind="quiet"
+                size="sm"
+                variant="quiet"
                 label={`Cancel the reminder for ${r.when}`}
                 onClick={() => cancel(r)}
               >

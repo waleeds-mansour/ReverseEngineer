@@ -59,7 +59,7 @@ export function Notes(props: { pane: number }) {
   return (
     <div class="flex h-full flex-col">
       <PaneHeader title="Notes">
-        <Button kind="primary" small onClick={() => void newNote(props.pane)}>
+        <Button variant="primary" size="sm" onClick={() => void newNote(props.pane)}>
           New note
         </Button>
       </PaneHeader>
@@ -163,7 +163,7 @@ export function NoteView(props: { id: string; pane: number }) {
           >
             <Show when={hasChecklist()}>
               <Button
-                small
+                size="sm"
                 onClick={() => void extract()}
                 title="Make a task for each open checklist item"
               >
@@ -171,7 +171,7 @@ export function NoteView(props: { id: string; pane: number }) {
               </Button>
             </Show>
             <Button
-              small
+              size="sm"
               onClick={() => setHistory(!history())}
               title="See and restore earlier versions"
             >

@@ -45,7 +45,7 @@ export function ReplaceToken(props: {
           value={token()}
           onInput={(e) => setToken(e.currentTarget.value)}
         />
-        <Button kind="primary" submit disabled={busy() || !token().trim()}>
+        <Button variant="primary" type="submit" disabled={busy() || !token().trim()}>
           Save
         </Button>
       </div>

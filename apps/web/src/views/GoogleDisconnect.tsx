@@ -38,7 +38,7 @@ export function DisconnectGoogle(props: { email: string }) {
     <Show
       when={asking()}
       fallback={
-        <Button small kind="danger" onClick={() => setAsking(true)}>
+        <Button size="sm" tone="danger" onClick={() => setAsking(true)}>
           Disconnect
         </Button>
       }
@@ -58,14 +58,14 @@ export function DisconnectGoogle(props: { email: string }) {
           </label>
         </Show>
         <Button
-          small
-          kind="danger"
+          size="sm"
+          tone="danger"
           disabled={busy() || drafts.isLoading}
           onClick={() => void disconnect()}
         >
           Disconnect
         </Button>
-        <Button small onClick={() => setAsking(false)}>
+        <Button size="sm" onClick={() => setAsking(false)}>
           Cancel
         </Button>
       </div>

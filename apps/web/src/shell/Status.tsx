@@ -63,7 +63,7 @@ export function Unreachable(props: { retry: () => void; trying: boolean }) {
       title="Can't reach Nook"
       text="Your PC may be asleep, restarting or offline. Nook will keep trying."
     >
-      <Button kind="primary" disabled={props.trying} onClick={props.retry}>
+      <Button variant="primary" disabled={props.trying} onClick={props.retry}>
         {props.trying ? "Trying…" : "Try again"}
       </Button>
     </Centered>
@@ -78,7 +78,7 @@ export function Crashed(props: { error: unknown; reset: () => void }) {
       title="Something went wrong"
       text="This screen hit a problem. Try again, or reload Nook if it keeps happening."
     >
-      <Button kind="primary" onClick={props.reset}>
+      <Button variant="primary" onClick={props.reset}>
         Try again
       </Button>
       <Button onClick={() => reloadPage()}>Reload</Button>
@@ -109,8 +109,8 @@ export function PaneCrashed(props: { error: unknown; reset: () => void }) {
       <div class="flex gap-2">
         <Show when={why() !== "updated"}>
           <Button
-            small
-            kind={why() ? "primary" : "plain"}
+            size="sm"
+            variant={why() ? "primary" : "secondary"}
             onClick={() => (why() === "offline" ? void tryAgain(props.reset) : props.reset())}
           >
             Try again
@@ -118,8 +118,8 @@ export function PaneCrashed(props: { error: unknown; reset: () => void }) {
         </Show>
         <Show when={why()}>
           <Button
-            small
-            kind={why() === "updated" ? "primary" : "plain"}
+            size="sm"
+            variant={why() === "updated" ? "primary" : "secondary"}
             onClick={() => reloadPage()}
           >
             Reload

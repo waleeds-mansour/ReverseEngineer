@@ -6,6 +6,7 @@ import { ago, who } from "../lib/format.ts";
 import { act, useAction } from "../lib/query.ts";
 import type { Entity, Turn } from "../lib/types.ts";
 import { Body } from "./Body.tsx";
+import { Button } from "./kit/Button.tsx";
 import { MentionEditor } from "./MentionEditor.tsx";
 
 export function JarvisWorking(props: { subjectId: string }) {
@@ -69,14 +70,9 @@ export function Comments(props: { parentId: string }) {
         placeholder="Comment, or @Pip to ask for help (Ctrl+Enter to send)"
       />
       <div class="flex justify-end">
-        <button
-          type="button"
-          class="rounded-md bg-accent px-3 py-1 text-sm font-medium text-on-fill disabled:opacity-50"
-          disabled={!draft().trim() || sending()}
-          onClick={send}
-        >
+        <Button variant="primary" disabled={!draft().trim() || sending()} onClick={send}>
           Comment
-        </button>
+        </Button>
       </div>
     </section>
   );

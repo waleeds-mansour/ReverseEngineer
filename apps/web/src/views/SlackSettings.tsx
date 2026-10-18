@@ -101,15 +101,15 @@ export function SlackSettings() {
                     value={token()}
                     onInput={(e) => setToken(e.currentTarget.value)}
                   />
-                  <Button kind="primary" submit disabled={busy() || !token().trim()}>
+                  <Button variant="primary" type="submit" disabled={busy() || !token().trim()}>
                     Connect
                   </Button>
                 </div>
               </form>
             }
           >
-            <div class="flex items-center gap-3 rounded-md bg-sunk px-3 py-3">
-              <div class="flex-1">
+            <div class="flex flex-wrap items-center gap-3 rounded-md bg-sunk px-3 py-3">
+              <div class="min-w-40 flex-1">
                 <p class="font-medium">{s().team}</p>
                 <p class="text-sm text-muted">
                   {s().state === "revoked"
@@ -123,7 +123,7 @@ export function SlackSettings() {
               </div>
               <Button onClick={() => setShowChannels(!showChannels())}>Channels</Button>
               <Button onClick={() => setReplacing(!replacing())}>New token</Button>
-              <Button kind="danger" onClick={() => void disconnect()}>
+              <Button tone="danger" onClick={() => void disconnect()}>
                 Disconnect
               </Button>
             </div>

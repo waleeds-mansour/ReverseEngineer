@@ -52,8 +52,8 @@ function Pairing() {
 
   return (
     <div class="space-y-2">
-      <div class="flex items-center gap-3 rounded-md bg-sunk px-3 py-3">
-        <div class="flex-1">
+      <div class="flex flex-wrap items-center gap-3 rounded-md bg-sunk px-3 py-3">
+        <div class="min-w-40 flex-1">
           <Show when={status()} fallback={<p class="text-sm text-muted">Checking…</p>}>
             {(s) => (
               <>
@@ -95,7 +95,7 @@ function Pairing() {
         </Show>
         <Show when={status()?.paired}>
           <Button
-            kind="danger"
+            tone="danger"
             onClick={async () => {
               await unpairBrowser();
               setCode(null);
@@ -106,7 +106,7 @@ function Pairing() {
             Unpair
           </Button>
         </Show>
-        <Button kind="primary" onClick={() => void pair()}>
+        <Button variant="primary" onClick={() => void pair()}>
           {status()?.paired ? "Pair again" : "Pair Chrome"}
         </Button>
       </div>
@@ -123,7 +123,7 @@ function Pairing() {
             <div class="flex items-center gap-2">
               <code class="flex-1 truncate rounded bg-sunk px-2 py-1 font-mono text-xs">{c()}</code>
               <Button
-                small
+                size="sm"
                 onClick={() => {
                   void navigator.clipboard.writeText(c());
                   toast.show("Code copied.");

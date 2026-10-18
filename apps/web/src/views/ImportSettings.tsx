@@ -1,7 +1,7 @@
 // Settings for bringing things in: a Notion export becomes notes.
 
 import { createSignal, For, Show } from "solid-js";
-import { Button } from "../components/ui.tsx";
+import { Button, TextButton } from "../components/ui.tsx";
 import { ago } from "../lib/format.ts";
 import { queryClient, reportError, toast } from "../lib/live.ts";
 import { layout } from "../lib/panes.ts";
@@ -90,14 +90,14 @@ export function ImportSettings() {
             {(i) => (
               <li class="flex items-center gap-3 px-3 py-2">
                 <div class="min-w-0 flex-1">
-                  <button
-                    type="button"
-                    class="block max-w-full truncate text-left hover:underline disabled:no-underline"
+                  <TextButton
+                    alone
+                    class="block max-w-full truncate"
                     disabled={i.trashedAt !== null}
                     onClick={() => layout.open({ view: "note", id: i.id }, { beside: true })}
                   >
                     {i.title}
-                  </button>
+                  </TextButton>
                   <p class="text-xs text-muted">
                     Imported {ago(i.createdAt)}
                     {i.trashedAt ? ` · undone ${ago(i.trashedAt)}, in the trash` : ""}
@@ -106,12 +106,12 @@ export function ImportSettings() {
                 <Show
                   when={i.trashedAt}
                   fallback={
-                    <Button small kind="danger" onClick={() => void undoImport(i.id)}>
+                    <Button size="sm" tone="danger" onClick={() => void undoImport(i.id)}>
                       Undo this import
                     </Button>
                   }
                 >
-                  <Button small onClick={() => void restore(i.id)}>
+                  <Button size="sm" onClick={() => void restore(i.id)}>
                     Restore
                   </Button>
                 </Show>

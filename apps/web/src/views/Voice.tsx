@@ -211,7 +211,7 @@ function Dictionary() {
           value={write()}
           onInput={(e) => setWrite(e.currentTarget.value)}
         />
-        <Button kind="primary" small submit>
+        <Button variant="primary" size="sm" type="submit">
           Add
         </Button>
       </form>
@@ -284,7 +284,7 @@ function Snippets() {
           value={text()}
           onInput={(e) => setText(e.currentTarget.value)}
         />
-        <Button kind="primary" small submit>
+        <Button variant="primary" size="sm" type="submit">
           Add snippet
         </Button>
       </form>
@@ -375,7 +375,7 @@ function Styles() {
         )}
       </For>
       <Button
-        small
+        size="sm"
         onClick={() =>
           void save([
             ...(styles.data ?? []),

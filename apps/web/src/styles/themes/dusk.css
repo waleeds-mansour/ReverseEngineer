@@ -62,9 +62,9 @@
   --color-avatar-6: #4a2c2e;
   --color-avatar-7: #432d40;
   --color-avatar-8: #33324c;
-  --elevation-1: 0 0.5px 1px #00000099, 0 0 0 0.5px #ffffff1a;
-  --elevation-2: 0 2px 6px #00000080, 0 0 0 0.5px #ffffff1f;
-  --elevation-3: 0 6px 20px #00000099, 0 0 0 0.5px #ffffff1f;
-  --elevation-4: 0 10px 40px #000000c0, 0 0 0 0.5px #ffffff26;
-  --elevation-5: 0 22px 70px 4px #000000bf, 0 2px 6px #00000080, 0 0 0 0.5px #ffffff2e;
+  --elevation-1: 0 0.5px 1px #00000099, 0 0 0 1px #ffffff1f;
+  --elevation-2: 0 2px 6px #00000080, 0 0 0 1px #ffffff1f;
+  --elevation-3: 0 6px 20px #00000099, 0 0 0 1px #ffffff1f;
+  --elevation-4: 0 10px 40px #000000c0, 0 0 0 1px #ffffff26;
+  --elevation-5: 0 22px 70px 4px #000000bf, 0 2px 6px #00000080, 0 0 0 1px #ffffff2e;
 }

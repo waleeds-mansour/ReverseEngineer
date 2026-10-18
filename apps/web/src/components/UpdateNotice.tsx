@@ -127,7 +127,7 @@ export function UpdateNotice() {
             <Notice
               tone="bad"
               action={
-                <Button small disabled={checking()} onClick={() => void checkAgain()}>
+                <Button size="sm" disabled={checking()} onClick={() => void checkAgain()}>
                   {checking() ? "Checking…" : "Check again"}
                 </Button>
               }
@@ -140,7 +140,7 @@ export function UpdateNotice() {
           <Notice
             tone="info"
             action={
-              <Button small onClick={() => reloadPage()}>
+              <Button size="sm" onClick={() => reloadPage()}>
                 Reload
               </Button>
             }

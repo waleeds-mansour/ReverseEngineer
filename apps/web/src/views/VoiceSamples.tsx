@@ -134,12 +134,12 @@ export function Samples() {
           <Show
             when={recording()}
             fallback={
-              <Button kind="primary" onClick={() => void start()}>
+              <Button variant="primary" onClick={() => void start()}>
                 {has(at()) ? "Record again" : "Record"}
               </Button>
             }
           >
-            <Button kind="primary" onClick={stop}>
+            <Button variant="primary" onClick={stop}>
               Stop and save
             </Button>
           </Show>

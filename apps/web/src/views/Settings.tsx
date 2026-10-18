@@ -71,8 +71,10 @@ export function Settings() {
                         : "Pip answers you and also acts on its own: briefs, reminders, follow-ups."}
                     </p>
                   </div>
+                  {/* Its words say which way it goes, so it isn't a pressed toggle as well: a screen
+                      reader would hear "Resume, pressed". Paused, Resume is the card's one action. */}
                   <Button
-                    kind={s().jarvisPaused ? "primary" : "plain"}
+                    variant={s().jarvisPaused ? "primary" : "secondary"}
                     onClick={() => void setPaused(!s().jarvisPaused)}
                   >
                     {s().jarvisPaused ? "Resume" : "Pause"}
@@ -106,8 +108,8 @@ export function Settings() {
                         {ruleWords(r)}
                       </span>
                       <Button
-                        small
-                        kind="danger"
+                        size="sm"
+                        tone="danger"
                         onClick={() => void act("standing_rule.delete", { id: r.id })}
                       >
                         Remove

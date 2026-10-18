@@ -8,6 +8,7 @@ import { For, Show } from "solid-js";
 import { InviteAnswers } from "../../components/InviteAnswers.tsx";
 import { Icon } from "../../components/icons.tsx";
 import { Badge } from "../../components/kit/Badge.tsx";
+import { Button } from "../../components/kit/Button.tsx";
 import type { QueryRead } from "../../components/QueryView.tsx";
 import { day, plural, time } from "../../lib/format.ts";
 import { meetingState, nextMeeting, unanswered } from "../../lib/today.ts";
@@ -131,16 +132,17 @@ function soon(e: CalEvent, now: Date): string {
 /** A video call's Join; it stands out for the meeting on now and the next one. */
 function Join(props: { url: string; strong: boolean }) {
   return (
-    <a
+    <Button
       href={props.url}
       target="_blank"
-      rel="noreferrer"
-      class={`-my-1 inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-md px-3 text-sm font-medium md:min-h-0 md:px-2 md:py-0.5 md:text-xs ${props.strong ? "bg-accent text-on-fill" : "border border-line bg-panel hover:bg-sunk"}`}
+      icon="video"
+      size="sm"
+      variant={props.strong ? "primary" : "secondary"}
+      class="-my-1 shrink-0"
       onClick={(ev) => ev.stopPropagation()}
     >
-      <Icon name="video" size={14} />
       Join
-    </a>
+    </Button>
   );
 }
 

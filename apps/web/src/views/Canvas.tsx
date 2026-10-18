@@ -49,7 +49,7 @@ export function Canvases(props: { pane: number }) {
   return (
     <div class="flex h-full flex-col">
       <PaneHeader title="Boards">
-        <Button kind="primary" small onClick={() => void newCanvas(props.pane)}>
+        <Button variant="primary" size="sm" onClick={() => void newCanvas(props.pane)}>
           New board
         </Button>
       </PaneHeader>

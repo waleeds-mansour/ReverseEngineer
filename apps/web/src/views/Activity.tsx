@@ -59,13 +59,17 @@ export function Activity() {
       <div class="flex-1 space-y-6 overflow-auto px-4 py-4">
         <div class="flex gap-1">
           <Button
-            small
-            kind={slackOnly() ? "plain" : "primary"}
+            size="sm"
+            variant={slackOnly() ? "secondary" : "primary"}
             onClick={() => setSlackOnly(false)}
           >
             Everything
           </Button>
-          <Button small kind={slackOnly() ? "primary" : "plain"} onClick={() => setSlackOnly(true)}>
+          <Button
+            size="sm"
+            variant={slackOnly() ? "primary" : "secondary"}
+            onClick={() => setSlackOnly(true)}
+          >
             Slack
           </Button>
         </div>
@@ -87,7 +91,7 @@ export function Activity() {
                         until {new Date(w.expiresAt!).toLocaleDateString()}
                       </span>
                     </Show>
-                    <Button small onClick={() => void act("jarvis.unwatch", { id: w.id })}>
+                    <Button size="sm" onClick={() => void act("jarvis.unwatch", { id: w.id })}>
                       Stop
                     </Button>
                   </li>

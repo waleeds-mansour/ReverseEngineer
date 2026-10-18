@@ -33,6 +33,7 @@ import { layout, routeFor } from "../lib/panes.ts";
 import { signInConfirmed } from "../lib/signedIn.ts";
 import type { SearchHit } from "../lib/types.ts";
 import { editorLook } from "./editorLook.ts";
+import { TextButton } from "./kit/TextButton.tsx";
 import { remoteCaret } from "./remoteCaret.ts";
 
 const TAG = /<m-ref\s+([^>]*)>([\s\S]*?)<\/m-ref>/g;
@@ -292,9 +293,9 @@ export default function DocEditor(props: { id: string; placeholder?: string }) {
                 ? "This was deleted before your last changes reached Nook. They're kept here: restore it from the trash to save them, or copy the text."
                 : "This was deleted. Restore it from the trash to edit it again; until then you can read it here."}
             </span>
-            <button type="button" class="text-accent hover:underline" onClick={copy}>
+            <TextButton alone onClick={copy}>
               {copied() ? "Copied" : "Copy text"}
-            </button>
+            </TextButton>
           </div>
         )}
       </Show>

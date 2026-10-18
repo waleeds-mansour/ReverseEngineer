@@ -69,12 +69,12 @@ export function RoutineSettings() {
         <For each={routines.data ?? []}>
           {(r) => (
             <li class="space-y-1 rounded-md bg-sunk px-3 py-2 text-sm">
-              <div class="flex items-center gap-3">
+              <div class="flex flex-wrap items-center gap-3">
                 <span class="font-medium">{r.title}</span>
                 <Badge tone={r.active ? "positive" : "neutral"}>
                   {r.active ? r.when : "paused"}
                 </Badge>
-                <span class="flex-1 text-xs text-faint">
+                <span class="min-w-40 flex-1 text-xs text-faint">
                   {r.lastRunAt ? `last ran ${ago(r.lastRunAt)}` : "hasn't run yet"}
                   <Show when={outcomeLabel(r.lastOutcome)}>
                     {(label) => (
@@ -82,18 +82,18 @@ export function RoutineSettings() {
                     )}
                   </Show>
                 </span>
-                <Button small onClick={() => void runNow(r)}>
+                <Button size="sm" onClick={() => void runNow(r)}>
                   Run now
                 </Button>
                 <Button
-                  small
+                  size="sm"
                   onClick={() => void act("routine.update", { id: r.id, active: !r.active })}
                 >
                   {r.active ? "Turn off" : "Turn on"}
                 </Button>
                 <Button
-                  small
-                  kind="danger"
+                  size="sm"
+                  tone="danger"
                   onClick={() => void act("routine.remove", { id: r.id })}
                 >
                   Remove
@@ -168,7 +168,7 @@ export function RoutineSettings() {
               onInput={(e) => setAt(e.currentTarget.value)}
             />
           </Show>
-          <Button kind="primary" onClick={(e) => void add(e)}>
+          <Button variant="primary" onClick={(e) => void add(e)}>
             Add routine
           </Button>
         </div>

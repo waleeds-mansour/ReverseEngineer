@@ -12,6 +12,11 @@
    styles/ is generated). */
 @import "./styles/kit/motion.css";
 
+/* High contrast draws states with edges and solid fills where the others tint: contrast:
+   is for the few places a tint alone would vanish there (a pressed button). :is() lifts it one
+   attribute above the class it overrides, so it wins whatever order Tailwind writes them in. */
+@custom-variant contrast (&:is([data-theme="contrast"] *));
+
 /* Hearth's own names for Nook's tokens, so every view reads the theme without knowing it. New
    code uses Nook's names (surface-1, ink-muted, hairline, positive…); these stay until the views
    move over. */

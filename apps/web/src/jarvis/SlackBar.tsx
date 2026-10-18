@@ -60,10 +60,10 @@ export function SlackBar(props: {
               <Badge tone="warning">A reply waits for your yes</Badge>
             </Show>
             <span class="flex-1" />
-            <Button small onClick={() => setReplying(!replying())}>
+            <Button size="sm" onClick={() => setReplying(!replying())}>
               Reply as Jarvis
             </Button>
-            <Button small kind="jarvis" onClick={() => void ask()}>
+            <Button size="sm" onClick={() => void ask()}>
               Ask Pip about this
             </Button>
             <Show
@@ -82,7 +82,7 @@ export function SlackBar(props: {
                 </select>
               }
             >
-              <Button small onClick={() => pause(0)}>
+              <Button size="sm" onClick={() => pause(0)}>
                 Resume
               </Button>
             </Show>
@@ -114,8 +114,8 @@ export function SlackBar(props: {
                 </select>
                 <Show when={p.tier !== "blocked"}>
                   <Button
-                    small
-                    kind="danger"
+                    size="sm"
+                    tone="danger"
                     onClick={() =>
                       confirm(`Block ${p.name}? The Jarvis bot stops answering them.`) &&
                       void act("slack.member_set", { user: p.id, tier: "blocked" })
@@ -144,7 +144,7 @@ export function SlackBar(props: {
                 value={reply()}
                 onInput={(e) => setReply(e.currentTarget.value)}
               />
-              <Button small kind="primary" submit disabled={!reply().trim()}>
+              <Button size="sm" variant="primary" type="submit" disabled={!reply().trim()}>
                 Send
               </Button>
             </form>

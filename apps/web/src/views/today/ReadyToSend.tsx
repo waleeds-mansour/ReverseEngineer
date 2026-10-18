@@ -169,16 +169,22 @@ function DraftRow(props: { draft: MailDraft; fresh: boolean; go: Go }) {
         <p class="basis-full text-meta text-muted @lg:min-w-40 @lg:flex-1 @lg:basis-auto">
           {wait() ?? (d().account ? `From ${d().account}` : "")}
         </p>
-        <Button kind="danger" small icon="trash-2" disabled={busy()} onClick={() => void discard()}>
+        <Button
+          tone="danger"
+          size="sm"
+          icon="trash-2"
+          disabled={busy()}
+          onClick={() => void discard()}
+        >
           Discard
         </Button>
         <span class="flex-1 @lg:hidden" />
-        <Button small icon="pencil" onClick={edit}>
+        <Button size="sm" icon="pencil" onClick={edit}>
           Edit
         </Button>
         <Button
-          kind="primary"
-          small
+          variant="primary"
+          size="sm"
           icon="send"
           disabled={busy() || wait() !== null}
           onClick={() => void send()}

@@ -70,7 +70,7 @@ export function Trash(props: { pane: number }) {
                     </p>
                   </div>
                   <Badge>{TYPE_LABEL[r.type] ?? r.type}</Badge>
-                  <Button small onClick={() => bringBack(r)} title="Restore (r)">
+                  <Button size="sm" onClick={() => bringBack(r)} title="Restore (r)">
                     Restore
                   </Button>
                 </li>

@@ -5,6 +5,7 @@
 import type { ConversationItem } from "@hearth/core";
 import { For, Match, Show, Switch } from "solid-js";
 import { Body } from "../components/Body.tsx";
+import { TextButton } from "../components/kit/TextButton.tsx";
 import { JarvisMark } from "../components/Mark.tsx";
 import { act } from "../lib/query.ts";
 import { ToolLine } from "./ToolLine.tsx";
@@ -50,13 +51,12 @@ export function LogItem(props: { item: ConversationItem }) {
               {(turnId) => (
                 <>
                   {" "}
-                  <button
-                    type="button"
-                    class="font-medium underline hover:text-ink"
+                  <TextButton
+                    class="font-medium"
                     onClick={() => void act("jarvis.retry_turn", { turnId: turnId() })}
                   >
                     Retry
-                  </button>
+                  </TextButton>
                 </>
               )}
             </Show>

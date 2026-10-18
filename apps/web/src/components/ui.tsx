@@ -1,5 +1,6 @@
 // Small shared pieces: empty, loading and failed states. The pane header (PaneHeader.tsx) and the
-// kit's Badge, Button and Kbd are re-exported, so views import them from here as they always did.
+// kit's Badge, Button, IconButton, TextButton and Kbd are re-exported, so views import them from
+// here as they always did.
 
 import type { JSX } from "solid-js";
 import { Show } from "solid-js";
@@ -11,7 +12,9 @@ import { PaneHeader } from "./PaneHeader.tsx";
 
 export { Badge } from "./kit/Badge.tsx";
 export { Button } from "./kit/Button.tsx";
+export { IconButton } from "./kit/IconButton.tsx";
 export { Kbd } from "./kit/Kbd.tsx";
+export { TextButton } from "./kit/TextButton.tsx";
 export { ForRecord, PaneContext, PaneHeader, type PaneRecord } from "./PaneHeader.tsx";
 
 /** A screen with nothing in it, said in a sentence; EmptyState adds a tile, title and button. */
@@ -31,7 +34,7 @@ export function Failed(props: { error: unknown; retry: () => unknown; what: stri
   return (
     <div role="alert" class="space-y-3 px-4 py-10 text-center text-sm text-muted">
       <p>{failedMessage(props.error, props.what)}</p>
-      <Button small onClick={() => void props.retry()}>
+      <Button size="sm" onClick={() => void props.retry()}>
         Try again
       </Button>
     </div>

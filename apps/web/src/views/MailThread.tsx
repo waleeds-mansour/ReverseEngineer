@@ -72,24 +72,24 @@ export function MailThreadPane(props: { id: string; pane: number }) {
             title={v().subject}
             sub={`${v().account} · ${v().messageCount} message${v().messageCount === 1 ? "" : "s"} · ${v().lane === "noise" ? "Noise" : "Signal"}${v().waiting === "you" ? " · needs your reply" : v().waiting === "them" ? " · waiting on them" : ""}`}
           >
-            <Button small onClick={archiveOrBack}>
+            <Button size="sm" onClick={archiveOrBack}>
               {v().inInbox ? "Archive" : "Move to inbox"}
             </Button>
             {/* A phone has it in the bar along the bottom. */}
             <Show when={!narrow()}>
-              <Button small onClick={task}>
+              <Button size="sm" onClick={task}>
                 Make task
               </Button>
             </Show>
             <Button
-              small
+              size="sm"
               onClick={() => void run("mail.star", { ids: [v().id], starred: !v().starred })}
             >
               {v().starred ? "Unstar" : "Star"}
             </Button>
             <Show when={v().waiting}>
               <Button
-                small
+                size="sm"
                 onClick={() => void run("mail.no_reply", { ids: [v().id] }, "No reply needed.")}
               >
                 No reply needed
@@ -116,10 +116,10 @@ export function MailThreadPane(props: { id: string; pane: number }) {
               )}
             </For>
             <div class="flex gap-2">
-              <Button small onClick={() => reply(false)}>
+              <Button size="sm" onClick={() => reply(false)}>
                 Reply
               </Button>
-              <Button small onClick={() => reply(true)}>
+              <Button size="sm" onClick={() => reply(true)}>
                 Reply all
               </Button>
             </div>

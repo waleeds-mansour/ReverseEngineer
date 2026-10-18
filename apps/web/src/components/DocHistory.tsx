@@ -6,6 +6,7 @@ import { createSignal, For, Show } from "solid-js";
 import { day, time, who } from "../lib/format.ts";
 import { toast } from "../lib/live.ts";
 import { act, useAction } from "../lib/query.ts";
+import { TextButton } from "./kit/TextButton.tsx";
 import { Button } from "./ui.tsx";
 
 type Frontiers = { peer: string; counter: number }[];
@@ -98,14 +99,14 @@ export function DocHistory(props: { id: string; onClose: () => void }) {
         </pre>
         <div class="flex flex-wrap items-center gap-2">
           <Show when={index() !== 0 || picked()}>
-            <Button kind="primary" small onClick={() => void restore()}>
+            <Button variant="primary" size="sm" onClick={() => void restore()}>
               Restore this version
             </Button>
           </Show>
           <Show
             when={naming()}
             fallback={
-              <Button small onClick={() => setNaming(true)}>
+              <Button size="sm" onClick={() => setNaming(true)}>
                 Save as checkpoint
               </Button>
             }
@@ -121,7 +122,7 @@ export function DocHistory(props: { id: string; onClose: () => void }) {
               }}
             />
           </Show>
-          <Button small onClick={props.onClose}>
+          <Button size="sm" onClick={props.onClose}>
             Back to editing
           </Button>
         </div>
@@ -133,14 +134,13 @@ export function DocHistory(props: { id: string; onClose: () => void }) {
             <For each={history.data?.checkpoints}>
               {(c) => (
                 <li class="flex items-center gap-2 text-sm">
-                  <button
-                    type="button"
-                    class="flex-1 truncate text-left hover:underline"
-                    classList={{ "font-semibold": picked()?.id === c.id }}
+                  <TextButton
+                    alone
+                    class={`flex-1 truncate ${picked()?.id === c.id ? "font-semibold" : ""}`}
                     onClick={() => setPicked(c)}
                   >
                     {c.name}
-                  </button>
+                  </TextButton>
                   <span class="text-xs text-faint">{when(c.createdAt)}</span>
                   <button
                     type="button"

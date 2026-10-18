@@ -299,7 +299,9 @@ try {
       // A checkbox counts by the label around it.
       const box = (el.closest("label") ?? el).getBoundingClientRect();
       const shown = box.width > 0 && box.bottom > 0 && box.top < innerHeight;
-      if (shown && (box.height < 44 || box.width < 44))
+      // A link in a sentence is as wide as its words, which WCAG 2.5.8 allows; it is still 44 tall.
+      const inline = el.hasAttribute("data-inline");
+      if (shown && (box.height < 44 || (!inline && box.width < 44)))
         out.push((el.getAttribute("aria-label") ?? el.textContent.trim()) + " " + box.width + "×" + box.height);
     }
     if (document.documentElement.scrollWidth > innerWidth) out.push("the page scrolls sideways");

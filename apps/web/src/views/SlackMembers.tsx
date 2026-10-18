@@ -178,7 +178,7 @@ function AddMember() {
           value={q()}
           onInput={(e) => setQ(e.currentTarget.value)}
         />
-        <Button small submit disabled={!q().trim()}>
+        <Button size="sm" type="submit" disabled={!q().trim()}>
           Find
         </Button>
       </form>
@@ -190,7 +190,7 @@ function AddMember() {
                 {c.name} <span class="text-xs text-faint">{c.email ?? c.id}</span>
               </span>
               <Show when={!c.guest} fallback={<span class="text-xs text-faint">a guest</span>}>
-                <Button small onClick={() => void add(c)}>
+                <Button size="sm" onClick={() => void add(c)}>
                   Share free time
                 </Button>
               </Show>
@@ -247,10 +247,10 @@ function AnswerForm(props: { answer?: Answer; onDone: () => void }) {
         onInput={(e) => setUsers(e.currentTarget.value)}
       />
       <div class="flex gap-2">
-        <Button small kind="primary" submit disabled={!body().trim()}>
+        <Button size="sm" variant="primary" type="submit" disabled={!body().trim()}>
           Save
         </Button>
-        <Button small onClick={props.onDone}>
+        <Button size="sm" onClick={props.onDone}>
           Cancel
         </Button>
       </div>
@@ -287,10 +287,10 @@ function SharedAnswers() {
                         {a.users ? `Only for ${a.users.join(", ")}` : "For everyone"}
                       </p>
                     </div>
-                    <Button small onClick={() => setEditing(a.id)}>
+                    <Button size="sm" onClick={() => setEditing(a.id)}>
                       Edit
                     </Button>
-                    <Button small kind="danger" onClick={() => void remove(a)}>
+                    <Button size="sm" tone="danger" onClick={() => void remove(a)}>
                       Delete
                     </Button>
                   </div>
@@ -305,7 +305,7 @@ function SharedAnswers() {
       <Show
         when={editing() === "new"}
         fallback={
-          <Button small onClick={() => setEditing("new")}>
+          <Button size="sm" onClick={() => setEditing("new")}>
             Add an answer
           </Button>
         }

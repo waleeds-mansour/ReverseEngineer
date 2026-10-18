@@ -118,8 +118,8 @@ export function PasskeySettings() {
                       </span>
                       <Show when={removable(p)}>
                         <Button
-                          small
-                          kind="danger"
+                          size="sm"
+                          tone="danger"
                           label={`Remove ${named(p)}, added ${date(new Date(p.createdAt))}`}
                           onClick={() => void remove(p)}
                         >
