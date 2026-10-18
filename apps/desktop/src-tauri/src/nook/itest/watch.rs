@@ -132,9 +132,10 @@ fn nook_wm_observes_writes_nothing_and_sleeps_when_idle() {
     });
     let cfg = Config {
         dir: tmp.path().to_path_buf(),
+        // Read as observe.rs does: on an elevated runner the window host is elevated too.
         own: Own {
             pid: std::process::id(),
-            elevated: false,
+            elevated: crate::nook::process::own_elevated(),
         },
         observe: false,
         panel_open: true,

@@ -25,9 +25,10 @@ fn shell_and_game_classes_are_ignored_without_opening_their_process() {
         );
         let probe = Guarded::default();
         probe.allow(pid);
+        // Read as observe.rs does: on an elevated runner the window host is elevated too.
         let own = Own {
             pid: std::process::id(),
-            elevated: false,
+            elevated: crate::nook::process::own_elevated(),
         };
         let rules = Rules {
             default: defaults().iter().collect(),
