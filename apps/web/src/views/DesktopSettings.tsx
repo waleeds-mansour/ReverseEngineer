@@ -125,6 +125,27 @@ export function DesktopSettings() {
         </p>
       </Show>
 
+      {/* Nook's panel is a page of the app itself (docs/nook-wm.md, "OPT-IN FLOW"), so the link
+          is offered only inside it. */}
+      <Show when={inDesktopApp()}>
+        <div class="flex items-center gap-3 rounded-md bg-sunk px-3 py-3">
+          <div class="flex-1">
+            <p class="font-medium">Arrange windows (preview)</p>
+            <p class="text-sm text-muted">
+              See what Nook would do with each window on this PC. For now it only watches: no window
+              is moved.
+            </p>
+          </div>
+          <Button
+            onClick={() => {
+              location.href = "hearth://nook-panel";
+            }}
+          >
+            Open
+          </Button>
+        </div>
+      </Show>
+
       <details class="text-sm">
         <summary class="cursor-pointer text-muted">Pair with a code instead</summary>
         <div class="mt-2 space-y-2">

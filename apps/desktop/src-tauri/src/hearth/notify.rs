@@ -77,6 +77,8 @@ async fn listen(app: &AppHandle, h: &Hearth, last_id: &mut Option<String>) -> Re
             }
             match serde_json::from_str::<Message>(&event.data) {
                 Ok(m) if !window::main_focused(app) => {
+                    // It waits on the Pip chip in Nook's bar too, until Hearth's window is seen.
+                    crate::nook::pip_notified(app);
                     toast::show(app, &m.title, &m.body, Some(&links::open_link(&m.url)))
                 }
                 Ok(_) => {}

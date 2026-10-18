@@ -765,6 +765,7 @@ pub fn run(cli_args: CliArgs) {
             trigger_update_check,
             show_main_window_command,
             nook::prepare_update,
+            nook::nook_ui,
             commands::cancel_operation,
             commands::is_portable,
             commands::is_update_checks_locked,
@@ -832,7 +833,16 @@ pub fn run(cli_args: CliArgs) {
         )
         .expect("Failed to export typescript bindings");
 
-    let invoke_handler = specta_builder.invoke_handler();
+    let specta_handler = specta_builder.invoke_handler();
+    // Hearth: Nook's pages may call nook_ui and no other app command (nook::may_invoke).
+    let invoke_handler = move |invoke: tauri::ipc::Invoke| {
+        let message = &invoke.message;
+        if !nook::may_invoke(message.webview_ref().label(), message.command()) {
+            invoke.resolver.reject("Nook's pages may call nook_ui only");
+            return true;
+        }
+        specta_handler(invoke)
+    };
 
     // The headless path must run as its own instance (see the single-instance
     // note below), not forward to an already-running app.
@@ -1143,6 +1153,12 @@ pub fn run(cli_args: CliArgs) {
             Ok(())
         })
         .on_window_event(|window, event| match event {
+            // Hearth: Nook's panel really closes, which ends the observing it started.
+            tauri::WindowEvent::CloseRequested { .. } if nook::closes(window.label()) => {}
+            // Nook's bar and popover stay as their switch says.
+            tauri::WindowEvent::CloseRequested { api, .. } if nook::stays(window.label()) => {
+                api.prevent_close();
+            }
             tauri::WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
                 let _res = window.hide();
@@ -1168,8 +1184,12 @@ pub fn run(cli_args: CliArgs) {
             }
             // Hearth's small windows (quick capture, ask Jarvis) tuck away on clicking elsewhere.
             tauri::WindowEvent::Focused(false) => hearth::window::blurred(window),
+            // Hearth: a click that activated Nook's bar hands the foreground back.
+            tauri::WindowEvent::Focused(true) => nook::focused(window.app_handle(), window.label()),
             // Minimized, Hearth's page rests as it does in the tray.
             tauri::WindowEvent::Resized(_) => hearth::sight::resized(window),
+            // Hearth: once Nook's panel is gone, observing stops unless its switch is on.
+            tauri::WindowEvent::Destroyed => nook::destroyed(window.app_handle(), window.label()),
             tauri::WindowEvent::ThemeChanged(theme) => {
                 log::info!("Theme changed to: {:?}", theme);
                 // Re-apply the current tray state with the new theme's icon set

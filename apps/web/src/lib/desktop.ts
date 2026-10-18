@@ -69,6 +69,37 @@ export function whenShownAgain(
   };
 }
 
+/** Nook's six themes: the only ones the app's hearth://theme link takes. */
+const THEME_IDS = /^(light|paper|dark|midnight|dusk|contrast)$/;
+
+/** The hearth:// link that tells the app's Nook bar the theme shown, or null for anything else. */
+export function themeLink(id: string): string | null {
+  return THEME_IDS.test(id) ? `hearth://theme/${id}` : null;
+}
+
+/** What themeTeller needs of the window. */
+export interface ThemeWindow {
+  open(url: string, target: string): unknown;
+}
+
+/**
+ * In the app, tells its Nook bar the theme this page shows, with a hearth://theme link the app
+ * takes only from its own windows, and sends only a change. The link goes as a new window, which
+ * the app takes and denies (WebView2 asks the app about every one, with no popup blocker): sent
+ * by navigating this page, it could stop what's still loading, and would ask "Leave site?" while
+ * a document is saving. In a browser it does nothing. Returns the function to call with each
+ * theme shown.
+ */
+export function themeTeller(win: ThemeWindow = window, app = inDesktopApp()) {
+  let told: string | null = null;
+  return (id: string) => {
+    const link = app ? themeLink(id) : null;
+    if (!link || link === told) return;
+    told = link;
+    win.open(link, "_blank");
+  };
+}
+
 /** Splits quick capture's text into a task: the first line is its title, the rest its notes. */
 export function captureToTask(text: string): { title: string; body?: string } | null {
   const [first = "", ...rest] = text.trim().split(/\r?\n/);

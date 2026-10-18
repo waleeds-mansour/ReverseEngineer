@@ -101,6 +101,8 @@ pub fn cancel_current_operation(app: &AppHandle) {
     // Update tray icon and hide overlay
     set_tray_state(app, crate::tray::TrayIconState::Idle);
     hide_recording_overlay(app);
+    // Hearth: Pip in Nook's bar stops listening.
+    crate::nook::pip_cancelled(app);
 
     // Unload model if immediate unload is enabled
     tm.maybe_unload_immediately("cancellation");

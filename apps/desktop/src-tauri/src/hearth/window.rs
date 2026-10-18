@@ -323,6 +323,8 @@ fn from_page(app: &AppHandle, label: &str, link: &str) {
             }
         }
         Ok(links::Link::Retry) => offline::retry(app),
+        // The theme Hearth's window shows, for Nook's bar; only Hearth's own pages send it.
+        Ok(links::Link::Theme(id)) => crate::nook::theme(app, id),
         _ => deeplink::handle(app, link),
     }
 }

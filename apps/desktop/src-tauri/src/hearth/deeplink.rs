@@ -54,6 +54,9 @@ pub fn handle(app: &AppHandle, raw: &str) {
         Ok(Link::Retry) => offline::retry(app),
         // Only Hearth's small windows close themselves; a link from outside can't.
         Ok(Link::Close) => {}
+        Ok(Link::NookPanel) => crate::nook::open_panel(app),
+        // Only Hearth's own windows tell Nook the theme; from a browser or another program, no.
+        Ok(Link::Theme(_)) => log::warn!("Ignored a hearth://theme link from outside Hearth"),
         Err(e) => log::warn!("Ignored a hearth:// link: {e}"),
     }
 }

@@ -2,6 +2,7 @@
 // so everything in one is checked here before the app acts on it: a page is only ever a path on
 // the Hearth address set in this app's settings, never an address from the link.
 
+use crate::nook::ThemeId;
 use url::Url;
 
 /// What a hearth:// link asks for.
@@ -17,6 +18,12 @@ pub enum Link {
     Retry,
     /// `hearth://close`: a small window (quick capture, ask Jarvis) closing itself.
     Close,
+    /// `hearth://nook-panel`: Nook's panel, from Settings > Desktop. A link from anywhere can at
+    /// most open it, and the panel only observes.
+    NookPanel,
+    /// `hearth://theme/<id>`: the theme Hearth's window shows, for Nook's bar. Taken only from
+    /// Hearth's own windows (window.rs); from anywhere else it is dropped (deeplink.rs).
+    Theme(ThemeId),
 }
 
 const MAX_PATH: usize = 2048;
@@ -55,10 +62,17 @@ pub fn parse(raw: &str) -> Result<Link, String> {
                 _ => Err("a connect link needs one nonce".into()),
             }
         }
-        "settings" | "retry" | "close" if path.is_empty() || path == "/" => {
+        // Exactly /<one of the six ids>: no query, no fragment, nothing after it.
+        "theme" if url.query().is_none() && url.fragment().is_none() => path
+            .strip_prefix('/')
+            .and_then(ThemeId::parse)
+            .map(Link::Theme)
+            .ok_or_else(|| "not one of Nook's themes".to_string()),
+        "settings" | "retry" | "close" | "nook-panel" if path.is_empty() || path == "/" => {
             Ok(match what.as_str() {
                 "settings" => Link::Settings,
                 "retry" => Link::Retry,
+                "nook-panel" => Link::NookPanel,
                 _ => Link::Close,
             })
         }
@@ -243,8 +257,35 @@ mod tests {
         assert_eq!(parse("hearth://settings/"), Ok(Link::Settings));
         assert_eq!(parse("hearth://retry"), Ok(Link::Retry));
         assert_eq!(parse("hearth://close"), Ok(Link::Close));
+        assert_eq!(parse("hearth://nook-panel"), Ok(Link::NookPanel));
+        assert_eq!(parse("HEARTH://Nook-Panel/"), Ok(Link::NookPanel));
+        assert!(parse("hearth://nook-panel/windows").is_err());
+        assert!(parse("hearth://nook-panel?arrange=1").is_ok_and(|l| l == Link::NookPanel));
         assert!(parse("hearth://nope").is_err());
         assert!(parse("not a link").is_err());
+    }
+
+    #[test]
+    fn reads_only_the_six_themes() {
+        assert_eq!(parse("hearth://theme/dark"), Ok(Link::Theme(ThemeId::Dark)));
+        assert_eq!(
+            parse("HEARTH://Theme/contrast"),
+            Ok(Link::Theme(ThemeId::Contrast))
+        );
+        for bad in [
+            "hearth://theme",
+            "hearth://theme/",
+            "hearth://theme/system",
+            "hearth://theme/Dark",
+            "hearth://theme/dark/",
+            "hearth://theme/dark/x",
+            "hearth://theme/dark?then=1",
+            "hearth://theme/dark#x",
+            "hearth://theme/%64ark",
+            "hearth://theme/dark%00",
+        ] {
+            assert!(parse(bad).is_err(), "{bad}");
+        }
     }
 
     #[test]

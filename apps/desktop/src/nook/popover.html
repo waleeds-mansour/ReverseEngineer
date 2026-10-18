@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <!-- The Nook bar's popover: nothing loads from anywhere but Hearth's bundle, and it talks
+         only to Tauri's IPC. Vite's dev server drops this tag (vite.config.ts). -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nook</title>
+  </head>
+  <body>
+    <section
+      id="pop"
+      class="np re-popover re-glass-strong"
+      aria-label="Nook"
+    ></section>
+    <script type="module" src="/src/nook/popover.ts"></script>
+  </body>
+</html>

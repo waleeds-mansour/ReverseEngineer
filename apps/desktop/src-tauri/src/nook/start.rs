@@ -153,7 +153,7 @@ mod tests {
     #[test]
     fn safe_start_comes_before_the_settings() {
         let on = NookSettings {
-            bar: true,
+            ring: true,
             ..NookSettings::default()
         };
         assert_eq!(status(&on, false, &[MIN, 2 * MIN]), Status::SafeStart);

@@ -1,0 +1,9 @@
+/* The preview stands in for the desktop behind the glass: DWM's acrylic isn't there in a
+   browser, so a soft wallpaper shows what the translucent fill sits on. */
+
+html.preview-wall,
+html.preview-wall body {
+  background:
+    radial-gradient(60% 140% at 15% 0%, #6aa7e8 0%, transparent 70%),
+    radial-gradient(50% 160% at 85% 100%, #e9a46a 0%, transparent 70%), #8a92a6;
+}

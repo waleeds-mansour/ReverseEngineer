@@ -13,6 +13,8 @@ const OURS = [
   "apps/desktop/src-tauri/src/nook/",
   "apps/desktop/src-tauri/crates/nook-restore/",
   "apps/desktop/scripts/build-guard.ts",
+  "apps/desktop/scripts/nook-rules.ts",
+  "apps/desktop/src/nook/",
   "apps/desktop/src/components/settings/Hearth",
 ];
 const SOURCE = /\.(ts|tsx|js|rs|css)$/;

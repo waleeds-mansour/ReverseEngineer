@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { captureToTask, inDesktopApp, miniPage, pageLink, whenShownAgain } from "./desktop.ts";
+import {
+  captureToTask,
+  inDesktopApp,
+  miniPage,
+  pageLink,
+  type ThemeWindow,
+  themeLink,
+  themeTeller,
+  whenShownAgain,
+} from "./desktop.ts";
 
 const EDGE =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36 Edg/140.0.0.0";
@@ -73,5 +82,35 @@ describe("Hearth's Windows app", () => {
     stop();
     win.dispatchEvent(new Event("focus"));
     expect(checks).toBe(2);
+  });
+
+  it("links only Nook's six themes", () => {
+    for (const id of ["light", "paper", "dark", "midnight", "dusk", "contrast"]) {
+      expect(themeLink(id)).toBe(`hearth://theme/${id}`);
+    }
+    for (const id of ["system", "Dark", "", "dark/../x", "dark?x=1"])
+      expect(themeLink(id)).toBeNull();
+  });
+
+  it("tells the app's bar each new theme as a window it denies, and a browser nothing", () => {
+    const opened: string[] = [];
+    const win: ThemeWindow = {
+      open: (url, target) => {
+        opened.push(`${target} ${url}`);
+        return null;
+      },
+    };
+    const tell = themeTeller(win, true);
+    tell("dusk");
+    tell("dusk");
+    tell("paper");
+    tell("system");
+    expect(opened).toEqual(["_blank hearth://theme/dusk", "_blank hearth://theme/paper"]);
+    tell("dusk");
+    expect(opened).toHaveLength(3);
+
+    const browser: string[] = [];
+    themeTeller({ open: (url) => browser.push(url) }, false)("dark");
+    expect(browser).toEqual([]);
   });
 });
