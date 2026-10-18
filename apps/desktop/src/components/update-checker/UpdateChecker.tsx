@@ -140,7 +140,7 @@ const UpdateChecker: React.FC<UpdateCheckerProps> = ({ className = "" }) => {
         return;
       }
 
-      await update.downloadAndInstall((event) => {
+      await update.download((event) => {
         switch (event.event) {
           case "Started":
             downloadedBytesRef.current = 0;
@@ -159,6 +159,14 @@ const UpdateChecker: React.FC<UpdateCheckerProps> = ({ className = "" }) => {
             break;
         }
       });
+      // Nook shows the windows it hid once the download is done, right before the installer
+      // replaces this version, so the windows aren't left un-arranged for a download that fails
+      // or takes minutes. The update goes ahead whatever Nook answers.
+      const nook = await commands.prepareUpdate();
+      if (nook.status === "error") {
+        console.warn("Nook before the update:", nook.error);
+      }
+      await update.install();
       await relaunch();
     } catch (error) {
       console.error("Failed to install update:", error);

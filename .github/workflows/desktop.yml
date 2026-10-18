@@ -2,8 +2,9 @@ name: Desktop
 
 # Builds Hearth for Windows (apps/desktop, a fork of Handy; D53) and keeps the installer
 # (Hearth_1.0.<run>_x64-setup.exe, installed per user) as an artifact, so the PC can install it
-# without a Rust toolchain. Runs Hearth's own Rust tests first. The Windows steps follow Handy's
-# build.yml.
+# without a Rust toolchain. Runs Hearth's own Rust tests first, Nook's among them, and checks
+# nook-restore (the crate the guard and the restore CLI are built from) on its own, since it is a
+# workspace of its own. The Windows steps follow Handy's build.yml.
 
 on:
   pull_request:
@@ -34,7 +35,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
       - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
-          workspaces: "apps/desktop/src-tauri -> target"
+          workspaces: |
+            apps/desktop/src-tauri -> target
+            apps/desktop/src-tauri/crates/nook-restore -> target
           cache-bin: false
 
       - name: Vulkan SDK
@@ -82,7 +85,20 @@ jobs:
 
       - name: Hearth's Rust tests
         working-directory: apps/desktop/src-tauri
-        run: cargo test --lib hearth
+        run: cargo test --lib -- hearth nook
+
+      # One command per step: a step's shell reports only its last command's exit code.
+      - name: Nook's restore crate, tests
+        working-directory: apps/desktop/src-tauri/crates/nook-restore
+        run: cargo test --locked --features fake --lib
+
+      - name: Nook's restore crate, clippy
+        working-directory: apps/desktop/src-tauri/crates/nook-restore
+        run: cargo clippy --locked --all-targets --features fake -- -D warnings
+
+      - name: Nook's restore crate, format
+        working-directory: apps/desktop/src-tauri/crates/nook-restore
+        run: cargo fmt -- --check
 
       # Each build's version is higher than the last (1.0.<run number>), so Windows installs it as
       # an upgrade. tauri.conf.json's 1.0.0 is only the local default (D53).

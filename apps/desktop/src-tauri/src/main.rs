@@ -5,6 +5,21 @@ use clap::Parser;
 use handy_app_lib::CliArgs;
 
 fn main() {
+    // `hearth.exe --nook-restore-windows`, which puts back the windows Nook arranged (D75). It
+    // runs before anything else reads the arguments, so the installer's hooks and a person in a
+    // terminal get their windows back even when Hearth is stuck, and single-instance and deep
+    // links never see these flags. Hearth's own version goes first, so a flag given later wins.
+    #[cfg(windows)]
+    {
+        let mut args = std::env::args_os();
+        let version =
+            std::ffi::OsString::from(concat!("--hearth-version=", env!("HEARTH_VERSION")));
+        let args = args.next().into_iter().chain([version]).chain(args);
+        if let Some(code) = nook_restore::cli::maybe_run(args) {
+            std::process::exit(code);
+        }
+    }
+
     let cli_args = CliArgs::parse();
 
     #[cfg(target_os = "linux")]

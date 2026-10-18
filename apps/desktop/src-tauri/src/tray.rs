@@ -69,6 +69,8 @@ struct MenuInputs {
     hearth_status: String,
     /// Hearth is installed as a service here, so it can be restarted and updated from the tray.
     hearth_installed: bool,
+    /// Nook arranges windows, so the tray offers to pause it and to put every window back.
+    nook_arranging: bool,
 }
 
 /// Complete description of what the tray should look like.
@@ -350,6 +352,7 @@ fn compute_desired(app: &AppHandle, icon_state: TrayIconState) -> TrayDesired {
                 .map(|s| s.line())
                 .unwrap_or_else(|| "Checking Nook…".to_string()),
             hearth_installed: crate::hearth::services::hearth_folder().is_some(),
+            nook_arranging: crate::nook::arranging(app),
         },
     }
 }
@@ -633,6 +636,31 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
         )?
     };
 
+    // Nook's two items sit right below Hearth's own, and only while Nook arranges windows (D75):
+    // until then there is nothing to pause or put back, and the menu stays as it was.
+    if inputs.nook_arranging {
+        let pause_i = MenuItem::with_id(
+            app,
+            crate::nook::TRAY_PAUSE,
+            "Pause window arranging",
+            true,
+            None::<&str>,
+        )?;
+        let put_back_i = MenuItem::with_id(
+            app,
+            crate::nook::TRAY_PUT_BACK,
+            "Put all windows back and turn off",
+            true,
+            None::<&str>,
+        )?;
+        let below = menu
+            .items()?
+            .iter()
+            .position(|item| item.id() == "hearth_meeting")
+            .map_or(0, |at| at + 1);
+        menu.insert_items(&[&pause_i, &put_back_i], below)?;
+    }
+
     // When update checks are forced off (e.g. HANDY_DISABLE_UPDATER, set by
     // the Nix package), the item is dropped from the menu rather than shown
     // disabled — it can never do anything in that case, and a disabled item
@@ -761,6 +789,7 @@ mod tests {
             recording: false,
             hearth_status: "Server ✓  Worker ✓  Pip ✓".to_string(),
             hearth_installed: true,
+            nook_arranging: false,
         }
     }
 

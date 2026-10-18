@@ -1,5 +1,11 @@
 {
+  "build": {
+    "beforeBuildCommand": "bun run build:guard && bun run build"
+  },
   "bundle": {
+    "externalBin": [
+      "binaries/nook-guard"
+    ],
     "resources": {
       "resources": "resources",
       "transcribe-libs": "."

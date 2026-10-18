@@ -15,6 +15,7 @@ mod input;
 mod llm_client;
 mod managers;
 mod memory;
+mod nook;
 mod overlay;
 mod paste_tx;
 pub mod portable;
@@ -235,6 +236,8 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     // Hearth's notifications, and the tray's status line (D53).
     hearth::notify::start(app_handle);
     hearth::status::start(app_handle);
+    // Nook (D75): its switches, its disabled file, and a restore an earlier run left owing.
+    nook::init(app_handle);
 
     // Saved recordings are the only files the settings window plays (convertFileSrc), so the
     // asset protocol reaches only them (tauri.conf.json); a portable install keeps them here.
@@ -364,6 +367,9 @@ fn initialize_core_logic(app_handle: &AppHandle) {
             }
             "quit" => {
                 app.exit(0);
+            }
+            id if id == nook::TRAY_PAUSE || id == nook::TRAY_PUT_BACK => {
+                nook::tray_action(app, id);
             }
             id if id.starts_with("model_select:") => {
                 let model_id = id.strip_prefix("model_select:").unwrap().to_string();
@@ -758,6 +764,7 @@ pub fn run(cli_args: CliArgs) {
             secure_input::run_keyboard_diagnostic,
             trigger_update_check,
             show_main_window_command,
+            nook::prepare_update,
             commands::cancel_operation,
             commands::is_portable,
             commands::is_update_checks_locked,
@@ -1197,7 +1204,11 @@ pub fn run(cli_args: CliArgs) {
             show_main_window(app);
         }
         // Before the window-state plugin saves Hearth's window on the way out (hearth/sight.rs).
-        tauri::RunEvent::ExitRequested { .. } => hearth::sight::quitting(app),
+        // A restore Nook is still running gets a moment to finish.
+        tauri::RunEvent::ExitRequested { .. } => {
+            hearth::sight::quitting(app);
+            nook::shutdown(app);
+        }
         // Teardown transcribe.cpp before exit
         tauri::RunEvent::Exit => {
             if let Some(tm) = app.try_state::<Arc<TranscriptionManager>>() {

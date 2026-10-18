@@ -9,9 +9,12 @@ voice commands to Jarvis, and talking to Jarvis out loud. It is a fork of
 
 ## What Hearth adds
 
-All of it lives in `src-tauri/src/hearth/` and `src/components/settings/HearthSettings.tsx`, with
-small hooks into Handy's code (look for `hearth` in `actions.rs`, `settings.rs`, `lib.rs`,
-`tray.rs`, `cli.rs` and `transcription_coordinator.rs`).
+All of it lives in `src-tauri/src/hearth/`, `src-tauri/src/nook/` and
+`src-tauri/crates/nook-restore/` (Nook arranging windows, and putting them back),
+`src-tauri/nsis/hooks.nsh`, `scripts/build-guard.ts` and
+`src/components/settings/HearthSettings.tsx`, with small hooks into Handy's code (look for
+`hearth` in `actions.rs`, `settings.rs`, `lib.rs`, `tray.rs`, `cli.rs` and
+`transcription_coordinator.rs`, and `nook` in `main.rs`, `build.rs`, `lib.rs` and `tray.rs`).
 
 - **Hearth's window** (`hearth/window.rs`): Hearth's web app from the address in voice settings
   (`http://localhost:4400` on the PC). Tray left-click, Ctrl+Alt+H, or starting the app again
@@ -51,6 +54,18 @@ small hooks into Handy's code (look for `hearth` in `actions.rs`, `settings.rs`,
 - **Named Hearth** (`hearth.exe`, identifier `app.hearth.desktop`), installed per user, and
   started with Windows (hidden) by default. Handy's updater is off and its signing key removed,
   so a Handy release never replaces it; updates come from Hearth's own installer for now.
+- **Nook arranging windows** (`nook/`, D75, [docs/nook-wm.md](../../docs/nook-wm.md)): off, and in
+  this version there is nothing to turn on yet. What is here keeps windows safe whatever happens:
+  `hearth.exe --nook-restore-windows` puts back every window Nook arranged (the installer runs it
+  before an update or an uninstall, `nsis/hooks.nsh`), Hearth finishes a restore an earlier run
+  left owing when it starts, and once Nook can be turned on, `nook-guard.exe`
+  (`crates/nook-restore`) does it when Hearth can't. Nook's log is `nook.log` in
+  `%LOCALAPPDATA%\app.hearth.desktop\nook`, and a file named `disabled` there keeps Nook off.
+  `hearth.exe` is a windowed program, so a terminal doesn't wait for it on its own. In cmd, run
+  `start /wait "" "%LOCALAPPDATA%\Hearth\hearth.exe" --nook-restore-windows`, and
+  `echo %errorlevel%` then gives 0 when every window came back; in PowerShell,
+  `(Start-Process "$env:LOCALAPPDATA\Hearth\hearth.exe" --nook-restore-windows -Wait -PassThru -NoNewWindow).ExitCode`.
+  Either way it says what it did; `--quiet` says nothing.
 
 ## Building
 
@@ -58,6 +73,10 @@ See [BUILD.md](BUILD.md); the steps are Handy's. On Windows you need Rust, Bun, 
 and an ONNX Runtime (set `ORT_LIB_LOCATION` and `ORT_PREFER_DYNAMIC_LINK=1`). The `Desktop`
 GitHub workflow builds the Windows installer whenever this folder changes, versioned
 `1.0.<run number>` so each one installs as an upgrade; a local build is `1.0.0`.
+
+On Windows, `tauri build` first runs `bun run build:guard`, which builds `nook-guard.exe` from
+`src-tauri/crates/nook-restore` into `src-tauri/binaries/`. Other builds (`cargo test`,
+`tauri dev`, the bake-off) get a stand-in from `build.rs`, which a `tauri build` refuses.
 
 A development build doesn't register `hearth://` links or touch the startup list: both belong to
 the installed app, and a dev build would take them over.

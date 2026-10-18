@@ -11,3 +11,7 @@
 # tauri.windows.conf.json on Windows, into /usr/lib/Handy (deb/rpm) via
 # tauri.conf.json on Linux.
 /transcribe-libs/
+
+# nook-guard.exe for Tauri's externalBin: built by `bun run build:guard`, or a stand-in made by
+# build.rs for builds that don't ship (build.rs, stage_nook_guard).
+/binaries/
