@@ -109,7 +109,7 @@ export function DataSettings() {
                   </label>
                 </div>
                 <Button onClick={() => void check(s)}>Check</Button>
-                <Button kind="danger" onClick={() => void forget(s)}>
+                <Button tone="danger" onClick={() => void forget(s)}>
                   Forget
                 </Button>
               </li>
@@ -156,8 +156,8 @@ export function DataSettings() {
           under the deployment's Settings.
         </p>
         <Button
-          kind="primary"
-          submit
+          variant="primary"
+          type="submit"
           disabled={!label().trim() || !address().trim() || !key().trim()}
         >
           Connect

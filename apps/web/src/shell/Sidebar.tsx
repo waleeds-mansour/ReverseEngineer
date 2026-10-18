@@ -6,7 +6,7 @@ import { createRoot, createSignal, For, type JSX, Show } from "solid-js";
 import { Icon } from "../components/icons.tsx";
 import { NookMark } from "../components/Mark.tsx";
 import { Overflow } from "../components/Menu.tsx";
-import { Badge, Kbd } from "../components/ui.tsx";
+import { Badge, IconButton, Kbd } from "../components/ui.tsx";
 import { JarvisStatusMark, jarvis } from "../jarvis/JarvisPane.tsx";
 import { authPost } from "../lib/api.ts";
 import { APPS, type App, type AppId, appOf } from "../lib/apps.ts";
@@ -63,23 +63,16 @@ function LiveDot(props: { class?: string }) {
  */
 const LiveWord = () => <span class="sr-only">{liveWord()}</span>;
 
-/** A button in the sidebar's corner that shows only an icon. */
-const CORNER =
-  "flex size-7 items-center justify-center rounded-md text-muted hover:bg-panel hover:text-ink";
-
 /** What shows when the sidebar is hidden: a button to bring it back. */
 export function SidebarRail() {
   return (
     <div class="flex shrink-0 flex-col items-center border-r border-line bg-sunk/50 px-1.5 py-3">
-      <button
-        type="button"
-        class={CORNER}
-        aria-label="Show the sidebar"
+      <IconButton
+        icon="panel-left-open"
+        label="Show the sidebar"
         title={`Show the sidebar (${keyLabel("mod+b")})`}
         onClick={() => sidebar.toggle(false)}
-      >
-        <Icon name="panel-left-open" size={18} />
-      </button>
+      />
       <LiveDot class="mt-3" />
       <LiveWord />
     </div>
@@ -179,15 +172,13 @@ export function Sidebar(props: {
         <LiveWord />
         <span class="flex-1" />
         <Show when={!props.onPicked}>
-          <button
-            type="button"
-            class={`-mr-1 ${CORNER}`}
-            aria-label="Hide the sidebar"
+          <IconButton
+            icon="panel-left-close"
+            label="Hide the sidebar"
             title={`Hide the sidebar (${keyLabel("mod+b")})`}
+            class="-mr-1"
             onClick={() => sidebar.toggle(true)}
-          >
-            <Icon name="panel-left-close" size={18} />
-          </button>
+          />
         </Show>
       </div>
       <button

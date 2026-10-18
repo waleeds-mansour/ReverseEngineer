@@ -77,18 +77,18 @@ export function PageWatchPanel(props: { id: string }) {
               <p class="text-bad">{d().lastError}</p>
             </Show>
             <div class="flex gap-2 pt-1">
-              <Button small onClick={() => void act("page_watch.check", { id: props.id })}>
+              <Button size="sm" onClick={() => void act("page_watch.check", { id: props.id })}>
                 Check now
               </Button>
               <Button
-                small
+                size="sm"
                 onClick={() => void act("page_watch.update", { id: props.id, active: !d().active })}
               >
                 {d().active ? "Pause" : "Resume"}
               </Button>
               <Button
-                small
-                kind="danger"
+                size="sm"
+                tone="danger"
                 onClick={async () => {
                   if (await act("entity.trash", { id: props.id })) toast.show("Watch removed.");
                 }}

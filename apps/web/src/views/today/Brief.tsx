@@ -11,6 +11,7 @@ import { Button } from "../../components/kit/Button.tsx";
 import { Card } from "../../components/kit/Card.tsx";
 import { SectionHeader } from "../../components/kit/SectionHeader.tsx";
 import { Skeleton } from "../../components/kit/Skeleton.tsx";
+import { TextButton } from "../../components/kit/TextButton.tsx";
 import { JarvisMark } from "../../components/Mark.tsx";
 import { OutsideMark } from "../../components/OutsideMark.tsx";
 import { day, time } from "../../lib/format.ts";
@@ -148,24 +149,20 @@ export function Brief(props: { row: InboxRow; go: Go; class?: string }) {
             </div>
             <div class="-mb-1 mt-2 flex items-center" data-fold="card">
               <Show when={long() && !whole()}>
-                <button
-                  type="button"
-                  class="inline-flex min-h-11 items-center gap-1 rounded-md text-sm font-medium text-accent hover:underline md:min-h-8"
-                  onClick={() => setWhole(true)}
-                >
+                <TextButton alone class="font-medium" onClick={() => setWhole(true)}>
                   Read all
-                </button>
+                </TextButton>
               </Show>
               <span class="flex-1" />
               <Show
                 when={!read()}
                 fallback={
-                  <Button kind="quiet" small expanded onClick={() => fold(false)}>
+                  <Button variant="quiet" size="sm" expanded onClick={() => fold(false)}>
                     Fold
                   </Button>
                 }
               >
-                <Button kind="quiet" small icon="check" onClick={gotIt}>
+                <Button variant="quiet" size="sm" icon="check" onClick={gotIt}>
                   Got it
                 </Button>
               </Show>

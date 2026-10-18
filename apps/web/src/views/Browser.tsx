@@ -2,8 +2,7 @@
 // the ones you handed it, and take over with your mouse and keyboard at any time.
 
 import { createEffect, createSignal, For, on, onCleanup, Show } from "solid-js";
-import { Icon } from "../components/icons.tsx";
-import { Button, Empty, PaneHeader } from "../components/ui.tsx";
+import { Button, Empty, PaneHeader, TextButton } from "../components/ui.tsx";
 import { createLiveBrowser, type LiveBrowser, openChrome } from "../lib/browser.ts";
 import { layout } from "../lib/panes.ts";
 import { DialogBar, Screen } from "./browser/Screen.tsx";
@@ -39,7 +38,7 @@ function ChromeClosed(props: { b: LiveBrowser }) {
             ? "Opening Chrome on your PC…"
             : "Chrome is closed. Nook opens it on your PC when Pip needs it."}
         </p>
-        <Button kind="primary" onClick={() => void open()} disabled={asked()}>
+        <Button variant="primary" onClick={() => void open()} disabled={asked()}>
           Open Chrome
         </Button>
         <Show when={o().openError && !o().opening}>
@@ -47,13 +46,9 @@ function ChromeClosed(props: { b: LiveBrowser }) {
         </Show>
       </Show>
       <p>
-        <button
-          type="button"
-          class="text-jarvis underline"
-          onClick={() => layout.open({ view: "settings" })}
-        >
+        <TextButton alone onClick={() => layout.open({ view: "settings" })}>
           Pair Chrome in Settings
-        </button>
+        </TextButton>
       </p>
     </div>
   );
@@ -122,15 +117,24 @@ export function Browser() {
             go(false);
           }}
         >
-          <Button small onClick={() => b.send({ type: "back" })} title="Back" label="Back">
-            <Icon name="arrow-left" size={14} class="my-0.5" />
-          </Button>
-          <Button small onClick={() => b.send({ type: "forward" })} title="Forward" label="Forward">
-            <Icon name="arrow-right" size={14} class="my-0.5" />
-          </Button>
-          <Button small onClick={() => b.send({ type: "reload" })} title="Reload" label="Reload">
-            <Icon name="rotate-cw" size={14} class="my-0.5" />
-          </Button>
+          <Button
+            size="sm"
+            icon="arrow-left"
+            label="Back"
+            onClick={() => b.send({ type: "back" })}
+          />
+          <Button
+            size="sm"
+            icon="arrow-right"
+            label="Forward"
+            onClick={() => b.send({ type: "forward" })}
+          />
+          <Button
+            size="sm"
+            icon="rotate-cw"
+            label="Reload"
+            onClick={() => b.send({ type: "reload" })}
+          />
           <input
             class="min-w-40 flex-1 rounded-md border border-line bg-panel px-2 py-1 font-mono text-xs"
             value={address()}
@@ -140,12 +144,12 @@ export function Browser() {
             onBlur={() => (editing = false)}
             onInput={(e) => setAddress(e.currentTarget.value)}
           />
-          <Button small onClick={() => go(true)} title="Open in a new tab in Pip's window">
+          <Button size="sm" onClick={() => go(true)} title="Open in a new tab in Pip's window">
             New tab
           </Button>
           <Show when={b.current()?.url.startsWith("http")}>
             <Button
-              small
+              size="sm"
               title="Get a notice when this page changes"
               onClick={() => {
                 const t = b.current();
@@ -156,7 +160,7 @@ export function Browser() {
             </Button>
           </Show>
           <Show when={b.current() && !b.current()?.handed}>
-            <Button small kind="danger" onClick={() => b.send({ type: "close" })} title="Close">
+            <Button size="sm" tone="danger" onClick={() => b.send({ type: "close" })} title="Close">
               Close
             </Button>
           </Show>

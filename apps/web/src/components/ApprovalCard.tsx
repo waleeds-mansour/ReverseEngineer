@@ -173,8 +173,8 @@ export function Decide(props: {
       onClick={(e) => e.stopPropagation()}
     >
       <Button
-        kind="quiet"
-        small
+        variant="quiet"
+        size="sm"
         icon="x"
         disabled={deciding(props.approvalId)}
         onClick={() => decide(props.approvalId, "deny")}
@@ -187,10 +187,11 @@ export function Decide(props: {
       <Show when={props.always}>
         {(says) => (
           <Button
-            kind="quiet"
-            small
+            variant="quiet"
+            size="sm"
             icon="check"
             disabled={deciding(props.approvalId)}
+            wrap
             onClick={() => alwaysAllow(props.approvalId)}
           >
             Approve, and always allow {says()}
@@ -198,8 +199,8 @@ export function Decide(props: {
         )}
       </Show>
       <Button
-        kind="primary"
-        small
+        variant="primary"
+        size="sm"
         icon="check"
         disabled={deciding(props.approvalId)}
         onClick={() => decide(props.approvalId, "approve", props.said)}

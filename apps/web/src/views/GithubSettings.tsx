@@ -117,14 +117,18 @@ export function GithubSettings() {
                   value={repos()}
                   onInput={(e) => setRepos(e.currentTarget.value)}
                 />
-                <Button kind="primary" submit disabled={!token().trim() || !repos().trim()}>
+                <Button
+                  variant="primary"
+                  type="submit"
+                  disabled={!token().trim() || !repos().trim()}
+                >
                   Connect
                 </Button>
               </form>
             }
           >
-            <div class="flex items-center gap-3 rounded-md bg-sunk px-3 py-3">
-              <div class="flex-1">
+            <div class="flex flex-wrap items-center gap-3 rounded-md bg-sunk px-3 py-3">
+              <div class="min-w-40 flex-1">
                 <p class="font-medium">{s().login}</p>
                 <p class="text-sm text-muted">
                   {s().state === "revoked"
@@ -149,7 +153,7 @@ export function GithubSettings() {
                 Repos
               </Button>
               <Button onClick={() => setReplacing(!replacing())}>New token</Button>
-              <Button kind="danger" onClick={() => void disconnect()}>
+              <Button tone="danger" onClick={() => void disconnect()}>
                 Disconnect
               </Button>
             </div>
@@ -170,7 +174,7 @@ export function GithubSettings() {
                   value={repos()}
                   onInput={(e) => setRepos(e.currentTarget.value)}
                 />
-                <Button kind="primary" submit>
+                <Button variant="primary" type="submit">
                   Save
                 </Button>
               </form>

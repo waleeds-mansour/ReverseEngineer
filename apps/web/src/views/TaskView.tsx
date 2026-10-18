@@ -65,14 +65,13 @@ export function TaskView(props: { id: string; pane: number }) {
             <Show
               when={t().assignee !== "jarvis"}
               fallback={
-                <Button small onClick={() => void update({ assignee: "owner" })}>
+                <Button size="sm" onClick={() => void update({ assignee: "owner" })}>
                   Take it back
                 </Button>
               }
             >
               <Button
-                kind="jarvis"
-                small
+                size="sm"
                 title="Pip will work on this and report back in the thread"
                 onClick={async () => {
                   if (await update({ assignee: "jarvis" })) toast.show("Pip has it.");

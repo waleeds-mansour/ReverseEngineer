@@ -181,20 +181,18 @@ export function JarvisPane() {
         >
           <RenameInput value={current()!.title} onDone={rename(current()!.id)} />
         </Show>
-        <Button small onClick={() => jarvis.newChat()} title="New conversation">
+        <Button size="sm" onClick={() => jarvis.newChat()} title="New conversation">
           New
         </Button>
         <Show when={jarvis.conversationId() && !narrow()}>
           <Button
-            small
-            title="Open in a pane"
+            size="sm"
+            icon="open-beside"
             label="Open in a pane"
             onClick={() =>
               layout.open({ view: "chat", id: jarvis.conversationId()! }, { beside: true })
             }
-          >
-            <Icon name="open-beside" size={14} class="my-0.5" />
-          </Button>
+          />
         </Show>
         <Show when={current()}>
           {(c) => (

@@ -124,15 +124,15 @@ export function MemoryPanel(props: { id: string }) {
             <div class="flex flex-wrap items-center gap-2">
               <span class="text-muted">Pip uses this</span>
               <Button
-                small
-                kind={n().scope === "always" ? "jarvis" : "plain"}
+                size="sm"
+                variant={n().scope === "always" ? "primary" : "secondary"}
                 onClick={() => void update({ scope: "always" })}
               >
                 in every answer
               </Button>
               <Button
-                small
-                kind={n().scope === "topic" ? "jarvis" : "plain"}
+                size="sm"
+                variant={n().scope === "topic" ? "primary" : "secondary"}
                 onClick={() => void update({ scope: "topic" })}
               >
                 when its topic comes up
@@ -175,7 +175,7 @@ export function MemoryPanel(props: { id: string }) {
                           {r.reason ? ` · ${r.reason}` : ""}
                         </span>
                         <Button
-                          small
+                          size="sm"
                           onClick={async () => {
                             if (await act("memory.revert", { id: props.id, revision: r.revision }))
                               toast.show(`Back to version ${r.revision}.`);

@@ -4,7 +4,7 @@
 import { createSignal, For, Show } from "solid-js";
 import { Body } from "../components/Body.tsx";
 import { Icon } from "../components/icons.tsx";
-import { Button } from "../components/ui.tsx";
+import { Button, TextButton } from "../components/ui.tsx";
 import { day } from "../lib/format.ts";
 import { layout, routeFor } from "../lib/panes.ts";
 import { act, useAction } from "../lib/query.ts";
@@ -57,35 +57,25 @@ export function MeetingPanel(props: { id: string }) {
               menu.
             </p>
           </Show>
-          <div class="space-y-1 rounded-md bg-sunk px-3 py-3 text-sm">
+          {/* On touch each name's box is 44 px tall in a 20 px line: the lines part far enough, and a
+              wrapped list of names is spaced as tall, that no box reaches over another's words. */}
+          <div class="space-y-1 rounded-md bg-sunk px-3 py-3 text-sm max-md:space-y-3 pointer-coarse:space-y-3">
             <Show when={v().event}>
               {(ev) => (
                 <p>
-                  <button
-                    type="button"
-                    class="text-jarvis underline"
-                    onClick={(e) => open("event", ev().id, e)}
-                  >
-                    {ev().title}
-                  </button>{" "}
+                  <TextButton onClick={(e) => open("event", ev().id, e)}>{ev().title}</TextButton>{" "}
                   <span class="text-muted">{day(new Date(ev().startsAt))}</span>
                 </p>
               )}
             </Show>
             <Show when={v().people.length > 0}>
-              <p class="text-muted">
+              <p class="text-muted max-md:leading-11 pointer-coarse:leading-11">
                 With{" "}
                 <For each={v().people}>
                   {(p, i) => (
                     <>
                       {i() > 0 ? ", " : ""}
-                      <button
-                        type="button"
-                        class="underline"
-                        onClick={(e) => open("person", p.id, e)}
-                      >
-                        {p.name}
-                      </button>
+                      <TextButton onClick={(e) => open("person", p.id, e)}>{p.name}</TextButton>
                     </>
                   )}
                 </For>
@@ -93,7 +83,11 @@ export function MeetingPanel(props: { id: string }) {
             </Show>
             <Show when={!v().endedAt}>
               <p class="flex items-center gap-3 pt-1">
-                <Button small kind="jarvis" onClick={() => void act("meeting.end", { id: v().id })}>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => void act("meeting.end", { id: v().id })}
+                >
                   End and summarize
                 </Button>
                 <span class="text-xs text-faint">

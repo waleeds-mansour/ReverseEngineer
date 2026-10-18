@@ -245,7 +245,7 @@ export function Mail(props: { pane: number }) {
           <option value="all">All mail</option>
           <option value="trash">Trash</option>
         </select>
-        <Button small kind="primary" onClick={compose}>
+        <Button size="sm" variant="primary" onClick={compose}>
           Write
         </Button>
         <input
@@ -346,21 +346,18 @@ export function Mail(props: { pane: number }) {
                             icon="archive"
                             label={t.inInbox ? "Archive" : "Move to inbox"}
                             title={t.inInbox ? "Archive (e)" : "Move to inbox (e)"}
-                            size={16}
                             onClick={() => archiveRow(t)}
                           />
                           <IconButton
                             icon="tasks"
                             label="Make task"
                             title="Make task (t)"
-                            size={16}
                             onClick={() => void makeTask(t)}
                           />
                           <IconButton
                             icon="reply"
                             label="Reply"
                             title="Reply (r)"
-                            size={16}
                             onClick={() => {
                               sel.select(i());
                               replyFrom(t);
@@ -375,7 +372,7 @@ export function Mail(props: { pane: number }) {
               <Show when={paging()}>
                 <div class="p-3 text-center" ref={(el) => onCleanup(whenSeen(el, listed.more))}>
                   <Button
-                    small
+                    size="sm"
                     disabled={listed.query.isFetchingNextPage}
                     onClick={() => listed.more()}
                   >

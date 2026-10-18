@@ -227,7 +227,7 @@ function Group(props: {
           <span class="text-muted"> · {props.items.length} waiting</span>
         </p>
         <Show when={several() && !allRead()}>
-          <Button small icon="chevron-down" onClick={() => props.openAll(closed())}>
+          <Button size="sm" icon="chevron-down" onClick={() => props.openAll(closed())}>
             {`Read all ${live().length}`}
           </Button>
         </Show>
@@ -242,8 +242,8 @@ function Group(props: {
             </p>
           </Show>
           <Button
-            kind="primary"
-            small
+            variant="primary"
+            size="sm"
             icon="check"
             disabled={
               props.approving.running() !== null ||
@@ -272,7 +272,7 @@ export function ApproveAllSaid(props: { approving: ApproveAll; ready: ReadonlySe
           <div class="flex items-center gap-2.5">
             <Icon name={r().ok ? "ok" : "warn"} class={r().ok ? "text-ok" : "text-warn"} />
             <p class="min-w-0 flex-1 font-medium">{r().text}</p>
-            <IconButton icon="x" label="Dismiss" size={16} onClick={props.approving.dismiss} />
+            <IconButton icon="x" label="Dismiss" onClick={props.approving.dismiss} />
           </div>
           <Show when={r().missed.length > 0}>
             <ul class="space-y-1 pr-3 pb-2 pl-7">

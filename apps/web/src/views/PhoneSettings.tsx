@@ -46,7 +46,7 @@ export function PhoneSettings() {
                 </p>
               </div>
               <Show when={push.supported && !push.on()}>
-                <Button kind="primary" disabled={push.busy()} onClick={() => void push.turnOn()}>
+                <Button variant="primary" disabled={push.busy()} onClick={() => void push.turnOn()}>
                   Turn on here
                 </Button>
               </Show>
@@ -66,7 +66,7 @@ export function PhoneSettings() {
                         · {d.lastSentAt ? `last notified ${ago(d.lastSentAt)}` : "nothing sent yet"}
                       </span>
                     </span>
-                    <Button small kind="danger" onClick={() => void push.remove(d.endpoint)}>
+                    <Button size="sm" tone="danger" onClick={() => void push.remove(d.endpoint)}>
                       Remove
                     </Button>
                   </li>

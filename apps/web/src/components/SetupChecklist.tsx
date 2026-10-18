@@ -45,7 +45,7 @@ export function SetupChecklist(props: { pane: number; class?: string }) {
           <span class="text-meta text-muted tabular-nums">
             {finished()} of {steps().length} done
           </span>
-          <Button small onClick={hide} title="Hide this list on this device">
+          <Button size="sm" onClick={hide} title="Hide this list on this device">
             Hide
           </Button>
         </div>
@@ -75,7 +75,7 @@ export function SetupChecklist(props: { pane: number; class?: string }) {
                   </Show>
                 </div>
                 <Show when={!step.done}>
-                  <Button small onClick={() => openSettings(step.section, props.pane)}>
+                  <Button size="sm" onClick={() => openSettings(step.section, props.pane)}>
                     {step.id === "jarvis" || step.id === "backup" ? "See how" : "Set up"}
                   </Button>
                 </Show>

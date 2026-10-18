@@ -12,19 +12,83 @@ const files = import.meta.glob<string>(["../**/*.{ts,tsx}", "!../**/*.test.ts"],
   eager: true,
 });
 
-/** A file's code with its comments taken out, since they may name a class to say it's gone. */
-const code = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+/**
+ * A file's code with its comments taken out, since they may name a class to say it's gone. A //
+ * after a colon is a URL's ("https://…"), not a comment.
+ */
+const code = (text: string) =>
+  text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 
 /** The web app's source, by its path under src/ ("components/kit/Card.tsx"). */
 const SOURCE = Object.entries(files).map(([path, text]) => [path.slice(3), code(text)] as const);
+
+/**
+ * Each opening <Tag …> in a file's code, to the > that closes it. Braces are skipped whole, so an
+ * arrow's => in an onClick doesn't end the tag, and nor does a > in a quoted attribute.
+ */
+function openingTags(text: string, tag: string): string[] {
+  const found: string[] = [];
+  for (const m of text.matchAll(new RegExp(`<${tag}(?![\\w.])`, "g"))) {
+    let depth = 0;
+    let quote = "";
+    let i = m.index + m[0].length;
+    for (; i < text.length; i++) {
+      const c = text[i]!;
+      if (quote) {
+        if (c === quote) quote = "";
+      } else if (c === "`" || (depth === 0 && (c === '"' || c === "'"))) quote = c;
+      else if (c === "{") depth++;
+      else if (c === "}") depth--;
+      else if (c === ">" && depth === 0) break;
+    }
+    found.push(text.slice(m.index, i + 1));
+  }
+  return found;
+}
 
 interface Rule {
   /** What to use instead, as the failure says it. */
   why: string;
   pattern: RegExp;
+  /** Tested against each opening tag of this component, rather than the whole file. */
+  tag?: string;
   /** Files that may still use it, each with what will move it off. */
   allowed?: Record<string, string>;
 }
+
+/**
+ * A tag with what its props hold taken out, quotes and braces both, so a tag rule tests the props'
+ * names: a title that says "the kind of reply" isn't a kind= prop.
+ */
+function propNames(tag: string): string {
+  let out = "";
+  let depth = 0;
+  let quote = "";
+  for (const c of tag) {
+    if (quote) {
+      if (c === quote) quote = "";
+    } else if (c === "`" || (depth === 0 && (c === '"' || c === "'"))) quote = c;
+    else if (c === "{") depth++;
+    else if (c === "}") depth--;
+    else if (depth === 0) out += c;
+  }
+  return out;
+}
+
+/** Where a file breaks a rule: the first match, or the first tag that matches. */
+function hit(rule: Rule, text: string): string | undefined {
+  if (!rule.tag) return rule.pattern.exec(text)?.[0];
+  return openingTags(text, rule.tag)
+    .find((t) => rule.pattern.test(propNames(t)))
+    ?.replace(/\s+/g, " ");
+}
+
+/**
+ * Raw <button>s in the web app's source. One that is a Button, IconButton or TextButton in all but
+ * name moves to the kit; the rest (rows, tiles, tabs, editor controls) move in Phase 4's view
+ * passes. The count only goes down: when a change takes one away, it lowers this to match.
+ */
+const RAW_BUTTONS = 62;
 
 const RULES: Record<string, Rule> = {
   "Tailwind's own shadows": {
@@ -75,6 +139,16 @@ const RULES: Record<string, Rule> = {
     pattern:
       /(?<![\w:-])bg-accent(?![\w/-])[^"`]*\btabular-nums\b|\btabular-nums\b[^"`]*(?<![\w:-])bg-accent(?![\w/-])/,
   },
+  "Button's older props": {
+    why: 'use variant= ("primary", "quiet"; secondary is the default), size="sm" and type="submit"; a one-click Disconnect or Remove is tone="danger" until 1e asks first in an Alert',
+    tag: "Button",
+    pattern: /\s(?:kind|small|submit)(?=[\s=/>])/,
+  },
+  "IconButton's icon size": {
+    why: "the icon follows the button's size (16 px in a 28 px square), so leave size off",
+    tag: "IconButton",
+    pattern: /\ssize=/,
+  },
   // Under any variant: focus:outline-none hides the ring as fully as the bare class, now that the
   // ring is in the base layer and no longer beats it.
   "outlines turned off": {
@@ -100,13 +174,11 @@ describe("Nook's look stays", () => {
   for (const [name, rule] of Object.entries(RULES)) {
     it(`with no ${name}`, () => {
       expect(SOURCE.length).toBeGreaterThan(50);
-      const found = SOURCE.filter(
-        ([path, text]) => rule.pattern.test(text) && !rule.allowed?.[path],
-      );
-      expect(
-        found.map(([path, text]) => `${path}: ${rule.pattern.exec(text)![0]}`),
-        rule.why,
-      ).toEqual([]);
+      const found = SOURCE.flatMap(([path, text]) => {
+        const at = rule.allowed?.[path] ? undefined : hit(rule, text);
+        return at === undefined ? [] : [`${path}: ${at}`];
+      });
+      expect(found, rule.why).toEqual([]);
     });
 
     if (rule.allowed) {
@@ -114,7 +186,7 @@ describe("Nook's look stays", () => {
         for (const path of Object.keys(rule.allowed!)) {
           const text = SOURCE.find(([p]) => p === path)?.[1];
           expect(text, `${path} is gone; take it off the list`).toBeDefined();
-          expect(rule.pattern.test(text!), `${path} no longer needs it`).toBe(true);
+          expect(hit(rule, text!), `${path} no longer needs it`).toBeDefined();
         }
       });
     }
@@ -122,5 +194,36 @@ describe("Nook's look stays", () => {
 
   it("with no older depth names in index.css", () => {
     expect(css).not.toMatch(/--shadow-(?:card|pop)\b/);
+  });
+
+  it("with no more raw <button>s than before", () => {
+    const count = SOURCE.reduce((n, [, text]) => n + (text.match(/<button\b/g)?.length ?? 0), 0);
+    expect(
+      count,
+      "use Button, IconButton or TextButton from components/ui.tsx",
+    ).toBeLessThanOrEqual(RAW_BUTTONS);
+    expect(count, `${count} now: lower RAW_BUTTONS to it, so they can't come back`).toBe(
+      RAW_BUTTONS,
+    );
+  });
+
+  it("finds a tag whatever its props hold", () => {
+    const [tag] = openingTags(
+      `<Button onClick={() => go(a > b)} title="x > y" size="sm">Go</Button>`,
+      "Button",
+    );
+    expect(tag).toBe(`<Button onClick={() => go(a > b)} title="x > y" size="sm">`);
+    expect(openingTags("<ButtonGroup><Button.Icon />", "Button")).toEqual([]);
+  });
+
+  it("tests a tag's prop names, not the words they hold", () => {
+    const old = RULES["Button's older props"]!;
+    const titled = `<Button title="Pick the kind of reply" onClick={() => go(small)}>`;
+    expect(hit(old, titled)).toBeUndefined();
+    expect(hit(old, code(`<Button href="https://example.com" small>Go</Button>`))).toBeDefined();
+    const size = RULES["IconButton's icon size"]!;
+    expect(
+      hit(size, code(`<IconButton title="https://x.y" />\n<Button size="sm">`)),
+    ).toBeUndefined();
   });
 });

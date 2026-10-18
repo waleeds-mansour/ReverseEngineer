@@ -144,7 +144,7 @@ export function PaneHeader(props: {
             strip
             icon="trash-2"
             action={
-              <Button small onClick={() => void restore(r().id)}>
+              <Button size="sm" onClick={() => void restore(r().id)}>
                 Restore
               </Button>
             }

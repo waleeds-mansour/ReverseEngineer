@@ -2,7 +2,9 @@
 
 import type { CanvasNode } from "@hearth/core";
 import { createSignal, For, Show } from "solid-js";
-import { Icon, type IconName } from "../components/icons.tsx";
+import type { IconName } from "../components/icons.tsx";
+import { Button } from "../components/kit/Button.tsx";
+import { IconButton } from "../components/kit/IconButton.tsx";
 import { action } from "../lib/api.ts";
 import { keyLabel } from "../lib/keys.ts";
 import type { SearchHit } from "../lib/types.ts";
@@ -18,9 +20,6 @@ const TOOLS: { tool: Tool; label: string; key: string; icon: IconName }[] = [
 ];
 
 const FILLS = ["#fff7ed", "#fef3c7", "#dcfce7", "#dbeafe", "#f3e8ff", "#fee2e2", "transparent"];
-
-const btn = (on: boolean) =>
-  `flex h-7 min-w-7 items-center justify-center gap-1 rounded px-1.5 text-xs ${on ? "bg-accent text-on-fill" : "text-muted hover:bg-sunk hover:text-ink"}`;
 
 export function Toolbar(props: {
   board: Board;
@@ -54,36 +53,32 @@ export function Toolbar(props: {
     >
       <For each={TOOLS}>
         {(t) => (
-          <button
-            type="button"
-            class={btn(b.tool() === t.tool)}
+          <IconButton
+            icon={t.icon}
+            label={t.label}
             title={`${t.label} (${keyLabel(t.key)})`}
-            aria-label={t.label}
-            aria-pressed={b.tool() === t.tool}
+            pressed={b.tool() === t.tool}
             onClick={() => b.setTool(t.tool)}
-          >
-            <Icon name={t.icon} />
-          </button>
+          />
         )}
       </For>
       <span class="mx-1 h-4 w-px bg-line" />
       <div class="relative">
-        <button
-          type="button"
-          class={btn(picking())}
+        <Button
+          variant="quiet"
+          icon="at-sign"
           title="Put a task, note, person or any record on the board"
-          aria-label="@ Record"
-          aria-expanded={picking()}
+          label="@ Record"
+          expanded={picking()}
           onClick={() => {
             setPicking(!picking());
             void search("");
           }}
         >
-          <Icon name="at-sign" />
           Record
-        </button>
+        </Button>
         <Show when={picking()}>
-          <div class="absolute top-9 left-0 w-64 glass-strong rounded-md p-2 shadow-4">
+          <div class="absolute top-full left-0 mt-1 w-64 glass-strong rounded-md p-2 shadow-4">
             <input
               class="mb-1 w-full rounded border border-line bg-panel px-2 py-1 text-sm"
               placeholder="Find a record…"
@@ -136,36 +131,17 @@ export function Toolbar(props: {
         </For>
       </Show>
       <span class="mx-1 h-4 w-px bg-line" />
-      <button
-        type="button"
-        class={btn(false)}
+      <IconButton
+        icon="undo-2"
+        label="Undo"
         title={`Undo (${keyLabel("mod+z")})`}
-        aria-label="Undo"
         onClick={() => b.undo()}
-      >
-        <Icon name="undo-2" />
-      </button>
-      <button
-        type="button"
-        class={btn(false)}
-        title="Zoom out"
-        aria-label="Zoom out"
-        onClick={() => props.onZoom(0.8)}
-      >
-        <Icon name="minus" />
-      </button>
-      <button type="button" class={btn(false)} title="Fit everything" onClick={props.onFit}>
+      />
+      <IconButton icon="minus" label="Zoom out" onClick={() => props.onZoom(0.8)} />
+      <Button variant="quiet" title="Fit everything" onClick={props.onFit}>
         {Math.round(props.zoom * 100)}%
-      </button>
-      <button
-        type="button"
-        class={btn(false)}
-        title="Zoom in"
-        aria-label="Zoom in"
-        onClick={() => props.onZoom(1.25)}
-      >
-        <Icon name="plus" />
-      </button>
+      </Button>
+      <IconButton icon="plus" label="Zoom in" onClick={() => props.onZoom(1.25)} />
     </div>
   );
 }

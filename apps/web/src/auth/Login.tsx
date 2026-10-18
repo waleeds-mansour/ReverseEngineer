@@ -5,12 +5,11 @@
 
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
 import { createSignal, Match, onMount, Show, Switch } from "solid-js";
+import { Button } from "../components/kit/Button.tsx";
 import { authPost } from "../lib/api.ts";
 import { inDesktopApp } from "../lib/desktop.ts";
 import { forgetStarted } from "../lib/version.ts";
 import { connectLink, wayIn } from "../lib/wayIn.ts";
-
-const BUTTON = "w-full rounded-md bg-accent px-3 py-2 font-medium text-on-fill disabled:opacity-50";
 
 export function Login(props: {
   needsSetup: boolean;
@@ -91,13 +90,10 @@ export function Login(props: {
     location.href = app && !props.needsSetup ? connectLink(props.origin) : props.origin;
   };
   const browserButton = (primary: boolean) => (
-    <button
-      type="button"
-      class={
-        primary
-          ? BUTTON
-          : "w-full rounded-md border border-line px-3 py-2 font-medium hover:bg-sunk"
-      }
+    <Button
+      size="lg"
+      variant={primary ? "primary" : "secondary"}
+      class="w-full"
       onClick={toBrowser}
     >
       {!app
@@ -105,7 +101,7 @@ export function Login(props: {
         : props.needsSetup
           ? "Set up Nook in your browser"
           : "Connect in your browser"}
-    </button>
+    </Button>
   );
 
   return (
@@ -140,21 +136,39 @@ export function Login(props: {
                   autofocus
                 />
               </label>
-              <button type="submit" class={BUTTON} disabled={busy() || code().trim().length < 6}>
+              <Button
+                size="lg"
+                variant="primary"
+                type="submit"
+                class="w-full"
+                disabled={busy() || code().trim().length < 6}
+              >
                 Create passkey
-              </button>
+              </Button>
             </form>
           </Match>
           <Match when={way() === "passkey"}>
-            <button type="button" class={BUTTON} disabled={busy()} onClick={() => void login()}>
+            <Button
+              size="lg"
+              variant="primary"
+              class="w-full"
+              disabled={busy()}
+              onClick={() => void login()}
+            >
               Sign in with your passkey
-            </button>
+            </Button>
           </Match>
           <Match when={way() === "hello"}>
             <div class="space-y-2">
-              <button type="button" class={BUTTON} disabled={busy()} onClick={() => void login()}>
+              <Button
+                size="lg"
+                variant="primary"
+                class="w-full"
+                disabled={busy()}
+                onClick={() => void login()}
+              >
                 Sign in with Windows Hello
-              </button>
+              </Button>
               <Show when={helloFailed()}>{browserButton(false)}</Show>
             </div>
           </Match>

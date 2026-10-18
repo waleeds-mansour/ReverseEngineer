@@ -56,8 +56,8 @@ export function SignInSettings() {
                 {l.lastUsedAt ? `used ${ago(l.lastUsedAt)}` : "not used yet"}
               </span>
               <Button
-                small
-                kind="danger"
+                size="sm"
+                tone="danger"
                 onClick={async () => {
                   if (await act("vault.remove", { id: l.id })) toast.show(`Forgot ${l.site}.`);
                 }}
@@ -99,7 +99,7 @@ export function SignInSettings() {
           onInput={(e) => setPassword(e.currentTarget.value)}
           required
         />
-        <Button kind="primary" onClick={(e) => void save(e)}>
+        <Button variant="primary" onClick={(e) => void save(e)}>
           Save sign-in
         </Button>
       </form>

@@ -94,8 +94,8 @@ export function DesktopSettings() {
         {(list) => {
           const desktop = () => list().find((d) => d.name === "desktop");
           return (
-            <div class="flex items-center gap-3 rounded-md bg-sunk px-3 py-3">
-              <div class="flex-1">
+            <div class="flex flex-wrap items-center gap-3 rounded-md bg-sunk px-3 py-3">
+              <div class="min-w-40 flex-1">
                 <p class="font-medium">{desktop() ? "Connected" : "Not connected"}</p>
                 <Show when={desktop()}>
                   {(d) => (
@@ -106,11 +106,11 @@ export function DesktopSettings() {
                 </Show>
               </div>
               <Show when={desktop()}>
-                <Button kind="danger" onClick={() => void unpair()}>
+                <Button tone="danger" onClick={() => void unpair()}>
                   Disconnect
                 </Button>
               </Show>
-              <Button kind="primary" onClick={() => void connect()}>
+              <Button variant="primary" onClick={() => void connect()}>
                 Connect Nook on this PC
               </Button>
             </div>
@@ -144,7 +144,7 @@ export function DesktopSettings() {
                     {c()}
                   </code>
                   <Button
-                    small
+                    size="sm"
                     onClick={() => {
                       void navigator.clipboard.writeText(c());
                       toast.show("Code copied.");

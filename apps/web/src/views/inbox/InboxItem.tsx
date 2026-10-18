@@ -44,7 +44,7 @@ export function InboxItem(props: {
         <For each={snoozeOptions().map((o) => o.label)}>
           {(label, j) => (
             <Button
-              small
+              size="sm"
               onClick={() => {
                 const o = snoozeOptions().find((x) => x.label === label);
                 if (o) props.onSnoozeUntil(o.until);

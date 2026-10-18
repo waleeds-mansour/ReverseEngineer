@@ -4,6 +4,7 @@
 
 import { createSignal, For, Show } from "solid-js";
 import { Icon } from "../../components/icons.tsx";
+import { TextButton } from "../../components/kit/TextButton.tsx";
 import { ago } from "../../lib/format.ts";
 import type { MailAddress, MailMessage } from "../../lib/types.ts";
 import { named } from "../Mail.tsx";
@@ -41,9 +42,7 @@ function HtmlBody(props: { id: string; text: string }) {
       <Show when={remote() && !images() && !missing()}>
         <p class="text-xs text-muted">
           Pictures from the internet are hidden, so the sender can't tell you opened this.{" "}
-          <button type="button" class="underline" onClick={() => setImages(true)}>
-            Show them
-          </button>
+          <TextButton onClick={() => setImages(true)}>Show them</TextButton>
         </p>
       </Show>
       {/* No scripts: same-origin only lets Hearth measure the height. */}

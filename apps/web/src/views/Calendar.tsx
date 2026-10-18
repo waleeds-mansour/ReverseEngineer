@@ -8,7 +8,7 @@ import { Body } from "../components/Body.tsx";
 import { InviteAnswers } from "../components/InviteAnswers.tsx";
 import { Icon } from "../components/icons.tsx";
 import { OutsideMark } from "../components/OutsideMark.tsx";
-import { Badge, Button, Empty, PaneHeader } from "../components/ui.tsx";
+import { Badge, Button, Empty, PaneHeader, TextButton } from "../components/ui.tsx";
 import { hours, plural, span, time } from "../lib/format.ts";
 import { toast } from "../lib/live.ts";
 import { layout, routeFor } from "../lib/panes.ts";
@@ -89,13 +89,13 @@ export function Calendar(props: { pane: number }) {
     <div class="flex h-full flex-col">
       <PaneHeader title="Calendar">
         <div class="flex gap-1">
-          <Button small onClick={() => setOffset(offset() - 1)}>
+          <Button size="sm" onClick={() => setOffset(offset() - 1)}>
             Earlier
           </Button>
-          <Button small onClick={() => setOffset(0)}>
+          <Button size="sm" onClick={() => setOffset(0)}>
             This week
           </Button>
-          <Button small onClick={() => setOffset(offset() + 1)}>
+          <Button size="sm" onClick={() => setOffset(offset() + 1)}>
             Later
           </Button>
         </div>
@@ -217,32 +217,22 @@ export function EventPanel(props: { id: string }) {
               </p>
             </Show>
             <p class="flex gap-3 pt-1">
-              <button
-                type="button"
-                class="text-jarvis underline"
-                onClick={(ev) => void takeNotes(e().id, ev.shiftKey)}
-              >
+              <TextButton alone onClick={(ev) => void takeNotes(e().id, ev.shiftKey)}>
                 Meeting notes
-              </button>
+              </TextButton>
               <Show when={e().meetUrl}>
-                <a
-                  class="text-jarvis underline"
-                  href={e().meetUrl ?? ""}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Join video call
-                </a>
+                {(url) => (
+                  <TextButton alone href={url()} target="_blank">
+                    Join video call
+                  </TextButton>
+                )}
               </Show>
               <Show when={e().htmlLink}>
-                <a
-                  class="text-jarvis underline"
-                  href={e().htmlLink ?? ""}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open in Google Calendar
-                </a>
+                {(url) => (
+                  <TextButton alone href={url()} target="_blank">
+                    Open in Google Calendar
+                  </TextButton>
+                )}
               </Show>
             </p>
           </div>
@@ -271,7 +261,7 @@ function Prep(props: { id: string }) {
             </Show>
             <span class="flex-1" />
             <Button
-              small
+              size="sm"
               onClick={(ev) => layout.open(routeFor(p().type, p().id), { beside: ev.shiftKey })}
             >
               Open

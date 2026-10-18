@@ -6,6 +6,7 @@
 
 import { createMemo, createSignal, type JSX, Show } from "solid-js";
 import { Icon, type IconName } from "../../components/icons.tsx";
+import { Button } from "../../components/kit/Button.tsx";
 import { JarvisMark } from "../../components/Mark.tsx";
 import { jarvis } from "../../jarvis/JarvisPane.tsx";
 import { due } from "../../lib/format.ts";
@@ -127,7 +128,8 @@ export function AskBar(props: { go: Go; now: Date; class?: string }) {
         <JarvisMark size={18} />
         <input
           ref={input}
-          class="min-h-9 min-w-0 flex-1 bg-transparent placeholder:text-faint focus-visible:outline-none"
+          // As tall as the send button that appears beside it, so the bar doesn't jump as you type.
+          class="min-h-9 min-w-0 flex-1 max-md:min-h-11 pointer-coarse:min-h-11 bg-transparent placeholder:text-faint focus-visible:outline-none"
           aria-label="Ask Pip or add a task"
           placeholder="Ask Pip or add a task…"
           enterkeyhint="send"
@@ -137,14 +139,15 @@ export function AskBar(props: { go: Go; now: Date; class?: string }) {
           onInput={(e) => setText(e.currentTarget.value)}
         />
         <Show when={text().trim()}>
-          <button
+          <Button
             type="submit"
-            class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-on-fill"
-            aria-label="Ask Pip"
+            variant="primary"
+            size="lg"
+            icon="send"
+            label="Ask Pip"
             title="Ask Pip (Enter)"
-          >
-            <Icon name="send" size={16} />
-          </button>
+            class="shrink-0"
+          />
         </Show>
       </form>
       {/* One line, even on a phone: it scrolls sideways rather than taking two. */}

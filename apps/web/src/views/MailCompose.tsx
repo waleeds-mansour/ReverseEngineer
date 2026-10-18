@@ -179,13 +179,18 @@ export function Composer(props: { draft: MailDraft; conversation?: string; onDon
         }}
       />
       <div class="flex items-center gap-2">
-        <Button kind="primary" small disabled={busy() || !from()} onClick={() => void send()}>
+        <Button
+          variant="primary"
+          size="sm"
+          disabled={busy() || !from()}
+          onClick={() => void send()}
+        >
           Send
         </Button>
         <span class="flex-1 text-xs text-faint">
           {from() ? "Ctrl+Enter sends. Saved as you type." : "Pick who it's from to send it."}
         </span>
-        <Button small kind="danger" onClick={() => void discard()}>
+        <Button size="sm" tone="danger" onClick={() => void discard()}>
           Discard
         </Button>
       </div>

@@ -91,7 +91,7 @@ function Chooser(props: { current: Status; onDone: () => void }) {
                 <For each={c().people}>{(p) => <option value={p.id}>{p.name}</option>}</For>
               </select>
             </label>
-            <Button kind="primary" submit disabled={!board()}>
+            <Button variant="primary" type="submit" disabled={!board()}>
               Save
             </Button>
           </Show>
@@ -160,7 +160,7 @@ export function NotionSettings() {
                   value={token()}
                   onInput={(e) => setToken(e.currentTarget.value)}
                 />
-                <Button kind="primary" submit disabled={!token().trim()}>
+                <Button variant="primary" type="submit" disabled={!token().trim()}>
                   Connect
                 </Button>
               </form>
@@ -180,7 +180,7 @@ export function NotionSettings() {
               </div>
               <Button onClick={() => setChoosing(!choosing())}>Board</Button>
               <Button onClick={() => setReplacing(!replacing())}>New secret</Button>
-              <Button kind="danger" onClick={() => void disconnect()}>
+              <Button tone="danger" onClick={() => void disconnect()}>
                 Disconnect
               </Button>
             </div>

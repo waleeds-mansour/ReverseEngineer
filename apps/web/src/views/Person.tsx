@@ -4,7 +4,7 @@
 import { createSignal, For, type JSX, Show } from "solid-js";
 import { Icon } from "../components/icons.tsx";
 import { Overflow, ROW_MENU } from "../components/Menu.tsx";
-import { Empty } from "../components/ui.tsx";
+import { Empty, TextButton } from "../components/ui.tsx";
 import { ago, day, TYPE_LABEL } from "../lib/format.ts";
 import { orBack } from "../lib/orBack.ts";
 import { layout, routeFor } from "../lib/panes.ts";
@@ -149,15 +149,13 @@ export function PersonPanel(props: { id: string }) {
               {(c) => (
                 <p>
                   Works at{" "}
-                  <button
-                    type="button"
-                    class="text-jarvis underline"
+                  <TextButton
                     onClick={(e) =>
                       layout.open(routeFor("company", c().id), { beside: e.shiftKey })
                     }
                   >
                     {c().name}
-                  </button>
+                  </TextButton>
                 </p>
               )}
             </Show>

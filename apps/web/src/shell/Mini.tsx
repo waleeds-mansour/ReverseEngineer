@@ -99,8 +99,8 @@ function Capture() {
           Enter adds it to your tasks · Shift+Enter for a new line · Esc closes
         </span>
         <Button
-          small
-          kind="primary"
+          size="sm"
+          variant="primary"
           disabled={!text().trim() || saving()}
           onClick={() => void save()}
         >
@@ -144,11 +144,11 @@ function Ask() {
       <div class="flex items-center gap-2 border-b border-line px-3 py-2">
         <p class="flex-1 text-sm font-medium text-jarvis">Ask Pip</p>
         <Show when={id()}>
-          <Button small onClick={() => setId(null)}>
+          <Button size="sm" onClick={() => setId(null)}>
             New chat
           </Button>
         </Show>
-        <Button small title="Esc" onClick={closeMiniWindow}>
+        <Button size="sm" title="Esc" onClick={closeMiniWindow}>
           Close
         </Button>
       </div>

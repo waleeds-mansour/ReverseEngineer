@@ -10,7 +10,7 @@ import { createEffect, createSignal, For, on, onCleanup, Show } from "solid-js";
 import { Icon } from "../components/icons.tsx";
 import { JarvisMark } from "../components/Mark.tsx";
 import { MentionEditor } from "../components/MentionEditor.tsx";
-import { Button, PaneHeader } from "../components/ui.tsx";
+import { Button, PaneHeader, TextButton } from "../components/ui.tsx";
 import { keyLabel } from "../lib/keys.ts";
 import { live } from "../lib/live.ts";
 import { type Looking, startersFor } from "../lib/looking.ts";
@@ -194,13 +194,9 @@ export function Conversation(props: {
           <Show when={!data.data && data.isError}>
             <p class="text-sm text-bad">
               Couldn't load this conversation.{" "}
-              <button
-                type="button"
-                class="font-medium underline"
-                onClick={() => void data.refetch()}
-              >
+              <TextButton class="font-medium" onClick={() => void data.refetch()}>
                 Try again
-              </button>
+              </TextButton>
             </p>
           </Show>
           <Show when={!data.data && data.isLoading}>
@@ -214,7 +210,7 @@ export function Conversation(props: {
                 <JarvisMark size={12} state="thinking" /> Thinking…
               </Show>
               <span class="flex-1" />
-              <Button small disabled={stopping()} title="Stop Pip" onClick={() => void stop()}>
+              <Button size="sm" disabled={stopping()} title="Stop Pip" onClick={() => void stop()}>
                 {stopping() ? "Stopping…" : "Stop"}
               </Button>
             </div>
@@ -264,9 +260,11 @@ export function Conversation(props: {
           }
         />
         <div class="mt-2 flex justify-end gap-2">
+          {/* Talk and Stop are the words, so it isn't also a pressed toggle; listening, Stop is red
+              as the mic's own light. */}
           <Button
-            small
-            kind={mic.state() === "listening" ? "danger" : "plain"}
+            size="sm"
+            tone={mic.state() === "listening" ? "danger" : undefined}
             icon={mic.state() === "listening" ? "square" : "mic"}
             disabled={mic.state() === "working"}
             title="Talk to Pip: tap, speak, tap again. The answer is read aloud."
@@ -275,8 +273,8 @@ export function Conversation(props: {
             {mic.state() === "listening" ? "Stop" : mic.state() === "working" ? "…" : "Talk"}
           </Button>
           <Button
-            kind="jarvis"
-            small
+            variant="primary"
+            size="sm"
             disabled={!draft().trim() || sending()}
             onClick={() => void send()}
           >

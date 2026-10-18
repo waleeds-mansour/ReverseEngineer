@@ -54,14 +54,14 @@ export function GoogleSettings() {
             {(setup.data?.accounts ?? []).find((a) => a.lastError)?.lastError}
           </p>
         </Show>
-        <div class="flex items-center gap-3">
-          <p class="flex-1 text-sm text-muted">
+        <div class="flex flex-wrap items-center gap-3">
+          <p class="min-w-40 flex-1 text-sm text-muted">
             {onPc()
               ? "Connect a Google account so Pip can see and plan your calendar."
               : "Connecting finishes on this PC's own browser (Google sends you back to localhost), so open Nook on the PC to connect."}
           </p>
           <Button
-            kind="primary"
+            variant="primary"
             onClick={() => location.assign("/api/google/connect?for=calendar")}
           >
             Connect Google Calendar
@@ -86,7 +86,7 @@ export function GoogleSettings() {
                       : ""}
                   </span>
                   <Show when={m.setAside > 0}>
-                    <Button small onClick={() => void tryAgain(m.address)}>
+                    <Button size="sm" onClick={() => void tryAgain(m.address)}>
                       Try again
                     </Button>
                   </Show>
@@ -202,7 +202,7 @@ function Calendars(props: { setup: CalendarSetup }) {
             </select>
           </label>
         </Show>
-        <Button small onClick={() => void syncNow()}>
+        <Button size="sm" onClick={() => void syncNow()}>
           Sync now
         </Button>
       </div>

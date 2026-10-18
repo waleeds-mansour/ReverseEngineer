@@ -56,7 +56,7 @@ export function SlackManifest(props: { text: string }) {
     <div class="space-y-1">
       <div class="flex items-center justify-between gap-2">
         <span class="text-xs text-muted">App manifest (YAML)</span>
-        <Button small onClick={copy}>
+        <Button size="sm" onClick={copy}>
           {copied() ? "Copied" : "Copy"}
         </Button>
       </div>
@@ -110,7 +110,7 @@ function TokensForm(props: {
         value={app()}
         onInput={(e) => setApp(e.currentTarget.value)}
       />
-      <Button kind="primary" submit disabled={busy() || !bot().trim() || !app().trim()}>
+      <Button variant="primary" type="submit" disabled={busy() || !bot().trim() || !app().trim()}>
         {props.label}
       </Button>
     </form>
@@ -190,7 +190,7 @@ export function SlackBotSettings(props: { manifest: string }) {
                 </Show>
               </div>
               <Button onClick={() => setReplacing(!replacing())}>New tokens</Button>
-              <Button kind="danger" onClick={() => void disconnect()}>
+              <Button tone="danger" onClick={() => void disconnect()}>
                 Disconnect
               </Button>
             </div>

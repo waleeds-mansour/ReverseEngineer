@@ -69,8 +69,8 @@ export function InviteAnswers(props: {
       <For each={ANSWERS}>
         {(a) => (
           <Button
-            small
-            kind={props.response === a.response ? "primary" : undefined}
+            size="sm"
+            variant={props.response === a.response ? "primary" : "secondary"}
             disabled={busy()}
             onClick={() => void send(a.response)}
           >

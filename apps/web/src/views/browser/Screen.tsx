@@ -131,11 +131,11 @@ export function DialogBar(props: { b: LiveBrowser }) {
               onInput={(e) => setText(e.currentTarget.value)}
             />
           </Show>
-          <Button small kind="primary" onClick={() => answer(true)}>
+          <Button size="sm" variant="primary" onClick={() => answer(true)}>
             {d().type === "beforeunload" ? "Leave" : "OK"}
           </Button>
           <Show when={d().type !== "alert"}>
-            <Button small onClick={() => answer(false)}>
+            <Button size="sm" onClick={() => answer(false)}>
               {d().type === "beforeunload" ? "Stay" : "Cancel"}
             </Button>
           </Show>
