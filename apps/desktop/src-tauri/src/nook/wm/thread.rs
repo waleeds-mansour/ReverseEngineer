@@ -66,6 +66,10 @@ pub fn run<P: Probe>(probe: P, inbox: Inbox, cfg: Config) {
     wm.observe_setting = cfg.observe;
     wm.follow_foreground = cfg.follow_foreground;
     wm.chrome = cfg.chrome.clone();
+    // Wm::new read the foreground before it knew the bar's and popover's own windows.
+    if wm.focused.is_some_and(|h| wm.chrome.contains(&h)) {
+        wm.focused = None;
+    }
     let mut hooks = HookSet::default();
     hooks.start();
     let Ok(mut timer) = Timer::new() else {

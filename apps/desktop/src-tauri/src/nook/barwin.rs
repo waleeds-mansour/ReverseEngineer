@@ -48,7 +48,9 @@ fn sync_now(shared: &Arc<Shared>) {
     let (want, made) = {
         let mut run = shared.bar();
         let want = bar::wanted(run.setting, shared.status(), faulted);
-        run.why_not = want.err();
+        // A bar given up on (BarRun::undrawn) keeps saying why, until its page draws after all.
+        let given_up = run.remade && run.made && !run.bar_drawn;
+        run.why_not = want.err().or(if given_up { run.why_not } else { None });
         (want, run.made)
     };
     match (want, made) {

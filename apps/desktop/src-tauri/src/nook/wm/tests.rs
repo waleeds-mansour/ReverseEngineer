@@ -210,6 +210,7 @@ fn a_monitor_that_stays_away_is_let_go_after_thirty_seconds() {
 fn going_fullscreen_in_place_trips_the_game_guard_without_a_focus_change() {
     let tmp = tempfile::tempdir().unwrap();
     let mut w = wm(probe_with(1), tmp.path());
+    w.follow_foreground = true;
     let t = Instant::now();
     w.apply(
         &Batch {
@@ -236,6 +237,7 @@ fn going_fullscreen_in_place_trips_the_game_guard_without_a_focus_change() {
     video.style = 0x1600_0000;
     w.apply(&located(1), t + Duration::from_secs(1));
     assert!(w.gates.game_guard, "the move alone trips it");
+    assert_eq!(w.follow_pid(), Some(100), "so F1 hears it leave");
     assert_eq!(w.windows[&1].v.facts.style, 0x1600_0000);
     let front = views::state(&w, t, 1).front.unwrap();
     assert!(front.game && front.rect.is_some());

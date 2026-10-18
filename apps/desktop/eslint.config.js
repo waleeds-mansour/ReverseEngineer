@@ -38,7 +38,7 @@ export default [
   {
     // Nook's pages listen on their own window only: Tauri hands an event sent to any one
     // window to every global listen(), so the bar would hear the panel's state.
-    files: ["src/nook/**/*.ts"],
+    files: ["src/nook/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": [
         "error",

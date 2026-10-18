@@ -11,6 +11,7 @@ use super::super::monitors::holding;
 use super::super::probe::{Hwnd, Probe};
 use super::super::shell::Signal;
 use super::super::vd::Answer;
+use super::super::why::Why;
 use super::state::Wm;
 use std::time::Instant;
 
@@ -209,13 +210,24 @@ impl<P: Probe> Wm<P> {
     }
 
     /// The process F1 should follow: the foreground app's, when the bar asked for it and the app
-    /// isn't a game. Nothing is managed while observing, so nothing else asks.
+    /// isn't a game. Nothing is managed while observing, so nothing else asks. A window that went
+    /// fullscreen in place is still followed: its own moves are how leaving it is heard. A bare
+    /// popup is followed too, as one can go fullscreen in place; the shell and games never are.
     pub fn follow_pid(&self) -> Option<u32> {
-        if !self.follow_foreground || self.game.is_some() {
+        if !self.follow_foreground {
             return None;
         }
         let win = self.windows.get(&self.focused?)?;
-        (win.v.kind != Kind::Ignore || win.v.stage > Stage::B).then_some(win.v.facts.pid)
+        let followed = match self.game {
+            Some(game::Tripped::Fullscreen) => true,
+            Some(_) => false,
+            None => {
+                win.v.kind != Kind::Ignore
+                    || win.v.stage > Stage::B
+                    || matches!(win.v.why, Why::BarePopup)
+            }
+        };
+        followed.then_some(win.v.facts.pid)
     }
 
     pub fn due(&self) -> Option<Instant> {
@@ -227,5 +239,44 @@ impl<P: Probe> Wm<P> {
 
     fn vd_asked_deadline(&self) -> Option<Instant> {
         self.vd_asked.deadline()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::state::Wm;
+    use crate::nook::coalesce::Batch;
+    use crate::nook::fake::{app_window, process, two_monitors, FakeProbe};
+    use crate::nook::probe::Own;
+    use std::time::Instant;
+
+    #[test]
+    fn f1_follows_a_bare_popup_in_front_but_never_a_game() {
+        let mut p = FakeProbe::default();
+        *p.screens.borrow_mut() = two_monitors();
+        // WS_POPUP and WS_VISIBLE, without a frame: a player's own borderless window, say.
+        let mut popup = app_window("SomePlayer", 100);
+        popup.facts.style = 0x9000_0000;
+        p.add(1, popup)
+            .proc(100, Ok(process(r"C:\Apps\player.exe")));
+        p.add(2, app_window("RiotWindowClass", 200));
+        let tmp = tempfile::tempdir().unwrap();
+        let own = Own {
+            pid: 1,
+            elevated: false,
+        };
+        let t = Instant::now();
+        let mut w = Wm::new(p, own, tmp.path().to_path_buf(), t);
+        w.follow_foreground = true;
+        let front = |h| Batch {
+            foreground: Some(h),
+            ..Batch::default()
+        };
+        w.apply(&front(1), t);
+        assert_eq!(w.windows[&1].v.why.code(), "bare_popup");
+        assert_eq!(w.follow_pid(), Some(100));
+        w.apply(&front(2), t);
+        assert!(w.game.is_some());
+        assert_eq!(w.follow_pid(), None, "no hook on a game's process");
     }
 }

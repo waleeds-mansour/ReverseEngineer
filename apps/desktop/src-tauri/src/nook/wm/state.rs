@@ -210,7 +210,8 @@ impl<P: Probe> Wm<P> {
         };
         self.stats.verdicts += 1;
         self.stats.process_opens += u64::from(v.opened);
-        if v.stage >= Stage::D && !self.vd.contains_key(&h) {
+        // Once each: while nook-com is stuck, a window judged again isn't queued again.
+        if v.stage >= Stage::D && !self.vd.contains_key(&h) && !self.vd_queue.contains(&h) {
             self.vd_queue.push(h);
         }
         let app = self.app_name(&v);
