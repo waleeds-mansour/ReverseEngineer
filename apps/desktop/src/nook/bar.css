@@ -1,0 +1,184 @@
+/* The Nook bar: the full width of DISPLAY1 at bar-height. With Windows' transparency on, DWM's
+   acrylic is behind the page and the bar is glass (data-glass); otherwise it is a solid surface.
+   Nothing here moves on its own: Pip's working poses come from nook.css and stop after 30 s. */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  font: 500 12px/16px var(--font-sans);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+.nb {
+  height: 100%;
+  gap: var(--space-1);
+  padding: 0 var(--space-2) 0 var(--space-3);
+  border: 0;
+  border-radius: 0;
+  background: var(--glass);
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge),
+    inset 0 -0.5px 0 var(--hairline);
+}
+
+:root:not([data-glass]) .nb {
+  background: var(--surface-2);
+}
+
+.nb-app {
+  display: block;
+  min-width: 0;
+  max-width: 40vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 650;
+}
+
+.nb-services {
+  border: 0;
+  cursor: pointer;
+}
+
+.nb-pip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  margin: 0 var(--space-1);
+  padding: 0 var(--space-2) 0 1px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink);
+  font: 500 12px/16px var(--font-sans);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-base) var(--ease-standard),
+    box-shadow var(--dur-base) var(--ease-standard);
+}
+
+.nb-pip:hover,
+.nb-services:hover {
+  filter: brightness(0.97);
+}
+
+.nb-pip-art {
+  display: inline-flex;
+}
+
+/* High contrast gives Pip no glow, and its white body would vanish into the white bar: Pip sits
+   in a round surface-3 well, round so it nests in the island's pill, with a hairline ring outside
+   a space a quarter wider than Pip, so it keeps its one-eighth margin. Pip stays 20px here in
+   every mood, so the well fits the bar. Windows' forced colours leave the well and Pip as drawn. */
+:root[data-theme="contrast"] .nb-pip-art {
+  align-items: center;
+  justify-content: center;
+  width: 27px;
+  height: 27px;
+  border: 1px solid var(--hairline);
+  border-radius: 50%;
+  background: var(--surface-3);
+  forced-color-adjust: none;
+}
+
+:root[data-theme="contrast"] .nb-pip-art .pip {
+  width: 20px;
+  height: 20px;
+}
+
+/* The island grows from the chip over dur-base while Pip works. */
+.nb-more {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    max-width var(--dur-base) var(--ease-standard),
+    opacity var(--dur-base) var(--ease-standard);
+}
+
+.nb-pip[data-working] {
+  height: 26px;
+  padding: 0 var(--space-1) 0 1px;
+  background: var(--glass-strong);
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge),
+    0 0 0 0.5px var(--hairline);
+}
+
+:root:not([data-glass]) .nb-pip[data-working] {
+  background: var(--surface-1);
+}
+
+.nb-pip[data-working] .nb-pip-name {
+  display: none;
+}
+
+.nb-pip[data-working] .nb-more {
+  max-width: 240px;
+  opacity: 1;
+}
+
+.nb-keys {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.nb-keys .re-kbd {
+  height: 18px;
+  min-width: 18px;
+}
+
+/* Something waits for the owner in Nook, like an approval. */
+.nb-wait {
+  display: none;
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.nb-pip[data-waiting] .nb-wait {
+  display: block;
+}
+
+.nb-clock {
+  font-variant-numeric: tabular-nums;
+}
+
+/* One hop for an answer, and no movement 30 s after Pip's last change or while hidden. */
+.pip--happy .pip-body,
+.pip--happy .pip-glow,
+.pip--happy .pip-sparks circle {
+  animation-iteration-count: 1;
+}
+
+:root[data-still] .pip,
+:root[data-still] .pip *,
+:root[data-quiet] .pip,
+:root[data-quiet] .pip * {
+  animation: none !important;
+}
+
+:root[data-hidden] * {
+  animation-play-state: paused !important;
+}

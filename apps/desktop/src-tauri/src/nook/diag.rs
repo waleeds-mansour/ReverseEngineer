@@ -1,6 +1,6 @@
 // nook.log (docs/nook-wm.md, "FAILURE REPORTING"): what Nook did about other apps' windows and
 // why, kept on this PC only, in at most three files of 1 MB each. Lines are made from typed
-// events rather than free text, and Nook never reads a window's title, so none can reach the log.
+// events rather than free text, and no event carries a window's title, so none can reach the log.
 // Nothing is written, and no folder is made, until there is something to say. The file handling
 // and the restore line are nook-restore's, which the CLI and the guard write with too.
 
@@ -61,8 +61,36 @@ pub enum Event<'a> {
     Unwound {
         thread: &'a str,
     },
+    /// A Nook thread ended without being asked to, and without a panic.
+    Ended {
+        thread: &'a str,
+    },
     /// Hearth was told to quit while a restore was still running, and didn't wait longer.
     QuitDuringRestore,
+    /// The observer started or stopped (P1), and why.
+    Observing {
+        on: bool,
+        why: &'a str,
+    },
+    /// One of the gates tripped or cleared.
+    Gate {
+        name: &'a str,
+        on: bool,
+    },
+    /// A monitor Nook arranges stayed away for 30 s.
+    MonitorAway {
+        name: &'a str,
+    },
+    /// The bar's windows were made or destroyed (P1), and why.
+    Bar {
+        on: bool,
+        why: &'a str,
+    },
+    /// The bar or its popover was told it has the focus, and what became of the foreground: the
+    /// first time for each outcome only.
+    BarFocus {
+        outcome: &'a str,
+    },
 }
 
 impl fmt::Display for Event<'_> {
@@ -83,7 +111,25 @@ impl fmt::Display for Event<'_> {
                 message,
             } => write!(f, "panic in {thread} at {at}: {}", one_line(message)),
             Event::Unwound { thread } => write!(f, "{thread} unwound; restoring from the journal"),
+            Event::Ended { thread } => write!(
+                f,
+                "{thread} ended without being asked; observing is off until Hearth starts again"
+            ),
             Event::QuitDuringRestore => f.write_str("quit while a restore was still running"),
+            Event::Observing { on, why } => {
+                write!(f, "observing {}: {why}", if *on { "on" } else { "off" })
+            }
+            Event::Gate { name, on } => {
+                write!(f, "gate {name} {}", if *on { "on" } else { "off" })
+            }
+            Event::MonitorAway { name } => write!(
+                f,
+                "monitor {name} stayed away for 30 s; observing, so nothing to put back"
+            ),
+            Event::Bar { on, why } => write!(f, "bar {}: {why}", if *on { "on" } else { "off" }),
+            Event::BarFocus { outcome } => {
+                write!(f, "the bar was focused; foreground {outcome} (first time)")
+            }
         }
     }
 }

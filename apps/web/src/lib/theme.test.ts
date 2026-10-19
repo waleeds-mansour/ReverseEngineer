@@ -111,4 +111,38 @@ describe("choosing a theme", () => {
     expect(theme.choice()).toBe("midnight");
     expect(root.dataset.theme).toBe("midnight");
   });
+
+  /** Loads theme.ts in a window whose user agent is `agent`; returns what it opened. */
+  async function shownIn(agent: string) {
+    vi.stubGlobal("navigator", { userAgent: agent });
+    const opened: string[] = [];
+    const page = { href: "http://localhost:4400/today" };
+    vi.stubGlobal("window", {
+      ...window,
+      location: page,
+      open: (url: string) => {
+        opened.push(url);
+        return null;
+      },
+    });
+    const { theme } = await import("./theme.ts");
+    return { theme, opened, page };
+  }
+
+  it("tells the desktop app's Nook bar the theme shown, at load and on each choice", async () => {
+    systemDark = true;
+    const { theme, opened, page } = await shownIn("Mozilla/5.0 HearthDesktop/1.0.42");
+    expect(opened).toEqual(["hearth://theme/dark"]);
+    theme.choose("dusk");
+    expect(opened).toEqual(["hearth://theme/dark", "hearth://theme/dusk"]);
+    expect(page.href, "the page itself never navigates").toBe("http://localhost:4400/today");
+  });
+
+  it("sends no link at all in a browser", async () => {
+    const { theme, opened, page } = await shownIn("Mozilla/5.0 Chrome/140.0 Safari/537.36");
+    theme.choose("midnight");
+    expect(root.dataset.theme).toBe("midnight");
+    expect(opened).toEqual([]);
+    expect(page.href).toBe("http://localhost:4400/today");
+  });
 });

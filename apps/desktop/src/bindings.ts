@@ -559,6 +559,18 @@ async prepareUpdate() : Promise<Result<null, string>> {
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * The one command Nook's own pages call. Only Nook's windows on a local page get an answer, and
+ * every argument is one of UiCmd's few cases, none of which changes a window.
+ */
+async nookUi(cmd: UiCmd) : Promise<Result<UiReply, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("nook_ui", { cmd }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async cancelOperation() : Promise<void> {
     await TAURI_INVOKE("cancel_operation");
 },
@@ -1052,6 +1064,28 @@ overlay_style?: OverlayStyle }
 export type AudioDevice = { index: string; name: string; is_default: boolean }
 export type AutoSubmitKey = "enter" | "ctrl_enter" | "cmd_enter"
 export type AvailableAccelerators = { transcribe: string[]; ort: string[]; gpu_devices: GpuDeviceOption[] }
+export type BarView = {
+/**
+ * The owner's switch.
+ */
+on: boolean;
+/**
+ * The bar is on the screen now.
+ */
+shown: boolean;
+/**
+ * Why there is no bar although the switch is on.
+ */
+why_not: string | null;
+/**
+ * The services and Pip popover is open.
+ */
+popover: boolean;
+/**
+ * A game or something fullscreen is in front, on any monitor: Pip holds still. On another
+ * monitor than the bar's, the bar stays up.
+ */
+quiet: boolean }
 export type BindingResponse = { success: boolean; binding: ShortcutBinding | null; error: string | null }
 /**
  * Script applied to Mandarin and Cantonese output. Other languages are never
@@ -1062,6 +1096,19 @@ export type ChineseScript =
  * Keep whatever script the model produced.
  */
 "as_transcribed" | "simplified" | "traditional"
+export type ChromeView = {
+/**
+ * Goes up with every new view, so a page can drop one that arrives late.
+ */
+seq: number; theme: ThemeId;
+/**
+ * Windows' transparency is on, so the bar is glass; off, it is a solid surface.
+ */
+glass: boolean;
+/**
+ * Windows' animation effects are off: nothing moves.
+ */
+reduced_motion: boolean; services: ServicesView; pip: PipView; bar: BarView }
 export type ClipboardHandling = "dont_modify" | "copy_to_clipboard"
 export type CustomSounds = { start: boolean; stop: boolean }
 export type EngineType = 
@@ -1071,7 +1118,24 @@ export type EngineType =
  * the file, so this one variant covers the whole transcribe-cpp family.
  */
 "TranscribeCpp" | "Parakeet" | "Moonshine" | "MoonshineStreaming" | "SenseVoice" | "GigaAM" | "Canary" | "Cohere"
+/**
+ * The app in front, for the bar.
+ */
+export type FocusedView = { 
+/**
+ * Its name, like "Google Chrome": the exe's description, or its file name.
+ */
+app: string; exe: string | null; verdict: VerdictName; why: string; 
+/**
+ * The game guard tripped on it: the bar and popover hide.
+ */
+game: boolean }
+export type GateView = { name: string; text: string }
 export type GpuDeviceOption = { id: string; name: string; total_vram_mb: number }
+/**
+ * How one of Hearth's services is, as the tray's status line reads it.
+ */
+export type Health = "ok" | "trouble" | "down" | "unknown"
 export type HistoryEntry = { id: number; file_name: string; timestamp: number; saved: boolean; title: string; transcription_text: string; post_processed_text: string | null; post_process_prompt: string | null; post_process_requested: boolean }
 export type HistoryUpdatePayload = { action: "added"; entry: HistoryEntry } | { action: "updated"; entry: HistoryEntry } | { action: "deleted"; id: number } | { action: "toggled"; id: number }
 /**
@@ -1090,6 +1154,11 @@ key_down: number; key_up: number; flags_changed: number; mouse: number; duration
 export type KeyboardImplementation = "tauri" | "handy_keys"
 export type LLMPrompt = { id: string; name: string; prompt: string }
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
+export type ModeName = "off" | 
+/**
+ * Hooks only: every write is refused.
+ */
+"observing"
 export type ModelInfo = { id: string; name: string; description: string; filename: string; source: ModelSource; size_mb: number; is_downloaded: boolean; is_downloading: boolean; partial_size: number; is_directory: boolean; engine_type: EngineType; accuracy_score: number; speed_score: number; supports_translation: boolean; is_recommended: boolean; supported_languages: string[]; supports_language_selection: boolean; is_custom: boolean; supports_streaming: boolean; supports_language_detection: boolean }
 export type ModelLoadStatus = { is_loaded: boolean; current_model: string | null }
 /**
@@ -1117,6 +1186,36 @@ sha256: string | null } } |
  */
 "Local"
 export type ModelUnloadTimeout = "never" | "immediately" | "min_2" | "min_5" | "min_10" | "min_15" | "hour_1" | "sec_15"
+export type MonitorView = { 
+/**
+ * The stable device-interface id.
+ */
+id: string; 
+/**
+ * "DISPLAY1".
+ */
+name: string; rect: RectView; work: RectView; dpi: number; primary: boolean; managed: boolean; note: string }
+export type NookState = { 
+/**
+ * Goes up with every new state, so a page can drop one that arrives late.
+ */
+seq: number; mode: ModeName; 
+/**
+ * Why Nook isn't observing, when it isn't.
+ */
+why_off: string | null; 
+/**
+ * The owner's switch for observing without the panel open.
+ */
+observe: boolean; panel_open: boolean; 
+/**
+ * Hearth runs as administrator, so Nook will only ever observe.
+ */
+elevated: boolean; monitors: MonitorView[]; focused: FocusedView | null; gates: GateView[]; writes: WriteCounts; 
+/**
+ * Only for the panel, and only while it is open.
+ */
+windows: WindowView[]; problems: string[] }
 export type OrtAcceleratorSetting = "auto" | "cpu" | "cuda" | "directml" | "rocm"
 export type OverlayPosition = "top" | "bottom"
 /**
@@ -1129,8 +1228,27 @@ export type OverlayStyle = "none" | "minimal" | "live"
 export type PaginatedHistory = { entries: HistoryEntry[]; has_more: boolean }
 export type PasteMethod = "ctrl_v" | "direct" | "none" | "shift_insert" | "ctrl_shift_v" | "external_script"
 export type PermissionAccess = "allowed" | "denied" | "unknown"
+/**
+ * What Pip is doing, as far as this PC knows: listening and thinking are its own calls to Pip
+ * (the command and talk keys); happy is the moment an answer comes back.
+ */
+export type PipMood = "idle" | "listening" | "thinking" | "happy"
+export type PipView = { mood: PipMood;
+/**
+ * Goes up with every new mood, so the bar can tell a fresh one from the same one again.
+ */
+changed: number;
+/**
+ * Notifications Hearth sent since the owner last looked at Hearth's window, like an approval.
+ */
+waiting: number;
+/**
+ * The key that stops Pip (Hearth's cancel binding), as key caps: ["Esc"].
+ */
+stop_key: string[] }
 export type PostProcessProvider = { id: string; label: string; base_url: string; allow_base_url_edit?: boolean; models_endpoint?: string | null; supports_structured_output?: boolean }
 export type RecordingRetentionPeriod = "never" | "preserve_limit" | "days_3" | "weeks_2" | "months_3"
+export type RectView = { x: number; y: number; width: number; height: number }
 export type SecretMap = Partial<{ [key in string]: string }>
 export type SecureInputStatus = { 
 /**
@@ -1167,6 +1285,19 @@ recorder_blocked: boolean }
 /**
  * How the transcribe shortcut's key events drive a recording.
  */
+export type ServicesView = {
+/**
+ * The first check has come back.
+ */
+checked: boolean;
+/**
+ * This app knows Hearth's address.
+ */
+address_set: boolean; server: Health; worker: Health; pip: Health; pip_paused: boolean;
+/**
+ * Something else Hearth watches (a sync, the disk, backups) is failing.
+ */
+other_failing: boolean }
 export type ShortcutActivation = 
 /**
  * Press to start, press again to stop.
@@ -1221,11 +1352,74 @@ export type StreamWorkKind = "transcribing" | "polishing"
  * and `Dark` force one of the two palettes Handy already ships.
  */
 export type Theme = "system" | "light" | "dark"
+/**
+ * One of Nook's six themes. These are the only values hearth://theme carries; anything else is
+ * dropped before it gets here.
+ */
+export type ThemeId = "light" | "paper" | "dark" | "midnight" | "dusk" | "contrast"
 export type TranscribeAcceleratorSetting = "auto" | "cpu" | "gpu"
 export type TypingTool = "auto" | "wtype" | "kwtype" | "dotool" | "ydotool" | "xdotool"
+export type UiCmd = 
+/**
+ * The page has loaded: send it the state.
+ */
+{ kind: "ready" } | 
+/**
+ * Look at every window again.
+ */
+{ kind: "refresh" } | 
+/**
+ * The observing switch.
+ */
+{ kind: "set_observe"; on: boolean } | 
+/**
+ * Save what Nook sees about each window, without titles, for the verdict tests.
+ */
+{ kind: "save_fixtures" } | 
+/**
+ * Write diag.json now.
+ */
+{ kind: "export_diag" } | 
+/**
+ * The bar's switch.
+ */
+{ kind: "set_bar"; on: boolean } | 
+/**
+ * The bar or popover has drawn its first frame and can be shown.
+ */
+{ kind: "drawn" } | 
+/**
+ * The bar opens or closes the services and Pip popover.
+ */
+{ kind: "popover"; open: boolean } | 
+/**
+ * The popover's Open Hearth: Hearth's window, on Today.
+ */
+{ kind: "open_today" }
+export type UiReply = { state: NookState; 
+/**
+ * Where a saved file went.
+ */
+saved: string | null; chrome: ChromeView }
 export type VadBackend = "silero" | "earshot"
+export type VerdictName = "tile" | "float" | "ignore"
+export type WindowState = "normal" | "minimized" | "maximized"
+/**
+ * One row of 'Why not tiled'.
+ */
+export type WindowView = { 
+/**
+ * The handle as "0x...", the way Nook's log and Spy++ show it.
+ */
+id: string; app: string; exe: string | null; class: string; verdict: VerdictName; 
+/**
+ * The reason the panel shows: the verdict's, or why an arrangeable window would still be
+ * left where it is (minimized, maximized or on a monitor Nook leaves alone).
+ */
+why: string; code: string; state: WindowState; monitor: string | null; sticky: boolean }
 export type WindowsMicrophonePermissionStatus = { supported: boolean; overall_access: PermissionAccess; device_access: PermissionAccess; app_access: PermissionAccess; desktop_app_access: PermissionAccess }
 
+export type WriteCounts = { attempted: number; refused: number; landed: number }
 /** tauri-specta globals **/
 
 import {

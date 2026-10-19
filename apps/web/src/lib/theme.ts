@@ -1,9 +1,11 @@
 // This device's theme: one of Nook's six, or the system's own choice between Light and Dark (the
 // default). It's set as data-theme on <html>, which picks the theme's stylesheet
 // (styles/themes/). public/theme-boot.js sets it before the page draws; this keeps it current.
+// In the desktop app, the Nook bar is told the theme shown too.
 
 import { createEffect, createRoot, createSignal } from "solid-js";
 import { DURATIONS, NOOK_THEMES } from "../styles/themes.ts";
+import { themeTeller } from "./desktop.ts";
 
 export type ThemeId = (typeof NOOK_THEMES)[number]["id"];
 export type ThemeChoice = ThemeId | "system";
@@ -43,11 +45,13 @@ export const theme = createRoot(() => {
     if (e.key === THEME_KEY) setChoice(stored());
   });
   const shown = () => themeFor(choice(), systemDark());
+  const tellDesktop = themeTeller();
 
   createEffect(() => {
     const id = shown();
     const root = document.documentElement;
     root.dataset.theme = id;
+    tellDesktop(id);
     // The phone's status bar and the window's title bar take the theme's canvas.
     const canvas = NOOK_THEMES.find((t) => t.id === id)!.canvas;
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", canvas);

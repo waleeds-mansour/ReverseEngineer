@@ -35,4 +35,24 @@ export default [
       ],
     },
   },
+  {
+    // Nook's pages listen on their own window only: Tauri hands an event sent to any one
+    // window to every global listen(), so the bar would hear the panel's state.
+    files: ["src/nook/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@tauri-apps/api/event",
+              importNames: ["listen", "once"],
+              message:
+                "Use getCurrentWebviewWindow().listen() so the page hears only its own window's events.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];

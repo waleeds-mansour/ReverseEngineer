@@ -137,6 +137,18 @@ windows = { version = "0.61.3", features = [
   "Win32_Foundation",
   "Win32_Graphics_Gdi",
   "Win32_UI_WindowsAndMessaging",
+  # Nook's observer (src/nook): window facts, process paths and elevation, monitors and their
+  # DPI, the shell window's notifications, WinEvent hooks and the virtual desktop manager.
+  "Win32_Graphics_Dwm",
+  "Win32_Security",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Power",
+  "Win32_System_RemoteDesktop",
+  "Win32_System_StationsAndDesktops",
+  "Win32_System_WindowsProgramming",
+  "Win32_UI_Accessibility",
+  "Win32_UI_HiDpi",
+  "Win32_UI_Shell",
 ] }
 winreg = "0.55"
 # Puts back the windows Nook arranged (D75): the same journal and restore as the
@@ -210,9 +222,12 @@ tempfile = "3"
 # resumable HTTP downloader; normal builds keep the leaner feature set.
 tokio = { version = "1.43.0", features = ["macros", "net", "io-util", "sync", "time", "rt-multi-thread"] }
 
-# Nook's "off means off" test (src/nook/off.rs) joins a private desktop and reads WinEvent hooks.
+# Nook's private-desktop tests (src/nook/off.rs, src/nook/itest) join a desktop of their own, read
+# WinEvent hooks and keep their child processes in a job that ends with the test.
 [target.'cfg(windows)'.dev-dependencies]
 windows = { version = "0.61.3", features = [
+  "Win32_System_JobObjects",
+  "Win32_System_Pipes",
   "Win32_System_StationsAndDesktops",
   "Win32_UI_Accessibility",
 ] }

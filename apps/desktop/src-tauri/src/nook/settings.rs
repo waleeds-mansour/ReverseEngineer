@@ -1,8 +1,11 @@
 // Nook's switches (docs/nook-wm.md, "Principles" and "OPT-IN FLOW"). They live in the app's
 // settings store next to Handy's settings, under a key of their own, so a value this version
-// can't read turns Nook off without touching the rest. Every switch starts off. This version has
-// no window manager to turn on, so for now the switches only decide what Nook's status says.
+// can't read turns Nook off without touching the rest. Every switch starts off. This version can't
+// arrange anything yet, so the arranging switches only decide what Nook's status says; the ones it
+// acts on are `observe`, which watches windows and writes nothing, and `bar`, the strip along the
+// top of DISPLAY1 that observes too. The theme Hearth's window last showed is kept beside them.
 
+use super::chrome::ThemeId;
 use log::warn;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
@@ -10,6 +13,8 @@ use tauri_plugin_store::StoreExt;
 
 /// The key in settings_store.json.
 pub const STORE_KEY: &str = "nook";
+/// The theme Hearth's window last showed, as one of the six ids.
+pub const THEME_KEY: &str = "nook_theme";
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -21,6 +26,7 @@ pub struct NookSettings {
     /// New windows of the chosen apps are arranged as they open.
     pub auto_manage: bool,
     pub workspaces: bool,
+    /// The Nook bar along the top of DISPLAY1, in Overlay mode (P1). It observes while it is on.
     pub bar: bool,
     pub ring: bool,
     /// Ctrl+Win+Alt keys beyond Pause and Panic.
@@ -33,6 +39,8 @@ pub struct NookSettings {
     pub display2: bool,
     /// When the owner last cleared safe start, in unix ms. Unclean ends before it don't count.
     pub safe_start_cleared_at: u64,
+    /// Observing without the panel open (P1): hooks, verdicts and gates, with every write refused.
+    pub observe: bool,
 }
 
 impl NookSettings {
@@ -44,20 +52,21 @@ impl NookSettings {
             arrange,
             auto_manage,
             workspaces,
-            bar,
             ring,
             keymap,
             reserve,
             cloak,
             display2,
             safe_start_cleared_at: _,
+            // Observing changes no window, and the bar only observes, so neither is arranging.
+            observe: _,
+            bar: _,
         } = self;
         [
             enabled,
             arrange,
             auto_manage,
             workspaces,
-            bar,
             ring,
             keymap,
             reserve,
@@ -80,6 +89,48 @@ pub fn load(app: &AppHandle) -> NookSettings {
             NookSettings::default()
         }
     }
+}
+
+fn store(app: &AppHandle) -> Result<std::sync::Arc<tauri_plugin_store::Store<tauri::Wry>>, String> {
+    app.store(crate::portable::store_path(
+        crate::settings::SETTINGS_STORE_PATH,
+    ))
+    .map_err(|e| e.to_string())
+}
+
+/// Turns observing on or off. Only that key changes, so switches this version can't read stay
+/// as they were.
+pub fn save_observe(app: &AppHandle, on: bool) -> Result<(), String> {
+    let store = store(app)?;
+    store.set(STORE_KEY, with_switch(store.get(STORE_KEY), "observe", on));
+    Ok(())
+}
+
+/// Turns the bar on or off, the same way.
+pub fn save_bar(app: &AppHandle, on: bool) -> Result<(), String> {
+    let store = store(app)?;
+    store.set(STORE_KEY, with_switch(store.get(STORE_KEY), "bar", on));
+    Ok(())
+}
+
+pub fn with_switch(value: Option<serde_json::Value>, key: &str, on: bool) -> serde_json::Value {
+    let mut map = match value {
+        Some(serde_json::Value::Object(map)) => map,
+        _ => serde_json::Map::new(),
+    };
+    map.insert(key.into(), serde_json::Value::Bool(on));
+    serde_json::Value::Object(map)
+}
+
+/// The theme Hearth's window last showed; none until it has told Nook one.
+pub fn load_theme(app: &AppHandle) -> Option<ThemeId> {
+    let value = store(app).ok()?.get(THEME_KEY)?;
+    value.as_str().and_then(ThemeId::parse)
+}
+
+pub fn save_theme(app: &AppHandle, theme: ThemeId) -> Result<(), String> {
+    store(app)?.set(THEME_KEY, serde_json::Value::String(theme.id().into()));
+    Ok(())
 }
 
 /// A stored value this version can't read counts as everything off: Nook fails closed.
@@ -107,8 +158,8 @@ mod tests {
 
     #[test]
     fn a_stored_switch_reads_and_the_rest_stay_off() {
-        let settings = from_value(Some(json!({ "bar": true })));
-        assert!(settings.bar);
+        let settings = from_value(Some(json!({ "ring": true })));
+        assert!(settings.ring);
         assert!(!settings.enabled);
         assert!(settings.any_on());
     }
@@ -124,6 +175,30 @@ mod tests {
     fn a_switch_from_a_later_version_is_ignored() {
         let settings = from_value(Some(json!({ "enabled": true, "hologram": true })));
         assert!(settings.enabled);
+    }
+
+    #[test]
+    fn observing_and_the_bar_are_not_arranging_and_saving_them_keeps_the_rest() {
+        let settings = from_value(Some(json!({ "observe": true, "bar": true })));
+        assert!(settings.observe && settings.bar);
+        assert!(!settings.any_on());
+        let saved = with_switch(
+            Some(json!({ "ring": true, "hologram": 3 })),
+            "observe",
+            true,
+        );
+        assert_eq!(
+            saved,
+            json!({ "ring": true, "hologram": 3, "observe": true })
+        );
+        assert_eq!(
+            with_switch(Some(json!("on")), "bar", false),
+            json!({ "bar": false })
+        );
+        assert_eq!(
+            with_switch(None, "observe", true),
+            json!({ "observe": true })
+        );
     }
 
     #[test]

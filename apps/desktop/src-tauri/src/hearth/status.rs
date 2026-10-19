@@ -214,6 +214,7 @@ async fn check(app: &AppHandle, fresh: bool) {
     }
     if changed {
         crate::tray::update_tray_menu(app);
+        crate::nook::services_changed(app);
     }
 }
 

@@ -64,9 +64,13 @@ pub fn link(app: &AppHandle) -> Option<Hearth> {
     Hearth::new(&s.hearth_url, &token)
 }
 
-/// Call when the hotkey goes down, before the overlay takes focus. Jarvis stops talking.
-pub fn pressed() {
+/// Call when the hotkey goes down, before the overlay takes focus. Jarvis stops talking, and for
+/// a command or talk, Pip in Nook's bar listens.
+pub fn pressed(app: &AppHandle, mode: Mode) {
     speak::stop();
+    if mode != Mode::Dictate {
+        crate::nook::pip(app, crate::nook::PipMood::Listening);
+    }
     if let Ok(mut p) = PRESSED.lock() {
         *p = Some((foreground::current(), Instant::now()));
     }
@@ -123,6 +127,9 @@ pub(crate) async fn finish(
 ) -> ProcessedTranscription {
     let (target, held) = take_pressed();
     let hearth = link(app);
+    if mode != Mode::Dictate {
+        crate::nook::pip(app, crate::nook::PipMood::Thinking);
+    }
     match (mode, hearth) {
         (Mode::Dictate, Some(h)) => match h
             .clean(transcription, &target, held.as_millis() as u64)
@@ -141,33 +148,47 @@ pub(crate) async fn finish(
             process_transcription_output(app, transcription, post_process).await
         }
         (_, None) => {
+            crate::nook::pip(app, crate::nook::PipMood::Idle);
             tell(app, "Pair the app with Nook in Settings to use Pip.");
             nothing()
         }
-        (Mode::Command, Some(h)) => match command(app, &h, transcription, &target).await {
-            // Pasted only where you asked; if you moved on, it waits on the clipboard.
-            Ok(text) if foreground::current() == target => pasted(text),
-            Ok(text) => {
-                use tauri_plugin_clipboard_manager::ClipboardExt;
-                let _ = app.clipboard().write_text(plain(&text));
-                tell(
-                    app,
-                    "You switched windows, so Pip's answer is on the clipboard.",
-                );
-                nothing()
+        (Mode::Command, Some(h)) => {
+            match answered(app, command(app, &h, transcription, &target).await) {
+                // Pasted only where you asked; if you moved on, it waits on the clipboard.
+                Ok(text) if foreground::current() == target => pasted(text),
+                Ok(text) => {
+                    use tauri_plugin_clipboard_manager::ClipboardExt;
+                    let _ = app.clipboard().write_text(plain(&text));
+                    tell(
+                        app,
+                        "You switched windows, so Pip's answer is on the clipboard.",
+                    );
+                    nothing()
+                }
+                Err(e) => {
+                    tell(app, &e);
+                    nothing()
+                }
             }
-            Err(e) => {
-                tell(app, &e);
-                nothing()
-            }
-        },
+        }
         (Mode::Talk, Some(h)) => {
-            if let Err(e) = talk(h, transcription).await {
+            if let Err(e) = talk(app.clone(), h, transcription).await {
+                crate::nook::pip(app, crate::nook::PipMood::Idle);
                 tell(app, &e);
             }
             nothing()
         }
     }
+}
+
+/// Pip in Nook's bar hops once for an answer, and rests without one.
+fn answered<T, E>(app: &AppHandle, r: Result<T, E>) -> Result<T, E> {
+    let mood = match r {
+        Ok(_) => crate::nook::PipMood::Happy,
+        Err(_) => crate::nook::PipMood::Idle,
+    };
+    crate::nook::pip(app, mood);
+    r
 }
 
 async fn command(
@@ -204,8 +225,9 @@ async fn command(
 }
 
 /// Sends what you said, then reads Jarvis's answer aloud as it arrives.
-async fn talk(h: Hearth, text: &str) -> Result<(), String> {
+async fn talk(app: AppHandle, h: Hearth, text: &str) -> Result<(), String> {
     if text.trim().is_empty() {
+        crate::nook::pip(&app, crate::nook::PipMood::Idle);
         return Ok(());
     }
     let current = TALKING.lock().ok().and_then(|t| {
@@ -238,9 +260,11 @@ async fn talk(h: Hearth, text: &str) -> Result<(), String> {
                 speak::say(&line);
             }
             if done {
-                break;
+                crate::nook::pip(&app, crate::nook::PipMood::Happy);
+                return;
             }
         }
+        crate::nook::pip(&app, crate::nook::PipMood::Idle);
     });
     Ok(())
 }

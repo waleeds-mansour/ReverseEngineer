@@ -392,7 +392,7 @@ pub(crate) async fn process_transcription_output(
 impl ShortcutAction for TranscribeAction {
     fn start(&self, app: &AppHandle, binding_id: &str, _shortcut_str: &str) {
         let start_time = Instant::now();
-        crate::hearth::pressed();
+        crate::hearth::pressed(app, self.hearth);
         debug!("TranscribeAction::start called for binding: {}", binding_id);
 
         // Load model in the background

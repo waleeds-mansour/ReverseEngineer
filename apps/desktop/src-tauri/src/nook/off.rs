@@ -1,13 +1,18 @@
 // Nook off means off (docs/nook-wm.md, P0's exit criteria): with every switch off, the disabled
 // file there, or switches on that this version can't act on, starting Hearth decides on no start
-// check and so starts no thread, and deciding installs no WinEvent hook and creates no window.
+// check and no observer, and so starts no thread, and deciding installs no WinEvent hook and
+// creates no window. The observer (P1) runs only for its own switch, the bar's or the open panel,
+// and the bar only for its own switch; the disabled file stops both.
 // The decision runs on a thread joined to a private desktop of the test's own, made with
 // CreateDesktopW and never switched to, so the before and after readings see nothing of the
 // owner's. Registering a hotkey to probe for Nook's is left out on purpose: the probe itself
 // would take the owner's keys.
 
+use super::bar;
 use super::host::plan;
+use super::observe::{wanted, Observer};
 use super::settings::NookSettings;
+use super::start::Status;
 use nook_restore::journal::{Journal, State, Store};
 use windows::core::{BOOL, PCWSTR};
 use windows::Win32::Foundation::{GENERIC_ALL, HWND, LPARAM};
@@ -76,7 +81,6 @@ fn nook_off_installs_no_hook_creates_no_window_and_starts_no_check() {
         let on_settings = NookSettings {
             enabled: true,
             auto_manage: true,
-            bar: true,
             keymap: true,
             ..NookSettings::default()
         };
@@ -99,12 +103,25 @@ fn nook_off_installs_no_hook_creates_no_window_and_starts_no_check() {
                 _ => {}
             }
             let settings = match case {
-                "disabled" | "switched-on" => on_settings.clone(),
+                // The disabled file holds off the bar and observing too.
+                "disabled" => NookSettings {
+                    bar: true,
+                    observe: true,
+                    ..on_settings.clone()
+                },
+                "switched-on" => on_settings.clone(),
                 _ => NookSettings::default(),
             };
             let plan = plan(&dir, &settings);
             assert!(!plan.check, "{case}: no start check, so no thread");
             assert!(!plan.status.arranges(), "{case}: {:?}", plan.status);
+            let mut observer = Observer::new(settings.observe);
+            observer.bar = bar::wanted(settings.bar, plan.status, false).is_ok();
+            assert!(!observer.bar, "{case}: no bar");
+            assert!(
+                wanted(&observer, plan.status).is_err(),
+                "{case}: no observer"
+            );
         }
         assert_eq!(hooks_installed(), hooks_before, "no WinEvent hook appeared");
         assert_eq!(windows_on(desk), windows_before, "no window appeared");
@@ -128,4 +145,49 @@ fn a_journal_that_still_owes_a_window_does_start_the_check() {
     });
     Store::in_dir(tmp.path()).save(&journal).unwrap();
     assert!(plan(tmp.path(), &NookSettings::default()).check);
+}
+
+#[test]
+fn observing_needs_its_switch_or_the_panel_and_yields_to_the_kill_switch() {
+    let all = [
+        Status::Off,
+        Status::Disabled,
+        Status::SafeStart,
+        Status::NotInThisVersion,
+    ];
+    for status in all {
+        assert!(wanted(&Observer::new(false), status).is_err(), "{status:?}");
+    }
+    let on = Observer::new(true);
+    assert!(wanted(&on, Status::Off).is_ok());
+    assert!(wanted(&on, Status::NotInThisVersion).is_ok());
+    assert!(wanted(&on, Status::Disabled).is_err());
+    assert!(wanted(&on, Status::SafeStart).is_err());
+    let mut panel = Observer::new(false);
+    panel.panel_open = true;
+    assert!(
+        wanted(&panel, Status::SafeStart).is_ok(),
+        "the owner opened the panel on purpose, and it writes nothing"
+    );
+    assert!(wanted(&panel, Status::Disabled).is_err());
+    let mut faulted = Observer::new(true);
+    faulted.faulted = true;
+    assert!(wanted(&faulted, Status::Off).is_err());
+    let mut for_bar = Observer::new(false);
+    for_bar.bar = true;
+    assert!(wanted(&for_bar, Status::Off).is_ok(), "the bar observes");
+    assert!(wanted(&for_bar, Status::Disabled).is_err());
+    assert!(wanted(&for_bar, Status::SafeStart).is_err());
+}
+
+#[test]
+fn the_panels_last_open_or_close_wins_whatever_order_the_workers_run_in() {
+    let mut o = Observer::new(false);
+    // Opened as turn 1, closed as turn 2, and the close's worker reached the lock first.
+    assert!(o.panel_turn(2, false));
+    assert!(!o.panel_turn(1, true), "the older open is dropped");
+    assert!(!o.panel_open);
+    assert!(o.panel_turn(3, true));
+    assert!(o.panel_open);
+    assert!(!o.panel_turn(3, false), "a turn is applied once");
 }
