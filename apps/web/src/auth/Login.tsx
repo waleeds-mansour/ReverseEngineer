@@ -1,12 +1,14 @@
 // Sign in with a passkey (Windows Hello, Touch ID, your phone). The first time, enter the code
-// `hearth setup` printed to add your first passkey, at Hearth's own address. The desktop app's
-// window on this PC asks the app to sign it in with this PC's Windows Hello key once connecting
-// has made one (D80), or uses a Windows Hello passkey of its own, or else signs in from your
-// browser (D53, D69): no page shows a passkey button that can't work where it is.
+// `hearth setup` printed to add your first passkey, at Hearth's own address. Can't use any of
+// yours? "Lost your passkey?" takes the code `hearth setup --recover` prints, there too (D81).
+// The desktop app's window on this PC asks the app to sign it in with this PC's Windows Hello key
+// once connecting has made one (D80), or uses a Windows Hello passkey of its own, or else signs
+// in from your browser (D53, D69): no page shows a passkey button that can't work where it is.
 
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
-import { createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
+import { createSignal, type JSX, Match, onCleanup, onMount, Show, Switch } from "solid-js";
 import { Button } from "../components/kit/Button.tsx";
+import { TextButton } from "../components/kit/TextButton.tsx";
 import { authPost } from "../lib/api.ts";
 import { inDesktopApp } from "../lib/desktop.ts";
 import { forgetStarted } from "../lib/version.ts";
@@ -22,6 +24,13 @@ export function Login(props: {
   const [code, setCode] = createSignal("");
   const [error, setError] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
+  // "Lost your passkey?": the recovery code's form instead of the passkey button (D81).
+  const [recovering, setRecovering] = createSignal(false);
+  const recover = (on: boolean) => {
+    setRecovering(on);
+    setCode("");
+    setError(null);
+  };
   // Windows Hello didn't work in the window: the browser is offered too.
   const [helloFailed, setHelloFailed] = createSignal(false);
   const [sent, setSent] = createSignal(false);
@@ -86,18 +95,18 @@ export function Login(props: {
     }
   };
 
-  const register = () =>
+  // With the setup code (your first passkey) or the recovery code (one more, D81).
+  const register = (kind: "setupCode" | "recoveryCode") =>
     run(async () => {
+      const codes = { [kind]: code() };
       const options = await authPost<Parameters<typeof startRegistration>[0]["optionsJSON"]>(
         "register/options",
-        {
-          setupCode: code(),
-        },
+        codes,
       );
       const response = await startRegistration({ optionsJSON: options });
       await authPost("register/verify", {
         response,
-        setupCode: code(),
+        ...codes,
         label: navigator.platform || "Passkey",
       });
     });
@@ -145,46 +154,55 @@ export function Login(props: {
         </div>
         <Switch>
           <Match when={way() === "setup"}>
-            <form
-              class="space-y-3"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void register();
-              }}
-            >
-              <label class="block space-y-1">
-                <span class="text-sm">
+            <CodeForm
+              label={
+                <>
                   Setup code from <code class="font-mono">hearth setup</code>
-                </span>
-                <input
-                  class="w-full rounded-md border border-line bg-panel px-3 py-2 font-mono tracking-widest uppercase focus:border-accent"
-                  value={code()}
-                  onInput={(e) => setCode(e.currentTarget.value)}
-                  autocomplete="one-time-code"
-                  autofocus
-                />
-              </label>
+                </>
+              }
+              code={code()}
+              setCode={setCode}
+              busy={busy()}
+              onSubmit={() => void register("setupCode")}
+            />
+          </Match>
+          <Match when={way() === "passkey" && recovering()}>
+            <div class="space-y-3">
+              <p class="text-sm text-muted">
+                On the PC Nook runs on, run <code class="font-mono">hearth setup --recover</code>.
+                Its code adds a new passkey here and signs you in. Your other passkeys keep working.
+              </p>
+              <CodeForm
+                label={
+                  <>
+                    Recovery code from <code class="font-mono">hearth setup --recover</code>
+                  </>
+                }
+                code={code()}
+                setCode={setCode}
+                busy={busy()}
+                onSubmit={() => void register("recoveryCode")}
+              />
+              <TextButton alone onClick={() => recover(false)}>
+                Sign in with your passkey instead
+              </TextButton>
+            </div>
+          </Match>
+          <Match when={way() === "passkey"}>
+            <div class="space-y-3">
               <Button
                 size="lg"
                 variant="primary"
-                type="submit"
                 class="w-full"
-                disabled={busy() || code().trim().length < 6}
+                disabled={busy()}
+                onClick={() => void login()}
               >
-                Create passkey
+                Sign in with your passkey
               </Button>
-            </form>
-          </Match>
-          <Match when={way() === "passkey"}>
-            <Button
-              size="lg"
-              variant="primary"
-              class="w-full"
-              disabled={busy()}
-              onClick={() => void login()}
-            >
-              Sign in with your passkey
-            </Button>
+              <TextButton alone onClick={() => recover(true)}>
+                Lost your passkey?
+              </TextButton>
+            </div>
           </Match>
           <Match when={way() === "native"}>
             <div class="space-y-2">
@@ -242,5 +260,47 @@ export function Login(props: {
         </Show>
       </div>
     </div>
+  );
+}
+
+/** A code `hearth setup` printed, and the button that makes a passkey with it. */
+function CodeForm(props: {
+  label: JSX.Element;
+  code: string;
+  setCode: (code: string) => void;
+  busy: boolean;
+  onSubmit: () => void;
+}) {
+  // Focused when it shows, after a click too: autofocus works only once a page.
+  let input!: HTMLInputElement;
+  onMount(() => input.focus());
+  return (
+    <form
+      class="space-y-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        props.onSubmit();
+      }}
+    >
+      <label class="block space-y-1">
+        <span class="text-sm">{props.label}</span>
+        <input
+          ref={input}
+          class="w-full rounded-md border border-line bg-panel px-3 py-2 font-mono tracking-widest uppercase focus:border-accent"
+          value={props.code}
+          onInput={(e) => props.setCode(e.currentTarget.value)}
+          autocomplete="one-time-code"
+        />
+      </label>
+      <Button
+        size="lg"
+        variant="primary"
+        type="submit"
+        class="w-full"
+        disabled={props.busy || props.code.trim().length < 6}
+      >
+        Create passkey
+      </Button>
+    </form>
   );
 }

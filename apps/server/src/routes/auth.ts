@@ -1,5 +1,6 @@
 // Sign-in with passkeys. The first passkey is added with the setup code `hearth setup` prints;
-// after that, new passkeys can only be added from a signed-in session. The desktop app's window
+// after that, new passkeys can only be added from a signed-in session, or with the recovery code
+// `hearth setup --recover` prints when you can't use any of yours (D81). The desktop app's window
 // signs in by hand-off from a signed-in browser (D53, /desktop/* below), with this PC's Windows
 // Hello key through the app (D80, auth/hello.ts), or with a Windows Hello passkey of its own once
 // you've added one there (D69, auth/relying-party.ts).
@@ -13,6 +14,7 @@ import { type Handoffs, handoffs as sharedHandoffs } from "../auth/handoff.ts";
 import { helloKey, readHelloKey, saveHelloKey, signedByHello } from "../auth/hello.ts";
 import { SESSION_COOKIE, secureCookies } from "../auth/middleware.ts";
 import {
+  checkRecoveryCode,
   checkSetupCode,
   hasPasskey,
   listPasskeys,
@@ -31,13 +33,18 @@ import { directFromThisPc } from "./health.ts";
 const CHALLENGE_COOKIE = "hearth_challenge";
 const SESSION_DAYS = 30;
 
-const registerOptionsBody = z.object({ setupCode: z.string().max(40).optional() });
+const codes = {
+  setupCode: z.string().max(40).optional(),
+  recoveryCode: z.string().max(40).optional(),
+};
+const registerOptionsBody = z.object(codes);
 const verifyBody = z.object({
   // The browser's WebAuthn response; SimpleWebAuthn checks its shape.
   response: z.record(z.string(), z.unknown()),
   label: z.string().max(100).optional(),
-  setupCode: z.string().max(40).optional(),
+  ...codes,
 });
+type Codes = { setupCode?: string | undefined; recoveryCode?: string | undefined };
 
 function setChallenge(c: Context<AppEnv>, id: string) {
   setCookie(c, CHALLENGE_COOKIE, id, {
@@ -72,23 +79,41 @@ async function signIn(c: Context<AppEnv>, principal: string, label?: string) {
   });
 }
 
+/** Each use of the recovery code, kept in the server's log (D81). */
+const recoveryLog = (what: string) => console.warn(`[auth] recovery code ${what}`);
+
 /**
- * You may add a passkey if you're signed in, or if none exists yet and you have the setup code.
- * The window's own only signed in, and never as the first: that one is for Hearth's own address,
- * even when development login has signed you in without any (D69).
+ * How you may add a passkey, if at all: signed in; with the setup code while none exists yet; or
+ * with the recovery code when you can't use any of yours (D81). The window's own only signed in,
+ * never with a code, and never as the first: that one is for Hearth's own address, even when
+ * development login has signed you in without any (D69).
  */
 async function mayRegister(
   c: Context<AppEnv>,
-  setupCode: string | undefined,
+  codes: Codes,
   local: boolean,
-): Promise<boolean> {
+): Promise<"signed in" | "setup" | "recovery" | null> {
   const { kernel } = c.get("deps");
   const owner = c.get("caller")?.kind === "owner";
-  if (local) return owner && (await hasPasskey(kernel.db));
-  if (owner) return true;
-  if (await hasPasskey(kernel.db)) return false;
-  return !!setupCode && (await checkSetupCode(kernel.db, setupCode));
+  if (local && codes.recoveryCode !== undefined) {
+    recoveryLog("refused: it adds passkeys only at Hearth's own address, not the window's");
+    return null;
+  }
+  if (local) return owner && (await hasPasskey(kernel.db)) ? "signed in" : null;
+  if (owner) return "signed in";
+  if (codes.recoveryCode !== undefined) {
+    if (await checkRecoveryCode(kernel.db, codes.recoveryCode)) return "recovery";
+    recoveryLog("refused: it's wrong, used or out of time");
+    return null;
+  }
+  if (await hasPasskey(kernel.db)) return null;
+  return codes.setupCode && (await checkSetupCode(kernel.db, codes.setupCode)) ? "setup" : null;
 }
+
+const refusal = (codes: Codes) =>
+  codes.recoveryCode !== undefined
+    ? "That recovery code didn't work. Each works once, for 30 minutes: run `hearth setup --recover` on the PC for a new one."
+    : "Sign in, or use the setup code from `hearth setup`.";
 
 const NOT_CONNECTED = "This PC's Nook window isn't connected. Connect it from your browser.";
 
@@ -232,8 +257,8 @@ export function authRoutes(handoffs: Handoffs = sharedHandoffs) {
     const { kernel } = c.get("deps");
     const rp = relyingPartyFor(c);
     const body = registerOptionsBody.safeParse(await c.req.json().catch(() => ({})));
-    if (!body.success || !(await mayRegister(c, body.data.setupCode, !!rp.local))) {
-      return c.json({ error: "Sign in, or use the setup code from `hearth setup`." }, 403);
+    if (!body.success || !(await mayRegister(c, body.data, !!rp.local))) {
+      return c.json({ error: refusal(body.data ?? {}) }, 403);
     }
     const { options, challengeId } = await registrationOptions(kernel.db, rp);
     setChallenge(c, challengeId);
@@ -246,18 +271,22 @@ export function authRoutes(handoffs: Handoffs = sharedHandoffs) {
     const body = verifyBody.safeParse(await c.req.json().catch(() => null));
     const challengeId = takeChallengeCookie(c);
     if (!body.success || !challengeId) return c.json({ error: "Start again." }, 400);
-    const first = c.get("caller")?.kind !== "owner";
-    if (!(await mayRegister(c, body.data.setupCode, !!rp.local)))
-      return c.json({ error: "Not allowed." }, 403);
+    const way = await mayRegister(c, body.data, !!rp.local);
+    if (!way) return c.json({ error: refusal(body.data) }, 403);
+    const label = body.data.label ?? "Passkey";
+    const recovery = way === "recovery" ? body.data.recoveryCode : undefined;
     const ok = await verifyRegistration(
       kernel.db,
       rp,
       challengeId,
       body.data.response as never,
-      body.data.label ?? "Passkey",
+      label,
+      recovery,
     ).catch(() => false);
     if (!ok) return c.json({ error: "That passkey couldn't be verified." }, 400);
-    if (first) await signIn(c, "owner");
+    if (way === "recovery")
+      recoveryLog(`used: added the passkey ${JSON.stringify(label)} and signed in`);
+    if (way !== "signed in") await signIn(c, "owner");
     return c.json({ ok: true });
   });
 

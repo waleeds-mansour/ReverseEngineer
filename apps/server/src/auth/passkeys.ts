@@ -1,5 +1,6 @@
 // Passkey (WebAuthn) login for the owner. The first passkey needs the one-time setup code from
-// `hearth setup`; more can be added from a signed-in session. A passkey works only at the address
+// `hearth setup`; more can be added from a signed-in session, or with the one-time recovery code
+// from `hearth setup --recover` when you can't use any (D81). A passkey works only at the address
 // it was made at: Hearth's own, or the desktop app's window on this PC (D69, relying-party.ts).
 // Each is kept to its own: offered, excluded and checked only there.
 import { randomBytes } from "node:crypto";
@@ -11,7 +12,7 @@ import {
   verifyAuthenticationResponse,
   verifyRegistrationResponse,
 } from "@simplewebauthn/server";
-import { and, eq, gt, isNull, lt } from "drizzle-orm";
+import { and, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import { hashToken, safeEqual } from "./tokens.ts";
 
 const CHALLENGE_TTL_MS = 5 * 60_000;
@@ -46,6 +47,9 @@ async function logged<T>(what: "sign-in" | "registration", fn: () => Promise<T>)
   }
 }
 export const SETUP_CODE_KEY = "auth.setupCodeHash";
+/** The code `hearth setup --recover` prints, for when you can't use any passkey (D81). */
+export const RECOVERY_CODE_KEY = "auth.recoveryCodeHash";
+const CODE_TTL_MS = 30 * 60_000;
 
 export interface RelyingParty {
   origin: string;
@@ -120,25 +124,35 @@ export async function removePasskey(db: Db, id: string): Promise<"removed" | "la
   });
 }
 
-export async function checkSetupCode(db: Db, code: string): Promise<boolean> {
-  const [row] = await db.select().from(setting).where(eq(setting.key, SETUP_CODE_KEY));
-  const stored = row?.value as { hash: string; expiresAt: string } | undefined;
-  if (!stored || new Date(stored.expiresAt) < new Date()) return false;
-  return safeEqual(stored.hash, hashToken(code.trim().toUpperCase()));
+/** A one-time code as kept: only its hash, and when it runs out. */
+type StoredCode = { hash: string; expiresAt: string };
+const codeHash = (code: string) => hashToken(code.trim().toUpperCase());
+const live = (stored: StoredCode | undefined): stored is StoredCode =>
+  !!stored && new Date(stored.expiresAt) >= new Date();
+
+async function checkCode(db: Db, key: string, code: string): Promise<boolean> {
+  const [row] = await db.select().from(setting).where(eq(setting.key, key));
+  const stored = row?.value as StoredCode | undefined;
+  return live(stored) && safeEqual(stored.hash, codeHash(code));
 }
 
-export async function createSetupCode(db: Db, now = new Date()): Promise<string> {
+/** A new code, replacing any of its kind not yet used: it works once, for 30 minutes. */
+async function createCode(db: Db, key: string, now: Date): Promise<string> {
   const code = randomBytes(5).toString("hex").toUpperCase();
-  const value = {
-    hash: hashToken(code),
-    expiresAt: new Date(now.getTime() + 30 * 60_000).toISOString(),
-  };
+  const expiresAt = new Date(now.getTime() + CODE_TTL_MS).toISOString();
+  const value: StoredCode = { hash: hashToken(code), expiresAt };
   await db
     .insert(setting)
-    .values({ key: SETUP_CODE_KEY, value, updatedAt: now })
+    .values({ key, value, updatedAt: now })
     .onConflictDoUpdate({ target: setting.key, set: { value, updatedAt: now } });
   return code;
 }
+
+export const checkSetupCode = (db: Db, code: string) => checkCode(db, SETUP_CODE_KEY, code);
+export const createSetupCode = (db: Db, now = new Date()) => createCode(db, SETUP_CODE_KEY, now);
+export const checkRecoveryCode = (db: Db, code: string) => checkCode(db, RECOVERY_CODE_KEY, code);
+export const createRecoveryCode = (db: Db, now = new Date()) =>
+  createCode(db, RECOVERY_CODE_KEY, now);
 
 async function saveChallenge(
   db: Db,
@@ -208,8 +222,12 @@ export async function verifyRegistration(
   challengeId: string,
   response: Parameters<typeof verifyRegistrationResponse>[0]["response"],
   label: string,
+  /** Added with the recovery code (D81): it's used up with the passkey, never at the window. */
+  recoveryCode?: string,
 ): Promise<boolean> {
-  return logged("registration", () => checkRegistration(db, rp, challengeId, response, label));
+  return logged("registration", () =>
+    checkRegistration(db, rp, challengeId, response, label, recoveryCode),
+  );
 }
 
 async function checkRegistration(
@@ -218,7 +236,12 @@ async function checkRegistration(
   challengeId: string,
   response: Parameters<typeof verifyRegistrationResponse>[0]["response"],
   label: string,
+  recoveryCode: string | undefined,
 ): Promise<boolean> {
+  if (rp.local && recoveryCode !== undefined) {
+    authFailed("registration", "the recovery code adds passkeys only at Hearth's own address");
+    return false;
+  }
   const challenge = await takeChallenge(db, challengeId, "register", rp);
   if (!challenge) {
     authFailed("registration", "the challenge expired or was already used");
@@ -248,15 +271,35 @@ async function checkRegistration(
     return false;
   }
   const c = info.credential;
-  await db.insert(credential).values({
-    id: c.id,
-    principal: "owner",
-    publicKey: Buffer.from(c.publicKey),
-    counter: c.counter,
-    transports: c.transports ?? [],
-    label: label.slice(0, 100),
-    rpId: rp.local ? "localhost" : null,
+  const added = await db.transaction(async (tx) => {
+    // The recovery code goes with the passkey it adds: two pages racing with it add one.
+    if (recoveryCode !== undefined) {
+      const [used] = await tx
+        .delete(setting)
+        .where(
+          and(
+            eq(setting.key, RECOVERY_CODE_KEY),
+            sql`${setting.value}->>'hash' = ${codeHash(recoveryCode)}`,
+          ),
+        )
+        .returning();
+      if (!live(used?.value as StoredCode | undefined)) return false;
+    }
+    await tx.insert(credential).values({
+      id: c.id,
+      principal: "owner",
+      publicKey: Buffer.from(c.publicKey),
+      counter: c.counter,
+      transports: c.transports ?? [],
+      label: label.slice(0, 100),
+      rpId: rp.local ? "localhost" : null,
+    });
+    return true;
   });
+  if (!added) {
+    authFailed("registration", "the recovery code ran out or was already used");
+    return false;
+  }
   await db.delete(setting).where(eq(setting.key, SETUP_CODE_KEY));
   return true;
 }
