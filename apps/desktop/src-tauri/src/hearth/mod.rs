@@ -15,6 +15,7 @@ pub mod chunker;
 pub mod client;
 pub mod deeplink;
 pub mod foreground;
+pub mod hello;
 pub mod links;
 pub mod meeting;
 pub mod notify;

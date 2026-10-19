@@ -1,14 +1,18 @@
 // The desktop app's sign-in hand-off (D53). Signed in in your browser, you ask Hearth to connect
 // the PC: Hearth makes a nonce and your browser opens hearth://connect?nonce=… . The app trades
-// the nonce for its device token and a code, and its window trades the code for a session.
+// the nonce for its device token and a code, and its window trades the code for a session. With
+// them comes a ticket for the window's Windows Hello key; later the app gets a challenge for that
+// key to sign, which buys a code too (D80, hello.ts).
 //
-// Nonces and codes are single-use, last a minute, and live only in this process's memory: a
+// All of them are single-use, last a minute or a few, and live only in this process's memory: a
 // restart forgets them, which only means clicking Connect again. Only their hashes are kept, and
 // a lookup compares every one in constant time.
 import { createHash, randomBytes } from "node:crypto";
 import { safeEqual } from "./tokens.ts";
 
 export const HANDOFF_TTL_MS = 60_000;
+/** Windows Hello may take a while to set up, or to see you. */
+export const HELLO_TTL_MS = 5 * 60_000;
 /** Plenty for one person clicking Connect; more pending than this and the oldest go. */
 const MAX_PENDING = 20;
 
@@ -23,15 +27,17 @@ const hash = (secret: string) => createHash("sha256").update(secret).digest("bas
 class SingleUse {
   private pending: Pending[] = [];
   private readonly now: () => number;
+  private readonly ttl: number;
 
-  constructor(now: () => number) {
+  constructor(now: () => number, ttl = HANDOFF_TTL_MS) {
     this.now = now;
+    this.ttl = ttl;
   }
 
   issue(principal: string): string {
     const secret = randomBytes(32).toString("base64url");
     this.prune();
-    this.pending.push({ hash: hash(secret), principal, expiresAt: this.now() + HANDOFF_TTL_MS });
+    this.pending.push({ hash: hash(secret), principal, expiresAt: this.now() + this.ttl });
     while (this.pending.length > MAX_PENDING) this.pending.shift();
     return secret;
   }
@@ -58,10 +64,16 @@ export class Handoffs {
   readonly nonces: SingleUse;
   /** Given to the desktop app, taken by its window to sign in. */
   readonly codes: SingleUse;
+  /** Given to the app with its token, taken with its Windows Hello key (D80). */
+  readonly enrolls: SingleUse;
+  /** Given to the app for Windows Hello to sign, taken with the signature (D80). */
+  readonly challenges: SingleUse;
 
   constructor(now: () => number = () => Date.now()) {
     this.nonces = new SingleUse(now);
     this.codes = new SingleUse(now);
+    this.enrolls = new SingleUse(now, HELLO_TTL_MS);
+    this.challenges = new SingleUse(now, HELLO_TTL_MS);
   }
 }
 

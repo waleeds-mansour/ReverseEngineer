@@ -3,6 +3,7 @@
 import { PRINCIPAL } from "@hearth/core";
 import { createSession, type DbOrTx, session } from "@hearth/db";
 import { and, eq, isNull, like } from "drizzle-orm";
+import { forgetHelloKey } from "./hello.ts";
 
 /** What each kind of device may run. */
 export const DEVICE_SCOPES: Record<string, string[]> = {
@@ -23,6 +24,10 @@ export const DEVICE_SCOPES: Record<string, string[]> = {
     // Hearth on the PC (D53): the tray's status line and Windows notifications. Read only.
     "system.status",
     "GET /api/desktop/notify",
+    // Signing Hearth's window in with this PC's Windows Hello key, not the token alone (D80).
+    "POST /api/auth/desktop/hello/enroll",
+    "POST /api/auth/desktop/hello/challenge",
+    "POST /api/auth/desktop/hello/verify",
   ],
 };
 
@@ -41,6 +46,8 @@ export async function pairDevice(db: DbOrTx, name: string, now = new Date()): Pr
 }
 
 export async function revokeDevice(db: DbOrTx, name: string, now = new Date()): Promise<number> {
+  // The window's Windows Hello key belongs to one pairing: the app sends a new one (D80).
+  if (name === "desktop") await forgetHelloKey(db);
   return revokeLabelled(db, label(name), now);
 }
 

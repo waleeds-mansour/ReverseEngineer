@@ -1,7 +1,8 @@
 // Sign-in with passkeys. The first passkey is added with the setup code `hearth setup` prints;
 // after that, new passkeys can only be added from a signed-in session. The desktop app's window
-// signs in by hand-off from a signed-in browser (D53, /desktop/* below), or with a Windows Hello
-// passkey of its own once you've added one there (D69, auth/relying-party.ts).
+// signs in by hand-off from a signed-in browser (D53, /desktop/* below), with this PC's Windows
+// Hello key through the app (D80, auth/hello.ts), or with a Windows Hello passkey of its own once
+// you've added one there (D69, auth/relying-party.ts).
 
 import type { Context } from "hono";
 import { Hono } from "hono";
@@ -9,6 +10,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
 import { DESKTOP_WINDOW, desktopPaired, pairDevice, revokeDesktopWindow } from "../auth/devices.ts";
 import { type Handoffs, handoffs as sharedHandoffs } from "../auth/handoff.ts";
+import { helloKey, readHelloKey, saveHelloKey, signedByHello } from "../auth/hello.ts";
 import { SESSION_COOKIE, secureCookies } from "../auth/middleware.ts";
 import {
   checkSetupCode,
@@ -24,6 +26,7 @@ import {
 import { relyingPartyFor } from "../auth/relying-party.ts";
 import { createSession, revokeToken } from "../auth/tokens.ts";
 import type { AppEnv } from "../env.ts";
+import { directFromThisPc } from "./health.ts";
 
 const CHALLENGE_COOKIE = "hearth_challenge";
 const SESSION_DAYS = 30;
@@ -90,6 +93,13 @@ async function mayRegister(
 const NOT_CONNECTED = "This PC's Nook window isn't connected. Connect it from your browser.";
 
 const redeemBody = z.object({ nonce: z.string().min(16).max(128) });
+const enrollBody = z.object({ ticket: z.string().max(128), publicKey: z.string().max(2048) });
+const helloBody = z.object({ challenge: z.string().max(128), signature: z.string().max(1024) });
+
+/** The desktop app itself: its device token, straight from this PC, through no proxy (D80). */
+const fromTheApp = (c: Context<AppEnv>) =>
+  c.get("caller")?.via === "device" && !c.get("viaCookie") && directFromThisPc(c);
+const NOT_THE_APP = "Only Nook's desktop app on this PC can do that.";
 
 const RUN_OUT_PAGE = `<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Connect again</title>
@@ -112,15 +122,57 @@ export function authRoutes(handoffs: Handoffs = sharedHandoffs) {
     return c.json({ nonce, link: `hearth://connect?nonce=${nonce}`, expiresInSeconds: 60 });
   });
 
-  // The app trades the nonce for its device token and a code for its window. It's paired anew,
-  // so its token has today's scopes.
+  // The app trades the nonce for its device token, a code for its window, and a ticket to send
+  // its Windows Hello key with (D80). It's paired anew, so its token has today's scopes, and the
+  // last pairing's key is forgotten.
   app.post("/desktop/redeem", async (c) => {
     const body = redeemBody.safeParse(await c.req.json().catch(() => null));
     const principal = body.success ? handoffs.nonces.take(body.data.nonce) : null;
     if (!principal) return c.json({ error: "That connect link has run out or was used." }, 410);
     const token = await pairDevice(c.get("deps").kernel.db, "desktop");
     c.header("Cache-Control", "no-store");
-    return c.json({ token, code: handoffs.codes.issue(principal) });
+    return c.json({
+      token,
+      code: handoffs.codes.issue(principal),
+      enroll: handoffs.enrolls.issue(principal),
+    });
+  });
+
+  // The window's Windows Hello key (D80, auth/hello.ts): only with the ticket connecting gave.
+  app.post("/desktop/hello/enroll", async (c) => {
+    if (!fromTheApp(c)) return c.json({ error: NOT_THE_APP }, 403);
+    const body = enrollBody.safeParse(await c.req.json().catch(() => null));
+    if (!body.success || !readHelloKey(body.data.publicKey))
+      return c.json({ error: "That isn't a Windows Hello key." }, 400);
+    if (!handoffs.enrolls.take(body.data.ticket))
+      return c.json({ error: "Setting up Windows Hello ran out. Connect this PC again." }, 410);
+    await saveHelloKey(c.get("deps").kernel.db, body.data.publicKey);
+    return c.json({ ok: true });
+  });
+
+  // Signing the window in again: Windows Hello signs a fresh challenge with the window's key, and
+  // the signature buys a code, as a hand-off does. The token alone gets no further than this.
+  app.post("/desktop/hello/challenge", async (c) => {
+    if (!fromTheApp(c)) return c.json({ error: NOT_THE_APP }, 403);
+    if (!(await helloKey(c.get("deps").kernel.db)))
+      return c.json({ error: "Windows Hello isn't set up for this window. Connect again." }, 409);
+    c.header("Cache-Control", "no-store");
+    return c.json({ challenge: handoffs.challenges.issue(c.get("caller")!.principal) });
+  });
+
+  app.post("/desktop/hello/verify", async (c) => {
+    if (!fromTheApp(c)) return c.json({ error: NOT_THE_APP }, 403);
+    const body = helloBody.safeParse(await c.req.json().catch(() => null));
+    const principal = body.success ? handoffs.challenges.take(body.data.challenge) : null;
+    const key = await helloKey(c.get("deps").kernel.db);
+    if (!body.success || !principal || !key)
+      return c.json({ error: "That sign-in ran out. Try again." }, 410);
+    if (!signedByHello(key, body.data.challenge, body.data.signature)) {
+      console.warn("[auth] window sign-in refused: not signed by its Windows Hello key");
+      return c.json({ error: "Windows Hello's signature didn't match." }, 401);
+    }
+    c.header("Cache-Control", "no-store");
+    return c.json({ code: handoffs.codes.issue(principal) });
   });
 
   // The app's window trades the code for an ordinary session, then opens Today. It has one
@@ -148,6 +200,8 @@ export function authRoutes(handoffs: Handoffs = sharedHandoffs) {
       // is sent back to it.
       origin: config.origin,
       localPasskey: made.window && (await desktopPaired(kernel.db)),
+      // Whether the app can sign the window in with this PC's Windows Hello key (D80).
+      windowHello: (await helloKey(kernel.db)) !== null,
     });
   });
 

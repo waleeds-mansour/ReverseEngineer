@@ -21,6 +21,13 @@ describe("wayIn", () => {
     expect(wayIn(window, { ...set, localPasskey: true }, false)).toBe("browser");
   });
 
+  it("asks the app for this PC's Windows Hello first, only in its window", () => {
+    expect(wayIn(window, { ...set, windowHello: true, localPasskey: true }, true)).toBe("native");
+    expect(wayIn(window, { ...set, windowHello: true }, false)).toBe("browser");
+    expect(wayIn(byNumber, { ...set, windowHello: true }, true)).toBe("browser");
+    expect(wayIn(own, { ...set, windowHello: true }, true)).toBe("passkey");
+  });
+
   it("otherwise sends you to your browser, never to a passkey that can't work", () => {
     expect(wayIn(window, { ...set, localPasskey: false }, true)).toBe("browser");
     expect(wayIn(byNumber, { ...set, localPasskey: true }, true)).toBe("browser");

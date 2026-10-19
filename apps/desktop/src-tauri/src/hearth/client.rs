@@ -241,7 +241,7 @@ fn unreachable(e: &reqwest::Error) -> String {
     }
 }
 
-fn http() -> &'static reqwest::Client {
+pub(super) fn http() -> &'static reqwest::Client {
     static HTTP: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
     HTTP.get_or_init(reqwest::Client::new)
 }
@@ -256,12 +256,14 @@ pub async fn healthy(base: &str) -> bool {
         .is_ok_and(|r| r.status().is_success())
 }
 
-/// What a connect link gets this PC: its device token, and a one-time code that signs Hearth's
-/// window in (D53).
+/// What a connect link gets this PC: its device token, a one-time code that signs Hearth's
+/// window in (D53), and a ticket for the window's Windows Hello key (D80; an older Hearth has none).
 #[derive(Debug, Deserialize)]
 pub struct Connected {
     pub token: String,
     pub code: String,
+    #[serde(default)]
+    pub enroll: Option<String>,
 }
 
 /// Trades the nonce from a connect link for this PC's token and a sign-in code, at the address
