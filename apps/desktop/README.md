@@ -25,11 +25,15 @@ All of it lives in `src-tauri/src/hearth/`, `src-tauri/src/nook/` and
   `capabilities/`). Keep it that way.
 - **Connecting.** In Hearth in your browser, Settings → Desktop app → Connect Hearth on this PC.
   Windows hands the `hearth://connect` link to this app, which asks you, then gets its own token
-  and signs its window in (`hearth/deeplink.rs`). Pairing with a code, under "Pair with a code
-  instead", still works. The token may only run the actions this app needs (D42).
+  and signs its window in (`hearth/deeplink.rs`). Then Windows Hello makes the window a key, so
+  it can sign itself in again: the sign-in page's "Sign in with Windows Hello" asks this app, and
+  Windows Hello signs Hearth's challenge (`hearth/hello.rs`, D80). Pairing with a code, under
+  "Pair with a code instead", still works. The token may only run the actions this app needs
+  (D42), and on its own it never signs the window in.
 - **`hearth://` links** (`hearth/links.rs`): `hearth://open/<page>` opens a page of Hearth,
-  `hearth://settings` opens voice settings, `hearth://connect?nonce=…` connects. Any website can
-  open them, so they're checked strictly and never say where Hearth is.
+  `hearth://settings` opens voice settings, `hearth://connect?nonce=…` connects, and
+  `hearth://sign-in` (from Hearth's window only) signs the window in with Windows Hello. Any
+  website can open them, so they're checked strictly and never say where Hearth is.
 - **Notifications** (`hearth/notify.rs`, `toast.rs`): what your phone would be told about, and
   Hearth's health changing, from `/api/desktop/notify`. Quiet while Hearth's window is in front;
   clicking one opens its page.

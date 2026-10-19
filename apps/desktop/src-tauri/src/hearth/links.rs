@@ -24,6 +24,9 @@ pub enum Link {
     /// `hearth://theme/<id>`: the theme Hearth's window shows, for Nook's bar. Taken only from
     /// Hearth's own windows (window.rs); from anywhere else it is dropped (deeplink.rs).
     Theme(ThemeId),
+    /// `hearth://sign-in`: the window's sign-in page asking for Windows Hello (D80). Taken only
+    /// from the window itself, so no website can start a prompt you didn't ask for.
+    SignIn,
 }
 
 const MAX_PATH: usize = 2048;
@@ -68,11 +71,14 @@ pub fn parse(raw: &str) -> Result<Link, String> {
             .and_then(ThemeId::parse)
             .map(Link::Theme)
             .ok_or_else(|| "not one of Nook's themes".to_string()),
-        "settings" | "retry" | "close" | "nook-panel" if path.is_empty() || path == "/" => {
+        "settings" | "retry" | "close" | "nook-panel" | "sign-in"
+            if path.is_empty() || path == "/" =>
+        {
             Ok(match what.as_str() {
                 "settings" => Link::Settings,
                 "retry" => Link::Retry,
                 "nook-panel" => Link::NookPanel,
+                "sign-in" => Link::SignIn,
                 _ => Link::Close,
             })
         }
@@ -261,6 +267,8 @@ mod tests {
         assert_eq!(parse("HEARTH://Nook-Panel/"), Ok(Link::NookPanel));
         assert!(parse("hearth://nook-panel/windows").is_err());
         assert!(parse("hearth://nook-panel?arrange=1").is_ok_and(|l| l == Link::NookPanel));
+        assert_eq!(parse("hearth://sign-in"), Ok(Link::SignIn));
+        assert!(parse("hearth://sign-in/elsewhere").is_err());
         assert!(parse("hearth://nope").is_err());
         assert!(parse("not a link").is_err());
     }

@@ -1272,7 +1272,8 @@ links open a page (`hearth://open/<path>`, relative paths only), open voice sett
 connect the PC. Any website can open them, so every part of one is untrusted.
 
 Passkeys belong to Hearth's https address, so the window signs in by hand-off (or, since D69,
-with a Windows Hello passkey of its own). In a signed-in
+with a Windows Hello passkey of its own, and since D80 with this PC's Windows Hello key through
+the app). In a signed-in
 browser, Settings → Desktop app → Connect Hearth on this PC makes a single-use nonce (one minute,
 kept in memory, compared in constant time) and opens `hearth://connect?nonce=…`. The app asks
 you first, then trades the nonce at its own configured address, never one from the link, for
@@ -2251,3 +2252,38 @@ a highly reputable open sourced windows manager and do research as to how to app
 best way possible." The first attempt, by another agent, ran an unguarded daemon on port 4401;
 this design puts safety first. The owner's 13 open choices are collected on the design page, with
 a proposed default for each.
+
+## D80. Hearth's window signs in with this PC's Windows Hello key, through the app (2026-10-19)
+
+*This amends D53 and D69: the app can sign its window in again without your browser and without
+a passkey. D53's rule still stands for the app's token on its own: it never becomes a session.
+D76–D79 are taken by docs/nook-extras.md.*
+
+**Decision:** When you connect the PC (D53), the app asks Windows Hello to make a key for its
+window (`KeyCredentialManager`, named "Nook window sign-in"; its private half never leaves this
+PC) and sends Hearth the public half, with a one-time ticket the connect gave it. Hearth keeps
+one such key, RSA of 2048 bits or more. Connecting again or disconnecting forgets it, and the app
+makes a new one each time you connect. When the window is signed out, its sign-in page offers
+"Sign in with Windows Hello" first. That opens `hearth://sign-in`, which the app takes only from
+its own window: a link from a website or another program is ignored, so nothing can start a
+prompt you didn't ask for. The app asks Hearth for a challenge with its token. Windows Hello signs
+it once it has seen your face, finger or PIN (Windows asks every time), and Hearth checks the
+signature against the key. The signature buys a one-time code, as a hand-off does, and the code
+signs the window in as its one session (`window:desktop`). The three requests
+(`/api/auth/desktop/hello/enroll`, `challenge` and `verify`) take only the app's token, straight
+from this PC through no proxy, as D69 sets out. A browser signed in as you can't use them either.
+Challenges and tickets are single-use and last five minutes. When Windows Hello is closed or
+fails, the window comes back to its sign-in page saying so, with "Connect in your browser" too.
+The D69 passkey stays, offered only when the app has no key.
+
+**Alternatives:** The app's token signing the window in by itself, with no prompt: the owner's
+"use my computer's signature", but any program running as you on this PC could read the token
+and take a full session. The app asking Windows Hello only for a yes or no (`UserConsentVerifier`)
+and then sending its token: Hearth couldn't tell that Windows Hello was asked at all. Keeping only
+the D69 passkey: on this PC Google Password Manager answers the passkey prompt, and its passkey is
+synced, which D69 refuses on purpose.
+
+**Why:** The owner, 2026-10-19, after the window was signed out again: the window passkey couldn't
+be added "cause google password manager bugging". Asked why passkeys at all, and whether the
+computer's own signature could sign them in, they chose this: "the app asks Windows Hello
+natively, then signs its window in with its device key."

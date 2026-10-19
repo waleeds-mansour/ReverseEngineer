@@ -6,7 +6,7 @@
 
 use super::client::redeem;
 use super::links::{self, Link};
-use super::{check_address, offline, tell, toast, window, DESKTOP_KEY};
+use super::{check_address, hello, offline, tell, toast, window, DESKTOP_KEY};
 use crate::settings::{get_settings, write_settings};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::AppHandle;
@@ -57,6 +57,10 @@ pub fn handle(app: &AppHandle, raw: &str) {
         Ok(Link::NookPanel) => crate::nook::open_panel(app),
         // Only Hearth's own windows tell Nook the theme; from a browser or another program, no.
         Ok(Link::Theme(_)) => log::warn!("Ignored a hearth://theme link from outside Hearth"),
+        // Only the window's own sign-in page starts Windows Hello (window.rs).
+        Ok(Link::SignIn) => {
+            log::warn!("Ignored a hearth://sign-in link from outside Nook's window")
+        }
         Err(e) => log::warn!("Ignored a hearth:// link: {e}"),
     }
 }
@@ -88,19 +92,30 @@ async fn connect_now(app: &AppHandle, nonce: &str) -> Result<(), String> {
     }
     let mut s = get_settings(app);
     s.hearth_keys
-        .insert(DESKTOP_KEY.to_string(), connected.token);
+        .insert(DESKTOP_KEY.to_string(), connected.token.clone());
     write_settings(app, s);
     // The window signs in with the one-time code; Hearth sets its session and opens the inbox.
     window::open(
         app,
         &format!("/api/auth/desktop/window?code={}", connected.code),
     );
-    toast::show(
-        app,
-        "This PC is connected",
-        "Nook's window, notifications and voice now work here.",
-        None,
-    );
+    // Then Windows Hello makes the window a key, so it can sign in again without your browser
+    // (D80). The window comes up first, so the prompt opens over it.
+    let done = "Nook's window, notifications and voice now work here.";
+    let said = match connected.enroll.filter(|t| links::is_code(t)) {
+        Some(ticket) => {
+            tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+            match hello::enroll(&base, &connected.token, &ticket).await {
+                Ok(()) => format!("{done} Windows Hello signs the window in from now on."),
+                Err(e) => {
+                    log::warn!("Windows Hello for Nook's window: {e}");
+                    format!("{done} Windows Hello isn't set up for it ({e}). Connect again to try.")
+                }
+            }
+        }
+        None => done.to_string(),
+    };
+    toast::show(app, "This PC is connected", &said, None);
     Ok(())
 }
 

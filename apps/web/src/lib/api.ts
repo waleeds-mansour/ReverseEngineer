@@ -158,6 +158,8 @@ export interface Me {
   origin?: string;
   /** Whether the window on this PC has a Windows Hello passkey of its own. */
   localPasskey?: boolean;
+  /** Whether the desktop app can sign its window in with this PC's Windows Hello key (D80). */
+  windowHello?: boolean;
 }
 
 /**

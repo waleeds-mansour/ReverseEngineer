@@ -339,6 +339,7 @@ export function App() {
                 needsSetup={m().needsSetup}
                 origin={m().origin}
                 localPasskey={m().localPasskey}
+                windowHello={m().windowHello}
                 onSignedIn={() => void refetch()}
               />
             )}

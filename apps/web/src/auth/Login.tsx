@@ -1,10 +1,11 @@
 // Sign in with a passkey (Windows Hello, Touch ID, your phone). The first time, enter the code
 // `hearth setup` printed to add your first passkey, at Hearth's own address. The desktop app's
-// window on this PC signs in with a Windows Hello passkey of its own once you've added one there,
-// or else from your browser (D53, D69): no page shows a passkey button that can't work where it is.
+// window on this PC asks the app to sign it in with this PC's Windows Hello key once connecting
+// has made one (D80), or uses a Windows Hello passkey of its own, or else signs in from your
+// browser (D53, D69): no page shows a passkey button that can't work where it is.
 
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
-import { createSignal, Match, onMount, Show, Switch } from "solid-js";
+import { createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
 import { Button } from "../components/kit/Button.tsx";
 import { authPost } from "../lib/api.ts";
 import { inDesktopApp } from "../lib/desktop.ts";
@@ -15,6 +16,7 @@ export function Login(props: {
   needsSetup: boolean;
   origin?: string;
   localPasskey?: boolean;
+  windowHello?: boolean;
   onSignedIn: () => void;
 }) {
   const [code, setCode] = createSignal("");
@@ -23,11 +25,37 @@ export function Login(props: {
   // Windows Hello didn't work in the window: the browser is offered too.
   const [helloFailed, setHelloFailed] = createSignal(false);
   const [sent, setSent] = createSignal(false);
+  // The app's Windows Hello is asking (D80): it brings the window back here, or into Today.
+  const [asked, setAsked] = createSignal(false);
   const app = inDesktopApp();
   const way = () => wayIn(location, props, app);
   // Signed out, or never in: Hearth isn't checked for a new build until you're in (UpdateNotice),
   // so this page opens from the PC next time, not from what's kept (sw.js).
   onMount(() => void forgetStarted());
+
+  // Back from the app's Windows Hello without signing in: why, from ?hello= (hearth/hello.rs).
+  const why = new URLSearchParams(location.search).get("hello");
+  onMount(() => {
+    if (!why) return;
+    history.replaceState(history.state, "", location.pathname);
+    setHelloFailed(true);
+    setError(
+      why === "cancelled"
+        ? "Windows Hello was closed. Try again, or connect from your browser."
+        : why === "connect"
+          ? "This window has to be connected again. In your browser: Settings, Desktop app, Connect Nook on this PC."
+          : "Windows Hello didn't sign this window in. Try again, or connect from your browser.",
+    );
+  });
+  let waited: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(waited));
+  const askApp = () => {
+    setError(null);
+    setAsked(true);
+    location.href = "hearth://sign-in";
+    // An app too old to know the link does nothing: the button comes back.
+    waited = setTimeout(() => setAsked(false), 60_000);
+  };
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -158,6 +186,23 @@ export function Login(props: {
               Sign in with your passkey
             </Button>
           </Match>
+          <Match when={way() === "native"}>
+            <div class="space-y-2">
+              <Button
+                size="lg"
+                variant="primary"
+                class="w-full"
+                disabled={asked()}
+                onClick={askApp}
+              >
+                Sign in with Windows Hello
+              </Button>
+              <Show when={asked()}>
+                <p class="text-sm text-muted">Windows Hello is asking. Look for its prompt.</p>
+              </Show>
+              <Show when={helloFailed()}>{browserButton(false)}</Show>
+            </div>
+          </Match>
           <Match when={way() === "hello"}>
             <div class="space-y-2">
               <Button
@@ -180,7 +225,7 @@ export function Login(props: {
                     ? `Set up Nook in your browser first, at ${props.origin}, with the code \`hearth setup\` printed. Then connect this window from there: Settings, Desktop app.`
                     : `Nook's address for browsers is ${props.origin}. Set it up there, with the code \`hearth setup\` printed.`
                   : app
-                    ? "This window was signed out. Your passkeys work at Nook's own address, so sign it in from your browser: Settings, Desktop app, Connect Nook on this PC. After that you can add Windows Hello here, in Settings, Passkeys."
+                    ? "This window was signed out. Your passkeys work at Nook's own address, so sign it in from your browser: Settings, Desktop app, Connect Nook on this PC. Connecting sets up Windows Hello, so next time this window signs in with it."
                     : `Nook's address for browsers is ${props.origin}. Your passkeys work there, not here.`}
               </p>
               {browserButton(true)}
