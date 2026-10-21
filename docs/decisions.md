@@ -2287,3 +2287,31 @@ synced, which D69 refuses on purpose.
 be added "cause google password manager bugging". Asked why passkeys at all, and whether the
 computer's own signature could sign them in, they chose this: "the app asks Windows Hello
 natively, then signs its window in with its device key."
+
+## D81. A recovery code from the PC adds a passkey when you can't use yours (2026-10-19)
+
+*This amends the sign-in rules: until now, once a passkey existed, a new one could only be added
+while signed in. D76–D79 are taken by docs/nook-extras.md.*
+
+**Decision:** `hearth setup --recover`, run on the PC, prints a one-time recovery code. It works
+once and lasts 30 minutes, and only its hash is kept, in the `setting` table as the setup code's
+is. Running it again replaces the last one. It leaves the database as it is: no migrations, and
+no passkey is removed. On the sign-in page at Hearth's own address, **Lost your passkey?** shows
+a field for the code. With it, the page adds one more passkey there and signs you in, as the
+first passkey does. Your other passkeys keep working. The code is used up in the same step that
+saves the new passkey, so two pages racing with it add one. It never adds the window's localhost
+passkey (D69): at the window a recovery code is refused, signed in or not. The setup code is
+unchanged: it still refuses once a passkey exists, and neither code works in the other's place.
+Each use goes in the server's log: `[auth] recovery code used: …` or `… refused: …`.
+
+**Alternatives:** Doing what was done on 2026-10-19 by hand: delete the passkey's row, run
+`hearth setup`, and put the row back. That takes database access and leaves Hearth open to a
+first passkey in between. Letting `hearth setup` print a setup code that works even when passkeys
+exist: one code would then mean two things, and the page couldn't say which it was asking for.
+Removing the old passkeys while recovering: a passkey that's only out of reach for now, as Google
+Password Manager's was, would have to be added again later.
+
+**Why:** On 2026-10-19 the owner's only passkey was in Google Password Manager, which was down, so
+nothing could sign in. Being at the PC's terminal already means full control of Hearth, and that
+is the trust the first passkey's setup code relies on. A recovery code from the same terminal adds
+no new way in.

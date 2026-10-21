@@ -77,6 +77,10 @@ This prepares the database and prints a one-time code. Open your `HEARTH_ORIGIN`
 the code, and create a passkey with Windows Hello. To sign in from your phone too, open Hearth
 there later and use **Settings → Add a passkey** from a signed-in device.
 
+Can't use any of your passkeys later on? Run `pnpm hearth setup --recover` on the PC. Open your
+`HEARTH_ORIGIN` address, choose **Lost your passkey?**, and enter the code it prints. It adds a new
+passkey and signs you in. The code works once, for 30 minutes (D81).
+
 ## 6. Install the services
 
 In PowerShell **run as administrator**:

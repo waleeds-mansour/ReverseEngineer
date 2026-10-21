@@ -16,6 +16,7 @@ import {
 import { ALL_MODULES, secretMigrations, vaultFromEnv } from "@hearth/modules";
 import {
   createApiToken,
+  createRecoveryCode,
   createSetupCode,
   listApiTokens,
   listDevices,
@@ -34,6 +35,7 @@ import { guardSchema } from "./schema-guard.ts";
 const HELP = `hearth: your personal workspace, with Jarvis.
 
   hearth setup              Prepare the database and print a one-time code for your first passkey
+  hearth setup --recover    Can't use any passkey? Print a one-time code that adds a new one
   hearth migrate [down [name]]
                             Apply database changes (or revert the last one, or the one named)
   hearth serve              Run the web server
@@ -105,16 +107,27 @@ async function main(argv: string[]): Promise<number> {
         migrateCommand(pool, rest, console.log, undefined, migrationCode()),
       );
 
-    case "setup":
+    case "setup": {
+      const { values } = parseArgs({ args: rest, options: { recover: { type: "boolean" } } });
+      const origin = process.env.HEARTH_ORIGIN ?? "http://localhost:4400";
+      // Recovery (D81) leaves the database as it is: Hearth is set up and may be running.
+      if (values.recover)
+        return withDatabase(async ({ db }) => {
+          const code = await createRecoveryCode(db);
+          console.log(
+            `Open ${origin}, choose "Lost your passkey?" and enter this code to add a new passkey:\n\n    ${code}\n\nIt works once and expires in 30 minutes. Your other passkeys keep working.`,
+          );
+          return 0;
+        });
       return withDatabase(async ({ pool, db }) => {
         await migrateUp(pool, undefined, migrationCode());
         const code = await createSetupCode(db);
-        const origin = process.env.HEARTH_ORIGIN ?? "http://localhost:4400";
         console.log(
           `Database ready.\n\nOpen ${origin} and enter this code to add your first passkey:\n\n    ${code}\n\nIt works once and expires in 30 minutes.`,
         );
         return 0;
       });
+    }
 
     case "serve":
     case "worker":
