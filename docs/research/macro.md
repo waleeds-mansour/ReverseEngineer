@@ -12,6 +12,12 @@ Kafka and Cloudflare. For example, `services/email_service` has 53 internal path
 and tasks can't be separated from the document stack. The mappers independently estimated a
 lean rebuild of each part at a few weeks, against hundreds of thousands of lines in Macro.
 
+> **2026-10-23: Hearth is MIT** (`LICENSE`), and Macro is AGPLv3. Copying Macro's code into Hearth
+> would put Hearth under the AGPL, so everything below marked "What we take" is now **ideas only**:
+> rebuild the pattern, don't copy the files. The one exception is code that's MIT where it comes
+> from: `loro-mirror` forks an MIT library, so take that library from its own repo, the way Hearth
+> already uses `loro-crdt` from npm.
+
 ## At a glance
 
 | | |
@@ -104,7 +110,7 @@ CRM builds itself from email. Calendar mirrors Google with sync tokens and push 
 - **Echo suppression:** events are tagged with their origin (your action or provider sync), so
   automation ignores its own echoes.
 - **`packages/email-renderer`:** a framework-free email body renderer with quote and signature
-  folding and color adaptation. Lifted as-is.
+  folding and color adaptation. Planned as a lift; now ideas only (see the note at the top).
 
 **What we change:**
 - Poll `history.list` every 30–60 seconds instead of Pub/Sub, so no inbound endpoint is needed.
@@ -135,7 +141,7 @@ state between tabs. History is Loro time-travel, with no extra storage. The AI e
 joins a doc as a real CRDT peer with its own cursor and applies a small, deterministic set of
 operations. The canvas is a separate SolidJS editor that saves one JSON blob, last write wins.
 
-**What we take (code, AGPL):**
+**What we take (planned as code; ideas only now, see the note at the top):**
 - `packages/lexical-core` (20K lines): Lexical nodes including mentions, the markdown transforms,
   and the Loro schema. It imports only `lexical`.
 - `packages/collaboration` (11K lines): the Loro manager, write-ahead log and websocket
@@ -277,7 +283,7 @@ are recorded locally rather than hosted.
   websocket of typed patch and invalidate events.
 - **Theming:** semantic OKLCH color tokens, so no component uses raw palette colors.
 
-**What we take (code, AGPL):**
+**What we take (planned as code; ideas only now, see the note at the top):**
 - `src/lib/split-router` (4.7K lines, no app imports)
 - `packages/machine` (1K lines)
 - the hotkey engine `src/lib/core/hotkey` (2.8K lines; a few imports to shim)
