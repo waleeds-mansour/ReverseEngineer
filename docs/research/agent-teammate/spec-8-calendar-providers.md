@@ -5,7 +5,10 @@
 > (RFC 6638), CalDAV discovery (RFC 6764), iCalendar (RFC 5545), Microsoft Graph's calendar and
 > identity-platform docs, and Google Calendar's API docs. It doesn't come from dots or Grok Bot,
 > and nothing here is reverse-engineered from another app. The libraries named below were checked
-> for their licence only. No code is adapted from them.
+> for their licence only. No code is adapted from them. The Morgen research ([../morgen.md](../morgen.md)
+> §1) asks for the same interface. This spec was written from the code without depending on it,
+> and it differs on one point: which adapter comes second (decision 1). It's the calendar twin of
+> D15's planned `MailProvider` (`docs/decisions.md:161-167`).
 
 ## The gap today
 Hearth's calendar is Google Calendar from end to end. The model Hearth keeps (an `event` entity
@@ -295,8 +298,10 @@ The card can't connect anything itself. Its link is a fixed Settings route.
 ## Decisions to settle before building
 1. **Which adapter comes second, Microsoft or CalDAV?** We recommend **Microsoft Graph**. Its shape
    is closest to Google's: OAuth, JSON, the server expands recurrence, creates have an idempotency
-   key, and RSVP is an endpoint. So it proves the interface with the least new risk. CalDAV comes
-   third. Swap them if the calendar you actually want is iCloud.
+   key, and RSVP is an endpoint. So it proves the interface with the least new risk, and the Graph
+   client is the one Morgen §3's Microsoft To Do idea needs anyway. CalDAV comes third. The Morgen
+   note puts CalDAV first, for reach (iCloud, Fastmail and self-hosted servers in one adapter).
+   Swap them if the calendar you actually want is iCloud: the interface is the same either way.
 2. **Which libraries may CalDAV use?** We recommend plain `fetch`, as Google's client does
    (`client.ts:2-3`), plus **`fast-xml-parser` (MIT)** for WebDAV's XML. iCalendar parsing extends
    Hearth's own reader (`mail/invites.ts:16-30`), and the server's `expand` means no `RRULE` engine
@@ -314,14 +319,14 @@ The card can't connect anything itself. Its link is a fixed Settings route.
    notifications and Google push both need a public HTTPS endpoint. That's possible behind the
    Funnel, but it's more surface for little gain on a personal calendar.
 6. **Column names.** We recommend keeping `google_id` (with a comment), not renaming it to
-   `provider_id`. The rename is churn across about 50 lines of code and a migration, and it buys nothing
-   on screen.
+   `provider_id`. The rename is churn across about 50 lines of code and a migration, and it buys
+   nothing on screen.
 
 ## Risk / effort
 - **Phase 0, Google behind the interface. Medium effort, low risk.** It's mostly moving code:
-  `CalendarApi` and `mapEvent` behind `GoogleProvider`, and `providerFor` in the four files that use `CalendarApi` today, plus one
-  additive migration. It's done when every calendar test passes unchanged. It ships alone and
-  changes nothing you can see.
+  `CalendarApi` and `mapEvent` behind `GoogleProvider`, `providerFor` in the four files that use
+  `CalendarApi` today, and one additive migration. It's done when every calendar test passes
+  unchanged. It ships alone and changes nothing you can see.
 - **Phase 1, Microsoft Graph. Medium effort, medium risk.** That's a new OAuth client (most of
   `google/client.ts` and `tokens.ts` carry over), the adapter, a fake Graph, Settings, and the
   conformance suite. The risks are the delta round's fixed window, and recurring series shared with
@@ -332,5 +337,6 @@ The card can't connect anything itself. Its link is a fixed Settings route.
   clear `lastError` contain it. A fake CalDAV server in tests gets a mode for each "doesn't
   support".
 - **What it builds on.** It pairs with Spec 4 (the Connect card) and Spec 1 (writes from any
-  provider show in the timeline the same way). Nothing in it depends on the unmerged calendar-app
-  research, and it doesn't change Pip's behaviour, only where its calendar comes from.
+  provider show in the timeline the same way). Spec 7's day planner reads free time from Hearth's
+  own rows (`free.ts`), so it works with any provider once Phase 0 lands. Spec 8 doesn't change
+  Pip's behaviour, only where its calendar comes from.
