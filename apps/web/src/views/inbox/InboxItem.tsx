@@ -19,6 +19,7 @@ import {
 } from "../../lib/inbox.ts";
 import { openSettings } from "../../lib/settingsNav.ts";
 import type { InboxRow } from "../../lib/types.ts";
+import { UndoButton } from "./UndoButton.tsx";
 
 export function InboxItem(props: {
   row: InboxRow;
@@ -116,6 +117,7 @@ export function InboxItem(props: {
                   </div>
                 )}
               </Show>
+              <UndoButton row={props.row} />
               {snoozes()}
             </div>
             <div class="shrink-0 text-right text-xs text-faint">

@@ -232,10 +232,16 @@ export async function applyOutcomes(
           o.ask ? { ...caller, askFirst: o.ask } : caller,
         );
         const def = kernel.registry.action(o.action);
-        if (def && wasHeld(res))
-          await noteHeld(kernel, heldWords(def, o.input), caller, res.reason);
-        else if (res.status !== "ok" && !(o.ask && res.status === "pending_approval"))
+        const failed = res.status !== "ok" && !(o.ask && res.status === "pending_approval");
+        // Not done, held or not: what it stood in for goes out instead (an invitation's card,
+        // D71), which says enough.
+        if (failed && o.fallback?.length) {
           log(`${src.name}: ${o.action} -> ${JSON.stringify(res)}`);
+          const inner = await applyOutcomes(kernel, o.fallback, src, log);
+          result.skipped.push(...inner.skipped);
+        } else if (def && wasHeld(res))
+          await noteHeld(kernel, heldWords(def, o.input), caller, res.reason);
+        else if (failed) log(`${src.name}: ${o.action} -> ${JSON.stringify(res)}`);
         break;
       }
       case "batch":

@@ -27,7 +27,8 @@ const BY_MODULE: Record<string, Rule> = {
   link: ["entity.", "task.", "note.list", "person.view", "company.view", "doc."],
   mail: MAIL,
   task: ["task.", "inbox.list"],
-  calendar: ["calendar.", "person.view", "company.view"],
+  // An Undo on an inbox line (D71, D72) puts the line away.
+  calendar: ["calendar.", "person.view", "company.view", "inbox.list"],
   // A Slack member's conversation growing shows on the Slack screens too (D62). A turn's
   // conversation grows as it works, so What Pip did fills in its card as it goes.
   conversation: [

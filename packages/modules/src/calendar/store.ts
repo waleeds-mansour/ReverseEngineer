@@ -103,7 +103,7 @@ export function guests(v: Pick<EventView, "attendees">): Attendee[] {
   return v.attendees.filter((a) => !a.self);
 }
 
-export type Mapped = Omit<EventRow, "entityId" | "taskId" | "peopleLinked"> & {
+export type Mapped = Omit<EventRow, "entityId" | "taskId" | "peopleLinked" | "jarvisAccepted"> & {
   title: string;
   body: string;
 };
@@ -181,18 +181,27 @@ export type Yours = () => Promise<ReadonlySet<string>>;
 
 /**
  * Links an event to the people on it. A meeting you organized or accepted makes its guests
- * people (like mail you send); any other only links the people you already know. You aren't
- * someone you know: another account of yours on it (invited to block time on its calendar)
- * becomes no person, nor a company for its domain. Google marks only the calendar's own account.
+ * people (like mail you send); any other only links the people you already know. One Jarvis
+ * accepted for you is any other (D71): someone known can't make their guests known through it.
+ * You aren't someone you know: another account of yours on it (invited to block time on its
+ * calendar) becomes no person, nor a company for its domain. Google marks only the calendar's own
+ * account.
  */
-async function linkGuests(ctx: ActionContext, id: string, m: Mapped, own: Yours): Promise<void> {
+async function linkGuests(
+  ctx: ActionContext,
+  id: string,
+  m: Mapped,
+  own: Yours,
+  byJarvis: boolean,
+): Promise<void> {
   if (m.status === "cancelled") return;
   const guests = m.attendees.filter((a) => !a.self);
   if (!guests.length) return;
   const mine = await own();
   const list = guests.filter((a) => !mine.has(addressKey(a.email))).slice(0, MAX_GUESTS);
   const yours =
-    m.attendees.length <= MAX_GUESTS + 1 && (m.selfOrganizer || m.selfResponse === "accepted");
+    m.attendees.length <= MAX_GUESTS + 1 &&
+    (m.selfOrganizer || (m.selfResponse === "accepted" && !byJarvis));
   for (const g of list) {
     const personId = yours
       ? await ensurePerson(ctx, { address: g.email, ...(g.name ? { name: g.name } : {}) })
@@ -227,6 +236,23 @@ async function followPrep(ctx: ActionContext, eventId: string, m: Mapped): Promi
 
 export type Change = "added" | "updated" | "cancelled" | null;
 
+/** A new time of a series Jarvis accepted is Jarvis's yes too: the yes was for every time. */
+async function seriesByJarvis(db: DbOrTx, m: Mapped): Promise<boolean> {
+  if (!m.recurringEventId) return false;
+  const [row] = await db
+    .select({ id: calendarEvent.entityId })
+    .from(calendarEvent)
+    .where(
+      and(
+        eq(calendarEvent.calendarId, m.calendarId),
+        eq(calendarEvent.recurringEventId, m.recurringEventId),
+        eq(calendarEvent.jarvisAccepted, true),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
 /**
  * Saves Google's version of an event. Returns what changed, for the event log. `replaces`: the
  * row a repeating meeting's occurrence takes over when Google gave it a new id (series.ts).
@@ -236,7 +262,7 @@ export async function saveEvent(
   ctx: ActionContext,
   m: Mapped,
   extra: { taskId?: string | null; replaces?: string; yours?: Yours } = {},
-): Promise<{ id: string; change: Change }> {
+): Promise<{ id: string; change: Change; was?: string | null }> {
   const yours = extra.yours ?? (() => accountAddresses(ctx.tx));
   const found = await findEvent(ctx.tx, m.calendarId, m.googleId);
   const existing = found ?? (extra.replaces ? await eventRow(ctx.tx, extra.replaces) : null);
@@ -244,10 +270,15 @@ export async function saveEvent(
   if (!existing) {
     if (m.status === "cancelled") return { id: "", change: null };
     const row = await createEntity(ctx, { type: "event", title, body });
-    await ctx.tx
-      .insert(calendarEvent)
-      .values({ entityId: row.id, ...fields, taskId: extra.taskId ?? null, peopleLinked: true });
-    await linkGuests(ctx, row.id, m, yours);
+    const jarvisAccepted = await seriesByJarvis(ctx.tx, m);
+    await ctx.tx.insert(calendarEvent).values({
+      entityId: row.id,
+      ...fields,
+      taskId: extra.taskId ?? null,
+      peopleLinked: true,
+      jarvisAccepted,
+    });
+    await linkGuests(ctx, row.id, m, yours, jarvisAccepted);
     return { id: row.id, change: "added" };
   }
   const { e, r } = existing;
@@ -284,9 +315,10 @@ export async function saveEvent(
       ...(extra.taskId !== undefined ? { taskId: extra.taskId } : {}),
     })
     .where(eq(calendarEvent.entityId, e.id));
-  if (!e.deletedAt) await linkGuests(ctx, e.id, m, yours);
+  if (!e.deletedAt) await linkGuests(ctx, e.id, m, yours, r.jarvisAccepted);
   if (!e.deletedAt && change === "updated") await followPrep(ctx, e.id, m);
-  return { id: e.id, change };
+  // Asked again: what you'd answered before, which Google has just reset.
+  return { id: e.id, change, ...(askedAgain ? { was: r.selfResponse } : {}) };
 }
 
 export function emitChange(
@@ -294,6 +326,8 @@ export function emitChange(
   id: string,
   change: Change,
   m: Pick<Mapped, "title" | "startsAt" | "endsAt" | "status">,
+  created?: string,
+  was?: string | null,
 ) {
   if (!change) return;
   ctx.emit({
@@ -304,6 +338,10 @@ export function emitChange(
       title: m.title,
       startsAt: m.startsAt.toISOString(),
       endsAt: m.endsAt.toISOString(),
+      // When Google got it: a calendar's first sync adds invitations months old too.
+      ...(created ? { created } : {}),
+      // A series asked again: your earlier answer to it, the least yes of its times (D71).
+      ...(was !== undefined ? { was } : {}),
     },
   });
 }
