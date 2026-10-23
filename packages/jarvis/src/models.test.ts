@@ -21,6 +21,10 @@ describe("the job a turn does", () => {
     expect(jobOf(turn("watch"))).toBe("watch");
     expect(jobOf(turn("reflex", "deep"))).toBe("reflex");
     expect(jobOf(turn("slack_member"))).toBe("slack_member");
+    expect(modelFor(turn("trigger", "deep"), {})).toMatchObject({
+      job: "trigger",
+      tier: "sonnet",
+    });
   });
 
   it("knows the built-in routines by name, and anything else is one of yours", () => {
@@ -46,6 +50,8 @@ describe("the job a turn does", () => {
       ["assignment", "fast"],
       ["reflex", "deep"],
       ["watch", "fast"],
+      // Your trigger on a pull request opening (Spec 6).
+      ["trigger", "deep"],
     ] as const)
       expect(modelFor(turn(trigger, lane, code), {})).toMatchObject({ job: "code", tier: "opus" });
     // A Slack member, a card you answered or a voice command stays as it was.

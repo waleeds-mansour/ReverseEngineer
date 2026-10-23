@@ -23,6 +23,7 @@ const turn = (t: Partial<TimelineTurn>): TimelineTurn => ({
   via: null,
   source: null,
   roleId: null,
+  triggerName: null,
   readOutside: false,
   conversationId: null,
   subjectId: null,
@@ -56,6 +57,13 @@ describe("what set a card off", () => {
     );
     expect(startedBy({ turn: turn({ trigger: "routine", source: "my.own" }) })).toBe("Routine");
     expect(startedBy({ turn: null })).toBe("Noticed something");
+  });
+
+  it("names the trigger that set it off (Spec 6)", () => {
+    expect(startedBy({ turn: turn({ trigger: "trigger", triggerName: "Acme emails" }) })).toBe(
+      "Your trigger: Acme emails",
+    );
+    expect(startedBy({ turn: turn({ trigger: "trigger" }) })).toBe("Your trigger");
   });
 
   it("knows what Slack started", () => {

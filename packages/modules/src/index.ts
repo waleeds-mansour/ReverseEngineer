@@ -25,6 +25,7 @@ import { sheetsModule } from "./sheets/index.ts";
 import { memberModule, slackModule } from "./slack/index.ts";
 import { systemModule } from "./system/index.ts";
 import { tasksModule } from "./tasks/index.ts";
+import { triggersModule } from "./triggers/index.ts";
 import { voiceModule } from "./voice/index.ts";
 
 export const ALL_MODULES: HearthModule[] = [
@@ -42,6 +43,7 @@ export const ALL_MODULES: HearthModule[] = [
   calendarModule,
   routinesModule,
   rolesModule,
+  triggersModule,
   mailModule,
   meetingsModule,
   voiceModule,
@@ -221,6 +223,7 @@ export {
   roughly,
 } from "./system/index.ts";
 export { loadTask, type TaskView } from "./tasks/index.ts";
+export type { TriggerKindView, TriggerList, TriggerView } from "./triggers/index.ts";
 export { POLISH_SERVICE, type Polisher, polisherFromEnv } from "./voice/polish.ts";
 export {
   approvalsModule,

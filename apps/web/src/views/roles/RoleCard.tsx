@@ -1,5 +1,6 @@
 // One of Pip's jobs in Settings: what it's for, the most it may do, the turns it spent today, and
-// what's in it, with a way to add a routine or something Pip does on its own, or take one out.
+// what's in it (routines, things Pip does on its own, triggers), with a way to add a routine or
+// something Pip does on its own, or take one out.
 
 import { createSignal, For, Show } from "solid-js";
 import { Badge, Button, TextButton } from "../../components/ui.tsx";
@@ -114,8 +115,21 @@ export function RoleCard(props: {
             </li>
           )}
         </For>
+        <For each={r().triggers}>
+          {(x) => (
+            <li class="flex items-center gap-2">
+              <span class="flex-1">Trigger: {x.name}</span>
+              <TextButton
+                alone
+                onClick={() => void act("trigger.update", { id: x.id, roleId: null })}
+              >
+                Take out
+              </TextButton>
+            </li>
+          )}
+        </For>
       </ul>
-      <Show when={r().routines.length + r().reflexes.length === 0}>
+      <Show when={r().routines.length + r().reflexes.length + r().triggers.length === 0}>
         <p class="text-faint">Nothing in it yet, so it changes nothing.</p>
       </Show>
       <Show when={choices().length > 0}>

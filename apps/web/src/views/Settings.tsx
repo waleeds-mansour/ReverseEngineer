@@ -27,6 +27,7 @@ import { RoutineSettings } from "./RoutineSettings.tsx";
 import { Anchor, SettingsNav } from "./SettingsNav.tsx";
 import { SignInSettings } from "./SignInSettings.tsx";
 import { SlackSettings } from "./SlackSettings.tsx";
+import { TriggerSettings } from "./TriggerSettings.tsx";
 
 /** Health components by a name you'd use; any other goes by its own. */
 const PART: Record<string, string> = {
@@ -175,6 +176,9 @@ export function Settings() {
         </Anchor>
         <Anchor id="routines">
           <RoutineSettings />
+        </Anchor>
+        <Anchor id="triggers">
+          <TriggerSettings />
         </Anchor>
         <Anchor id="jobs">
           <RoleSettings />

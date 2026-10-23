@@ -63,6 +63,8 @@ export const JOBS = {
   reflex: { tier: "sonnet", effort: "medium" },
   /** One of your own routines. */
   routine: { tier: "sonnet", effort: "high" },
+  /** One of your triggers went off: something you picked happened (Spec 6). */
+  trigger: { tier: "sonnet", effort: "medium" },
   /** A spoken command from the desktop app: rewrite or write the text at your cursor. */
   voice: { tier: "haiku", effort: "low" },
   /** Someone in your Slack wrote to Pip's bot: Pip answers them. */
@@ -103,7 +105,14 @@ const ROUTINE_JOBS = new Set<Job>([
 ]);
 
 /** Turns that run as the code job when what started them marked them as about code. */
-const CODE_TRIGGERS = new Set<TurnTrigger>(["chat", "mention", "assignment", "reflex", "watch"]);
+const CODE_TRIGGERS = new Set<TurnTrigger>([
+  "chat",
+  "mention",
+  "assignment",
+  "reflex",
+  "watch",
+  "trigger",
+]);
 
 /** The job a turn does, from what started it. */
 export function jobOf(turn: TurnLike): Job {
@@ -118,6 +127,7 @@ export function jobOf(turn: TurnLike): Job {
     case "watch":
     case "reflex":
     case "slack_member":
+    case "trigger":
       return turn.trigger;
     case "voice_command":
       return "voice";

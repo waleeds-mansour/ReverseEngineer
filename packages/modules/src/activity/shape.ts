@@ -32,6 +32,8 @@ export interface TimelineTurn {
   source: string | null;
   /** The job (role) it ran for (Spec 3). */
   roleId: string | null;
+  /** The name of your trigger that set it off (Spec 6), as it was then. */
+  triggerName: string | null;
   /** It started from, or went on to read, outside content (D58). */
   readOutside: boolean;
   conversationId: string | null;
@@ -150,6 +152,7 @@ export function turnOf(t: TurnRow): TimelineTurn {
     via: str(c.via),
     source: str(c.source),
     roleId: t.roleId,
+    triggerName: t.trigger === "trigger" ? str(c.triggerName) : null,
     readOutside: t.origin === "untrusted" || c.readOutside === true,
     conversationId: t.conversationId,
     subjectId: t.subjectId,

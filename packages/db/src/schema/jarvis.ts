@@ -59,7 +59,9 @@ export type TurnTrigger =
   | "routine"
   | "voice_command"
   /** A Slack member's message to Jarvis's bot: the turn runs as that member (D62). */
-  | "slack_member";
+  | "slack_member"
+  /** One of your triggers went off (Spec 6): something you picked happened. */
+  | "trigger";
 export type TurnMode = "reactive" | "proactive";
 export type TurnLane = "fast" | "deep";
 export type TurnStatus = "queued" | "running" | "done" | "failed" | "skipped" | "canceled";
