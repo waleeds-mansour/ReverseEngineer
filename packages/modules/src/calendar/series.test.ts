@@ -52,7 +52,7 @@ function weekly(summary: string, series: string, day: string, hour: number, extr
   });
 }
 /** Sam's meeting, with your answer to it. */
-const fromSam = (responseStatus: "accepted" | "needsAction") => ({
+const fromSam = (responseStatus: "accepted" | "declined" | "tentative" | "needsAction") => ({
   organizer: { email: SAM },
   attendees: [
     { email: SAM, organizer: true, responseStatus: "accepted" },
@@ -154,13 +154,47 @@ describe("a repeating meeting edited at Google", () => {
     const told = (await t.events("calendar.event_changed")).slice(seen);
     expect(told.map((e) => e.payload.change)).toEqual(["added", "added"]);
     const first = told.find((e) => e.entityId === at(before, "12").id)!;
+    // From Sam, whom you know, and you're free: Jarvis says yes again (D71), and the invitation
+    // card goes out instead should it find it can't.
+    const card = {
+      kind: "act",
+      action: "calendar.respond",
+      input: { id: at(before, "12").id, response: "accepted", scope: "all" },
+      ask: expect.stringContaining(`From ${SAM}.`),
+    };
     expect(await newInvite.run(first, read())).toMatchObject([
       {
         kind: "act",
-        action: "calendar.respond",
-        input: { id: at(before, "12").id, response: "accepted", scope: "all" },
-        ask: expect.stringContaining(`From ${SAM}.`),
+        action: "calendar.accept_invite",
+        input: { id: at(before, "12").id },
+        fallback: [card],
       },
+    ]);
+  });
+
+  it.each([
+    ["declined", "declined", "declined"],
+    ["said maybe to", "tentative", "tentative"],
+    ["declined one time of", "accepted", "declined"],
+  ] as const)("leaves it to you, as a card, when you'd %s it", async (_, on12, on19) => {
+    const sam = await ok<{ id: string }>("person.create", { name: "Sam" });
+    await ok("person.add_email", { id: sam.id, email: SAM });
+    weekly("Planning", "plan", "05", 14, fromSam("accepted"));
+    weekly("Planning", "plan", "12", 14, fromSam(on12));
+    weekly("Planning", "plan", "19", 14, fromSam(on19));
+    await sync();
+    const before = await events();
+    const seen = (await t.events("calendar.event_changed")).length;
+    g.remove(ME, "plan_20261012T140000Z");
+    g.remove(ME, "plan_20261019T140000Z");
+    for (const day of ["12", "19"])
+      weekly("Planning", "plan_R20261012T150000", day, 15, fromSam("needsAction"));
+    await sync();
+    const told = (await t.events("calendar.event_changed")).slice(seen);
+    const first = told.find((e) => e.entityId === at(before, "12").id)!;
+    // Jarvis never says yes over your no (D71): you answer it again yourself.
+    expect(await newInvite.run(first, read())).toMatchObject([
+      { kind: "act", action: "calendar.respond", input: { id: at(before, "12").id } },
     ]);
   });
 

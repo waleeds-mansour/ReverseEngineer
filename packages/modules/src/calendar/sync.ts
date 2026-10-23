@@ -16,7 +16,7 @@ import { id } from "../shared.ts";
 import { syncCalendarList } from "./calendars.ts";
 import { recordCalendarHealth, troubleOf } from "./health.ts";
 import { seriesTakeovers } from "./series.ts";
-import { emitChange, mapEvent, saveEvent } from "./store.ts";
+import { type Change, emitChange, type Mapped, mapEvent, saveEvent } from "./store.ts";
 
 const DAY_MS = 24 * 3600_000;
 export const SYNC_BACK_DAYS = 7;
@@ -144,6 +144,10 @@ export async function syncCalendars(ctx: ActionContext): Promise<SyncResult> {
       const takeovers = await seriesTakeovers(ctx.tx, cal.id, listed, { from, to });
       // Rows a takeover couldn't save to: still Google's, so not taken for deleted.
       const kept: string[] = [];
+      const told: { id: string; change: NonNullable<Change>; m: Mapped; created?: string }[] = [];
+      // A series asked again: the least yes you'd given any of its times, which every time of it
+      // carries, so Jarvis answers yes again only where you'd said yes to all of them (D71).
+      const was = new Map<string, string | null>();
       for (const { g, m } of mapped) {
         if (!m) continue;
         // Seen even if it won't save, so it isn't taken for deleted at Google.
@@ -164,11 +168,17 @@ export async function syncCalendars(ctx: ActionContext): Promise<SyncResult> {
           if (old) kept.push(old);
           continue;
         }
+        const series = m.recurringEventId ?? saved.id;
+        const before = was.get(series);
+        if (saved.was !== undefined && (before === undefined || before === "accepted"))
+          was.set(series, saved.was);
         if (saved.change && m.endsAt > ctx.now) {
           result.changed++;
-          emitChange(ctx, saved.id, saved.change, m);
+          told.push({ id: saved.id, change: saved.change, m, created: g.created });
         }
       }
+      for (const c of told)
+        emitChange(ctx, c.id, c.change, c.m, c.created, was.get(c.m.recurringEventId ?? c.id));
       // Anything in the window Google no longer lists was deleted there.
       const missing = await ctx.tx
         .select({ id: calendarEvent.entityId, title: entity.title, r: calendarEvent })
