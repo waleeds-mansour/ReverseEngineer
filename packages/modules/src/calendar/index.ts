@@ -19,6 +19,7 @@ import { calendarWriteActions } from "./actions.ts";
 import { blockAction, blockReflex, blockRoutine } from "./blocks.ts";
 import { calendarSetupActions, isOwnCalendar, ownAccount } from "./calendars.ts";
 import { conflicts, overlaps } from "./conflicts.ts";
+import { findTimeAction, knownRange } from "./find-time.ts";
 import { freeSlots } from "./free.ts";
 import { newInvite } from "./invites.ts";
 import { meetingActions } from "./meetings.ts";
@@ -186,7 +187,7 @@ export const calendarModule = defineModule({
     defineAction({
       name: "calendar.free_time",
       description:
-        "Free slots in the owner's working hours (never evenings or weekends) of at least `minutes`, from now or `from`, over `days` days.",
+        "Free slots in the owner's working hours (never evenings or weekends) of at least `minutes`, from now or `from`, over `days` days, and only as far ahead as the owner's calendar is known (calendar.find_time says where that is). For a time that suits other people too, calendar.find_time.",
       input: z.object({
         minutes: z.number().int().min(15).max(600).default(30),
         from: isoDateTime.optional(),
@@ -195,17 +196,13 @@ export const calendarModule = defineModule({
       risk: "read",
       async handler(i, ctx) {
         const rules = await getSetting(ctx.tx, "owner.dayRules");
-        const from = i.from ? new Date(i.from) : ctx.now;
-        const slots = await freeSlots(
-          ctx.tx,
-          from,
-          new Date(from.getTime() + i.days * DAY_MS),
-          i.minutes,
-          rules,
-        );
-        return slots.slice(0, 40);
+        const wanted = i.from ? new Date(i.from) : undefined;
+        const { from, to } = knownRange(ctx.now, rules.timeZone, wanted, i.days);
+        if (from >= to) return [];
+        return (await freeSlots(ctx.tx, from, to, i.minutes, rules)).slice(0, 40);
       },
     }),
+    findTimeAction,
     ...calendarSetupActions,
     defineAction({
       name: "calendar.sync",
