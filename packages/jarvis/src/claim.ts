@@ -1,9 +1,10 @@
 // Which queued turn runs next. Yours come first: your reactive turns, then Slack members' turns,
 // then Jarvis's own proactive work. Only one member turn runs at a time, so however many people
 // write to Jarvis in Slack, a runner is always free for you (D62). One turn at a time per
-// conversation or record, so the same thing is never answered twice at once.
+// conversation or record, so the same thing is never answered twice at once. Claiming one says so
+// (jarvis.turn_started), so what shows Pip at work (Today's desk) moves on at once.
 import { jarvisTurn } from "@hearth/db";
-import type { Kernel } from "@hearth/kernel";
+import { appendEvents, type Kernel } from "@hearth/kernel";
 import { and, asc, desc, eq, lte, sql } from "drizzle-orm";
 
 export type TurnRow = typeof jarvisTurn.$inferSelect;
@@ -42,6 +43,22 @@ export function claimNextTurn(kernel: Kernel, now: Date): Promise<TurnRow | null
       .set({ status: "running", startedAt: now, attempts: sql`${jarvisTurn.attempts} + 1` })
       .where(eq(jarvisTurn.id, next.id))
       .returning();
-    return claimed ?? null;
+    if (!claimed) return null;
+    await appendEvents(
+      tx,
+      [
+        {
+          kind: "jarvis.turn_started",
+          entityId: claimed.subjectId ?? claimed.conversationId,
+          payload: {
+            turnId: claimed.id,
+            trigger: claimed.trigger,
+            conversationId: claimed.conversationId,
+          },
+        },
+      ],
+      { actor: "jarvis", origin: "agent", correlationId: claimed.id, at: now },
+    );
+    return claimed;
   });
 }

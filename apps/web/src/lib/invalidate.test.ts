@@ -78,6 +78,13 @@ describe("what a change you make refreshes", () => {
     expect(hits(affectedBy({ kind: "mail.received" }), "activity.timeline")).toBe(false);
   });
 
+  it("refreshes Pip's desk on Today as a turn starts and ends, and after you stop one", () => {
+    for (const kind of ["jarvis.turn_started", "jarvis.turn_finished"])
+      expect(hits(affectedBy({ kind }), "jarvis.desk")).toBe(true);
+    expect(hits(affectedBy({ kind: "jarvis.turn_started" }), "activity.timeline")).toBe(true);
+    expect(hits(affectedByChange("jarvis.cancel_turn"), "jarvis.desk")).toBe(true);
+  });
+
   it("refreshes everything after trashing a record, whose type it can't see", () => {
     expect(affectedByChange("entity.trash")).toBeNull();
   });
