@@ -91,6 +91,18 @@ describe("the timeline", () => {
     ]);
   });
 
+  it("says the title of a record an action names, over the words in its input", async () => {
+    const { id } = await ok<{ id: string }>("task.create", { title: "Pay the plumber" });
+    h.brain.next([
+      { call: "task_update", input: { id, body: "Paid by card on the 3rd", status: "completed" } },
+      { say: "Marked it done." },
+    ]);
+    await ok("chat.send", { text: "I paid the plumber" });
+    await h.settle();
+    const card = byTrigger(await timeline(), "chat");
+    expect(card.actions.find((a) => a.action === "task.update")?.what).toBe("Pay the plumber");
+  });
+
   it("keeps an approval's run on the card that asked, even once that turn is off the page", async () => {
     await askPip();
     const asked = byTrigger(await timeline(), "chat");

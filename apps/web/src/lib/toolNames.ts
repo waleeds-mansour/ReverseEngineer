@@ -65,6 +65,8 @@ const SAID: Record<string, Said> = {
   "browser.tabs": ["Checking Chrome's tabs", "Checked Chrome's tabs"],
   "page_watch.create": ["Setting up a page watch", "Set up a page watch"],
   "jarvis.watch": ["Setting up a watch", "Set up a watch"],
+  "jarvis.observe": ["Noting something for your brief", "Noted something for your brief"],
+  "prep.publish": ["Writing meeting prep", "Wrote meeting prep"],
   "routine.create": ["Making a routine", "Made a routine"],
   "slack.messages": ["Reading Slack", "Read Slack"],
   "github.prs": ["Checking pull requests", "Checked pull requests"],

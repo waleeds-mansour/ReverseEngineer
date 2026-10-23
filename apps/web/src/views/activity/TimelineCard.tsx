@@ -111,7 +111,7 @@ export function TimelineCard(props: {
           <For each={g().approvals}>
             {(a) => (
               <li class="flex flex-wrap items-center gap-2 text-sm">
-                <span class="min-w-0 flex-1">{a.summary}</span>
+                <span class="line-clamp-2 min-w-0 flex-1">{a.summary}</span>
                 <Show when={a.status === "pending"}>
                   <TextButton alone onClick={(e) => props.answer(a.id, e.shiftKey)}>
                     Answer in Updates

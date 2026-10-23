@@ -124,14 +124,14 @@ export async function readTimeline(
   };
   for (const t of turns)
     group(t.id, latest(t.queuedAt, t.startedAt, t.finishedAt)).turn = turnOf(t);
-  // An action whose input only names a record says that record's title, read below.
+  // An action whose input names a record says that record's title, read below: a reply's draft
+  // says the thread's subject, not the start of its text. Otherwise, what its input says.
   const recordOf = new Map<string, string>();
   for (const a of actions.sort((x, y) => x.at.getTime() - y.at.getTime())) {
     if (!a.correlationId) continue;
     const g = group(a.correlationId, a.at.getTime());
     if (g.actions.length >= MAX_ACTIONS) continue;
-    const what = inputWords(a.input);
-    const record = what ? null : recordIn(a.input);
+    const record = recordIn(a.input);
     if (record) recordOf.set(a.id, record);
     g.actions.push({
       id: a.id,
@@ -142,7 +142,7 @@ export async function readTimeline(
       error: clip(a.error, 300),
       durationMs: a.durationMs,
       approvalId: a.approvalId,
-      what,
+      what: inputWords(a.input),
     });
   }
   for (const a of asks.sort((x, y) => x.createdAt.getTime() - y.createdAt.getTime())) {
@@ -231,7 +231,7 @@ export async function readTimeline(
 
   const out: TimelineGroup[] = [...groups.values()].map(({ touchedBy, ...g }) => ({
     ...g,
-    actions: g.actions.map((a) => ({ ...a, what: a.what ?? clip(titleOf(a.id)) })),
+    actions: g.actions.map((a) => ({ ...a, what: clip(titleOf(a.id)) ?? a.what })),
     touched: [...touchedBy]
       .flatMap(([id, how]) => {
         const r = byId.get(id);
