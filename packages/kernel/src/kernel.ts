@@ -1,6 +1,6 @@
 // The executor: every action from every surface runs through here, gets a policy decision,
 // an audit row and its events (PLAN.md section 5.4).
-import { memberWildcard } from "@hearth/core";
+import { type ConnectionNeed, memberWildcard } from "@hearth/core";
 import { type Db, principal, standingRule, type Tx } from "@hearth/db";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { z } from "zod";
@@ -14,6 +14,7 @@ import {
   type ActionErrorCode,
   describeError,
   isDatabaseDown,
+  isExpected,
   logLine,
   stackFrames,
 } from "./errors.ts";
@@ -35,7 +36,7 @@ export type ExecuteResult<R = unknown> =
   | { status: "ok"; result: R }
   | { status: "pending_approval"; approvalId: string; summary: string; reason: string }
   | { status: "denied"; reason: string }
-  | { status: "error"; code: ActionErrorCode; message: string };
+  | { status: "error"; code: ActionErrorCode; message: string; need?: ConnectionNeed };
 
 export interface KernelOptions {
   db: Db;
@@ -224,7 +225,7 @@ export class Kernel {
       const failure = describeError(err);
       // A bug in a handler keeps where it happened; the database being out of reach doesn't need
       // a stack for every call that found it so.
-      if (!(err instanceof ActionError)) {
+      if (!isExpected(err)) {
         const where = isDatabaseDown(err) ? "" : stackFrames(err);
         this.log(`Action ${def.name} failed: ${logLine(err)}${where}`);
       }

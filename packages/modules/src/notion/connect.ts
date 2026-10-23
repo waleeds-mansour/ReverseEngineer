@@ -1,5 +1,6 @@
 // Connecting Notion for tasks (D68), from Settings: paste an internal integration's token, pick
 // the task board and who you are on it. The token is only ever yours to give, and stays sealed.
+import { ConnectionError } from "@hearth/core";
 import { entity, googleAccount, notionAccount, notionTask } from "@hearth/db";
 import { type ActionContext, ActionError, defineAction } from "@hearth/kernel";
 import { and, count, desc, eq, isNull } from "drizzle-orm";
@@ -27,9 +28,10 @@ async function ask<T>(f: () => Promise<T>): Promise<T> {
   }
 }
 
-async function account(ctx: ActionContext) {
+/** The connected account. Without one, Pip gets a card to ask you to connect it (Spec 4). */
+async function account(ctx: ActionContext, why = "Pip wants to read your Notion board.") {
   const [a] = await ctx.tx.select().from(notionAccount).limit(1);
-  if (!a) throw new ActionError("not_found", "Notion isn't connected.");
+  if (!a) throw new ConnectionError("notion", why);
   return a;
 }
 
@@ -68,6 +70,8 @@ export const connectActions = [
         token: sealToken(ctx, me.botId, i.token),
       });
       await closeAlerts(ctx, "notion");
+      // A turn waiting for Notion picks its work up again (connect.wait).
+      ctx.emit({ kind: "notion.connected", payload: {} });
       return { workspace: me.workspace };
     },
   }),
@@ -214,6 +218,7 @@ export const connectActions = [
     }),
     risk: "read",
     async handler(i, ctx) {
+      await account(ctx, "Pip wants to read your tickets on the Notion board.");
       const rows = await ctx.tx
         .select({
           id: notionTask.entityId,

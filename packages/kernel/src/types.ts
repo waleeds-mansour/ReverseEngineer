@@ -211,6 +211,11 @@ export type ReflexOutcome =
       untrusted?: boolean;
       /** The turn is no more trusted than this (a watch replays what set it up, D58). */
       origin?: Origin;
+      /**
+       * Background work even from a reactive reflex: a background turn's work picked up again
+       * stays background work (connect.wait). It can only make a turn proactive, never reactive.
+       */
+      proactive?: boolean;
     }
   | { kind: "tell"; notification: NewNotification }
   | { kind: "note"; observation: NewObservation }

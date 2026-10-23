@@ -14,7 +14,7 @@ vi.mock("./live.ts", () => ({
   reportError: (err: Error) => errors.push(err.message),
 }));
 
-const { approvalParts, itemDue, rowMenu, summaryParts } = await import("./inbox.ts");
+const { approvalParts, connectTarget, itemDue, rowMenu, summaryParts } = await import("./inbox.ts");
 const { act } = await import("./query.ts");
 
 const row = (id: string, approvalStatus: string | null = null) =>
@@ -97,5 +97,17 @@ describe("a reminder that rang", () => {
     const past = new Date(Date.now() - 60_000).toISOString();
     expect(itemDue({ kind: "reminder", deadline: past })).toBeNull();
     expect(itemDue({ kind: "note", deadline: past })).toMatchObject({ overdue: true });
+  });
+});
+
+describe("a card asking you to connect a tool Pip needs", () => {
+  it("opens that tool's part of Settings, and only for the tools it knows", () => {
+    expect(connectTarget({ kind: "connect.notion" })).toEqual({
+      section: "notion",
+      label: "Notion",
+    });
+    expect(connectTarget({ kind: "connect.dropbox" })).toBeNull();
+    expect(connectTarget({ kind: "connect.toString" })).toBeNull();
+    expect(connectTarget({ kind: "note" })).toBeNull();
   });
 });

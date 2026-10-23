@@ -4,6 +4,7 @@
 import { createSignal } from "solid-js";
 import { isWaiting } from "./approvals.ts";
 import { due } from "./format.ts";
+import type { SettingsSection } from "./settingsNav.ts";
 import type { InboxRow, Notification } from "./types.ts";
 
 export type InboxView = "live" | "snoozed" | "done";
@@ -22,6 +23,20 @@ export const itemDue = (n: Pick<Notification, "kind" | "deadline">) =>
 export const waitingOnYou = (row: InboxRow | undefined) =>
   !!row?.notification.approvalId && isWaiting(row.notification.approvalId, row.approvalStatus);
 export const NEEDS_DECISION = "This one needs a yes or a no first: press a or d.";
+
+/** The tools a card can ask you to connect, by the card's kind ("connect.notion"). */
+const CONNECT: Record<string, { section: SettingsSection; label: string }> = {
+  notion: { section: "notion", label: "Notion" },
+};
+
+/**
+ * Where a "Pip needs a tool" card's button goes: that tool's part of Settings (Spec 4). The card
+ * only opens it; connecting it, and its secret, stay yours there.
+ */
+export function connectTarget(n: Pick<Notification, "kind">) {
+  const tool = n.kind.startsWith("connect.") ? n.kind.slice("connect.".length) : "";
+  return Object.hasOwn(CONNECT, tool) ? CONNECT[tool]! : null;
+}
 
 /**
  * A row whose body is shown whole, not cut to three lines: a Slack message Jarvis wrote that

@@ -17,6 +17,8 @@ const STATUS_FOR_ERROR: Record<string, ContentfulStatusCode> = {
   unknown_action: 404,
   conflict: 409,
   unavailable: 503,
+  // Not connected yet: as "not found" said before it had a code of its own (Spec 4).
+  needs_connection: 404,
   failed: 500,
 };
 

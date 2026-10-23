@@ -8,6 +8,7 @@ import { browserModule } from "./browser/index.ts";
 import { calendarModule } from "./calendar/index.ts";
 import { canvasModule } from "./canvas/index.ts";
 import { chatModule } from "./chat/index.ts";
+import { connectModule } from "./connect/index.ts";
 import { dataModule } from "./data/index.ts";
 import { githubModule } from "./github/index.ts";
 import { graphModule } from "./graph/index.ts";
@@ -47,6 +48,7 @@ export const ALL_MODULES: HearthModule[] = [
   memberModule,
   githubModule,
   notionModule,
+  connectModule,
   sheetsModule,
   dataModule,
   activityModule,
@@ -87,6 +89,14 @@ export { gist } from "./calendar/soon.ts";
 export type { EventView } from "./calendar/store.ts";
 export { appendLog, type LogEntry, type LogKind, routeLane } from "./chat/index.ts";
 export { MENTION_SETTLE_MS } from "./chat/mention.ts";
+export {
+  CONNECT_WAIT,
+  type ConnectWait,
+  connectCard,
+  GIVE_UP_AFTER_MS,
+  REMIND_AFTER_MS,
+  waitKey,
+} from "./connect/index.ts";
 export { CONVEX_SERVICE, type ConvexApi, FakeConvex, httpConvex } from "./data/index.ts";
 export { FakeGithub, GITHUB_SERVICE, type GithubApi, httpGithub } from "./github/index.ts";
 export { GOOGLE_SERVICE, GoogleClient, googleFromEnv, SCOPES } from "./google/client.ts";
