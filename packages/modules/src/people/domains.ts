@@ -66,6 +66,18 @@ export function isRoleAddress(address: string): boolean {
   return ROLE.test(address.slice(0, address.lastIndexOf("@")));
 }
 
+/**
+ * Nobody reads it as themselves: no-reply, bounces and notices, and the clearest help desks. Far
+ * narrower than a role address: hello@, info@ or team@ is often a freelancer or a small shop, and
+ * stays a person. The whole local part only, or with a +tag.
+ */
+const MACHINE =
+  /^(no-?reply|do-?not-?reply|mailer-daemon|postmaster|bounces?|notifications?|alerts?|newsletters?|support|helpdesk|billing|invoices?)(\+.*)?$/i;
+
+export function isMachineAddress(address: string): boolean {
+  return MACHINE.test(address.slice(0, address.lastIndexOf("@")));
+}
+
 export function isFreeMail(domain: string): boolean {
   const base = baseDomain(domain);
   return FREE_MAIL.has(base) || FREE_MAIL_NAMES.has(base.split(".")[0]!);
