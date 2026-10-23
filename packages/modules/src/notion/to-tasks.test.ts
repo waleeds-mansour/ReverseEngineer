@@ -109,6 +109,16 @@ describe("notion tickets as tasks", () => {
     expect(await news()).toEqual([]);
   });
 
+  it("makes one task when a ticket's news is told twice at once", async () => {
+    for (const id of ["a", "b", "c"]) ticket(id);
+    await sync();
+    await lose();
+    const ids = (await t.events("notion.task_assigned")).map((e) => e.entityId!);
+    const make = (ticketId: string) => ok("notion.make_task", { ticketId }, systemCaller());
+    await Promise.all(ids.flatMap((id) => [make(id), make(id)]));
+    expect((await tasks()).map((k) => k.title)).toEqual(["Ticket a", "Ticket b", "Ticket c"]);
+  });
+
   it("closes a task left open after its ticket closed or left you, and keeps what you did", async () => {
     for (const id of ["a", "b", "c", "d"]) ticket(id);
     await sync();
