@@ -30,6 +30,8 @@ export interface TimelineTurn {
   via: string | null;
   /** The routine or reflex that queued it ("brief", "jarvis.heartbeat"). */
   source: string | null;
+  /** The job (role) it ran for (Spec 3). */
+  roleId: string | null;
   /** It started from, or went on to read, outside content (D58). */
   readOutside: boolean;
   conversationId: string | null;
@@ -118,6 +120,7 @@ export const TURN = {
   startedAt: jarvisTurn.startedAt,
   finishedAt: jarvisTurn.finishedAt,
   durationMs: jarvisTurn.durationMs,
+  roleId: jarvisTurn.roleId,
 };
 export type TurnRow = Pick<typeof jarvisTurn.$inferSelect, keyof typeof TURN>;
 
@@ -146,6 +149,7 @@ export function turnOf(t: TurnRow): TimelineTurn {
     asked: ASKED.has(t.trigger) ? clip(t.prompt, 300) : null,
     via: str(c.via),
     source: str(c.source),
+    roleId: t.roleId,
     readOutside: t.origin === "untrusted" || c.readOutside === true,
     conversationId: t.conversationId,
     subjectId: t.subjectId,

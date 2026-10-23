@@ -24,14 +24,17 @@ import {
   waitKey,
 } from "@hearth/modules";
 import { eq } from "drizzle-orm";
-import { proactiveGate } from "./budget.ts";
+import { turnGate } from "./budget.ts";
 import { heldWords, noteHeld, wasHeld } from "./held.ts";
+import { roleBudget } from "./roles.ts";
 
 export interface OutcomeSource {
   event: HearthEvent;
   /** The reflex or routine that decided this. */
   name: string;
   mode: ReflexMode;
+  /** The job (role) the reflex is in: its turns are tagged and its acts held to the job (Spec 3). */
+  roleId?: string;
 }
 
 export interface ApplyResult {
@@ -46,9 +49,14 @@ async function setLastOutcome(kernel: Kernel, scheduleId: string, outcome: strin
 function callerFor(src: OutcomeSource): Caller {
   const extra = { causationId: src.event.id, correlationId: src.event.correlationId ?? newId() };
   // A proactive reflex's act is background work like a proactive turn's call (Spec 5).
+  // A job's reflex acts within the job's ceiling (Spec 3).
   return src.mode === "always"
     ? systemCaller(extra)
-    : jarvisCaller(src.event.origin, { ...extra, mode: src.mode });
+    : jarvisCaller(src.event.origin, {
+        ...extra,
+        mode: src.mode,
+        ...(src.roleId ? { roleId: src.roleId } : {}),
+      });
 }
 
 /** Puts it in your inbox as `caller`; `outside` when its words are outside content's (D58). */
@@ -105,8 +113,10 @@ export async function applyOutcomes(
         }
         // Background work picked up again stays background work (connect.wait).
         const mode = src.mode === "reactive" && !o.proactive ? "reactive" : "proactive";
-        const gate =
-          mode === "proactive" ? await proactiveGate(kernel.db, now) : ({ open: true } as const);
+        // The job it runs for: its reflex's, or what it names (a routine's, a resumed turn's).
+        const roleId = src.roleId ?? o.roleId ?? null;
+        const role = roleId ? await roleBudget(kernel.db, roleId) : null;
+        const gate = await turnGate(kernel.db, now, mode, role);
         // A routine's firing: the turn reports back how it went (D54), to the schedule the
         // routine names (Run now fires a one-off schedule of its own) or the one that fired.
         const named = o.context?.scheduleId;
@@ -140,6 +150,8 @@ export async function applyOutcomes(
           subjectId: o.subjectId ?? null,
           sourceEventSeq: src.event.seq,
           dedupeKey: o.dedupeKey ?? null,
+          // A job that's gone tags nothing.
+          roleId: role?.id ?? null,
           queuedAt: now,
         } as const;
         if (!gate.open) {
@@ -220,7 +232,8 @@ export async function applyOutcomes(
           o.ask ? { ...caller, askFirst: o.ask } : caller,
         );
         const def = kernel.registry.action(o.action);
-        if (def && wasHeld(res)) await noteHeld(kernel, heldWords(def, o.input), caller);
+        if (def && wasHeld(res))
+          await noteHeld(kernel, heldWords(def, o.input), caller, res.reason);
         else if (res.status !== "ok" && !(o.ask && res.status === "pending_approval"))
           log(`${src.name}: ${o.action} -> ${JSON.stringify(res)}`);
         break;
@@ -285,6 +298,7 @@ export async function waitForConnection(
           lane: jarvisTurn.lane,
           conversationId: jarvisTurn.conversationId,
           subjectId: jarvisTurn.subjectId,
+          roleId: jarvisTurn.roleId,
         })
         .from(jarvisTurn)
         .where(eq(jarvisTurn.id, caller.turnId))
@@ -300,6 +314,8 @@ export async function waitForConnection(
     mode: turn.mode,
     // As trusted as the turn is now: it may have read outside content since it began.
     origin: caller.origin,
+    // Picked up again for the same job, within its ceiling (Spec 3).
+    roleId: turn.roleId,
     since: now.toISOString(),
   };
   for (const o of connectionOutcomes(need, wait, now)) {

@@ -19,6 +19,7 @@ import { memoryModule } from "./memory/index.ts";
 import { notesModule } from "./notes/index.ts";
 import { notionModule } from "./notion/index.ts";
 import { peopleModule } from "./people/index.ts";
+import { rolesModule } from "./roles/index.ts";
 import { routinesModule } from "./routines/index.ts";
 import { sheetsModule } from "./sheets/index.ts";
 import { memberModule, slackModule } from "./slack/index.ts";
@@ -40,6 +41,7 @@ export const ALL_MODULES: HearthModule[] = [
   memoryModule,
   calendarModule,
   routinesModule,
+  rolesModule,
   mailModule,
   meetingsModule,
   voiceModule,
@@ -128,6 +130,7 @@ export {
   UPLOADS_SERVICE,
   type Uploads,
 } from "./notion/index.ts";
+export type { AttachableReflex, RoleList, RoleView } from "./roles/index.ts";
 export {
   isSealed,
   openGoogleTokens,

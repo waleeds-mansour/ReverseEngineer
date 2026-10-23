@@ -18,6 +18,7 @@ export const SETTINGS_SECTIONS = [
   { id: "import", label: "Import" },
   { id: "signins", label: "Sign-ins" },
   { id: "routines", label: "Routines" },
+  { id: "jobs", label: "Pip's jobs" },
   { id: "passkeys", label: "Passkeys" },
   { id: "health", label: "Health" },
   { id: "coming", label: "Coming up" },

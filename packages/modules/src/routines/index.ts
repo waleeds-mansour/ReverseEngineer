@@ -2,7 +2,7 @@
 // "every weekday at 7, check my bank's site for new statements". Each one gets a Jarvis turn
 // when it's due, with all of Jarvis's tools, the browser included. The words are yours: a turn
 // that has read outside content can't write or change them.
-import { type DbOrTx, entity, routine, schedule } from "@hearth/db";
+import { type DbOrTx, entity, role, roleRoutine, routine, schedule } from "@hearth/db";
 import {
   type ActionContext,
   ActionError,
@@ -112,6 +112,13 @@ const due: ReflexDef = {
     const routineId = String(payload.routineId);
     const r = await loadRoutine(ctx.db, routineId);
     if (!r || (!r.active && !payload.now)) return [];
+    // In a job, its turn runs for the job (Spec 3); a job that's off pauses it, but Run now runs.
+    const [job] = await ctx.db
+      .select({ id: role.id, active: role.active })
+      .from(roleRoutine)
+      .innerJoin(role, eq(role.id, roleRoutine.roleId))
+      .where(eq(roleRoutine.routineId, routineId));
+    if (job && !job.active && !payload.now) return [];
     const at = String(payload.scheduledFor ?? ctx.event.at.toISOString());
     return [
       {
@@ -120,6 +127,7 @@ const due: ReflexDef = {
         lane: "deep",
         subjectId: routineId,
         dedupeKey: `routine:${routineId}:${at}`,
+        ...(job ? { roleId: job.id } : {}),
         // How the turn went shows on the routine, Run now included (D54).
         context: { routine: r.title, scheduleId: scheduleId(routineId) },
         prompt: [

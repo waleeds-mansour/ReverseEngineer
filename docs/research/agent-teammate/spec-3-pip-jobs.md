@@ -1,4 +1,29 @@
-# Spec 3 — Pip "jobs": role-scoped profiles · DESIGN ONLY (do not build yet)
+# Spec 3 — Pip "jobs": role-scoped profiles · BUILT (2026-10-23)
+
+> **As built.** The owner asked for it on 2026-10-23, with the recommendations below settled:
+> jobs run concurrently and tag their turns, the trust scope is one `riskCeiling`, and "Research"
+> (capped at `read`) is seeded. In code a job is a **role**, because D82 already calls model tiers
+> "jobs" (`packages/jarvis/src/models.ts`): tables `role`, `role_routine` and `role_reflex`
+> (migration 0050), `jarvis_turn.role_id`, actions `role.create/update/attach/detach/list/remove`
+> (`packages/modules/src/roles/`). The UI still says "Pip's jobs" (Settings, and a filter and label
+> in What Pip did). Where the build differs from the design below:
+> - **The ceiling is a `Hold` in `decide()`**, beside Spec 5's: `holdsFor` (`kernel/src/guard.ts`)
+>   reads the turn's job for every call, so a change applies at once. A call past it is refused,
+>   noted for the brief (`jarvis/src/held.ts`) and shown as "Held for your brief" in What Pip did.
+>   What only reports (`jarvis.observe`, `inbox.notify`, `comment.create`, marked `reports`) stays
+>   within any ceiling, so a job that only reads can still say what it found. `outward` still holds
+>   what's hard to undo.
+> - **A job is a plain table, not an entity**: it's configuration, like a data source. Removing one
+>   deletes it; its routines and reflexes stay and run as before, and its past turns lose the label.
+> - **Its allowance is `turns_per_day`**, counting all its turns, its routines' (reactive) too, and
+>   it never lets a turn past the global proactive allowance.
+> - **Only proactive reflexes** can be in a job, and each routine or reflex is in one job at most.
+>   A job that's off pauses them; Run now still runs a routine.
+> - **Pip can make and tighten a job, but only you can loosen one** (a higher ceiling, more turns,
+>   back on, or moving something out of another job); taking something out and removing a job are
+>   yours alone.
+> - The job follows its work when it's picked up again: after your answer to its approval, and
+>   after you connect what it needed (Spec 4).
 
 > **Source / provenance:** from **both** pages — Grok **Bot** ("give each Bot a job"; a billing/sales/research Bot) and ChatGPT **dots** ("specialist dots" for a domain). Both are *marketing claims*, not reverse-engineered. The realization below — a single-agent profile that scopes routines/reflexes/trust/budget, **no extra agent process** — is Hearth-native and deliberately avoids the multi-agent path (that's Track 5, deferred for reliability).
 

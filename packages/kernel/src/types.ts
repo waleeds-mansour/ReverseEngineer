@@ -21,6 +21,11 @@ export interface Caller {
    */
   mode?: TurnMode;
   /**
+   * Set by Jarvis's runtime from its turn, or a reflex's act: the job (role) it runs for. A call
+   * that reaches past the job's ceiling is held for your brief (Spec 3).
+   */
+  roleId?: string;
+  /**
    * Set by Jarvis's runtime when this particular call needs your yes whatever its risk, e.g.
    * opening an address an untrusted turn never saw (D25). The text is the approval's reason.
    */
@@ -77,6 +82,8 @@ export interface ActionContext {
   call<T = unknown>(name: string, input: unknown): Promise<T>;
   /** A process-level service, like the browser. Throws "unavailable" if this process has none. */
   service<T>(name: string): T;
+  /** Every reflex this process runs, for what Settings lists and a job can take on (Spec 3). */
+  reflexes(): readonly Pick<ReflexDef, "name" | "description" | "mode">[];
 }
 
 export interface ActionDef<S extends z.ZodType = z.ZodType, R = unknown> {
@@ -118,6 +125,11 @@ export interface ActionDef<S extends z.ZodType = z.ZodType, R = unknown> {
   ): Promise<Record<string, unknown>>;
   /** One line for an approval card: "Send email to Ana: Friday's agenda". */
   summarize?(input: z.output<S>): string;
+  /**
+   * It only tells you something (a note for your brief, a card, a comment), so it stays within any
+   * job's ceiling: even a job that only reads can say what it found (Spec 3).
+   */
+  reports?: boolean;
   /**
    * What "Always allow" on its approval card covers (D70): the one place or person the call
    * reaches, as the rule's target, and the button's words for it ("posting in #eng"). Given the
@@ -216,6 +228,8 @@ export type ReflexOutcome =
        * stays background work (connect.wait). It can only make a turn proactive, never reactive.
        */
       proactive?: boolean;
+      /** The job it runs for (a routine's), when the reflex itself isn't in one (Spec 3). */
+      roleId?: string | null;
     }
   | { kind: "tell"; notification: NewNotification }
   | { kind: "note"; observation: NewObservation }

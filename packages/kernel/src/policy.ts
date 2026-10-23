@@ -25,21 +25,78 @@ function mayCall(action: Pick<ActionDef, "callers">, kind: Caller["kind"]): bool
  * or touch credentials (D62). */
 const BEYOND_MEMBERS: Risk[] = ["self_external", "destructive", "secret"];
 
+/** How every held call's reason ends, so the turn, the brief and What Pip did can tell. */
+const HELD = "so this was held for your brief.";
+
 /** Why background work's call was refused while read-only. The turn notes it for the brief. */
-export const HELD_FOR_BRIEF =
-  "Pip's background work is read-only, so this was held for your brief.";
+export const HELD_FOR_BRIEF = `Pip's background work is read-only, ${HELD}`;
+
+/** Whether a refusal was a hold: background read-only (Spec 5) or a job's ceiling (Spec 3). */
+export const isHeldReason = (reason: string | null | undefined): boolean =>
+  Boolean(reason?.endsWith(HELD));
+
+/** Risks in order of reach, for a ceiling to compare against. */
+const REACH: Record<Risk, number> = {
+  read: 0,
+  internal: 1,
+  self_external: 2,
+  outward: 3,
+  destructive: 4,
+  secret: 5,
+};
+
+/**
+ * A cap on a call of Pip's: anything that reaches further than `risk` is refused with `reason`
+ * and noted for your brief rather than asked about, so nothing wakes you for it.
+ */
+export interface Hold {
+  risk: Risk;
+  reason: string;
+  /** A call that would ask you anyway (an address only outside content showed) is held too. */
+  asks?: boolean;
+}
+
+/** While background work is read-only, a proactive turn reads and keeps its notes (Spec 5). */
+export const BACKGROUND_READ_ONLY: Hold = { risk: "internal", reason: HELD_FOR_BRIEF, asks: true };
+
+const CEILING_WORDS: Record<string, string> = {
+  read: "only reads",
+  internal: "only reads and changes things in Nook",
+  self_external: "doesn't do what others would see",
+  outward: "doesn't do what's hard to undo",
+};
+
+/**
+ * A job's ceiling (Spec 3). Its reports (a note for your brief, a card, a comment) stay within any
+ * ceiling, so even a job that only reads can tell you what it found.
+ */
+export function roleHold(name: string, ceiling: Risk): Hold {
+  const words = CEILING_WORDS[ceiling] ?? `stops at ${ceiling}`;
+  return { risk: ceiling, reason: `Pip's ${name} job ${words}, ${HELD}` };
+}
+
+/** The first hold a call breaks, if any. */
+function heldBy(
+  action: Pick<ActionDef, "risk" | "reports">,
+  caller: Caller,
+  holds: readonly Hold[],
+): Hold | undefined {
+  if (action.reports) return undefined;
+  return holds.find(
+    (h) => REACH[action.risk] > REACH[h.risk] || (h.asks === true && Boolean(caller.askFirst)),
+  );
+}
 
 /**
  * Decides whether a call runs now, waits for your approval, or is refused.
  * `standingRule` is true when you've written "this principal may do this action without asking".
- * `backgroundReadOnly` is the jarvis.backgroundReadOnly setting, which only a proactive turn's
- * calls read.
+ * `holds` cap Pip's call: background work while read-only, and its turn's job (guard.ts).
  */
 export function decide(
-  action: Pick<ActionDef, "risk" | "callers">,
+  action: Pick<ActionDef, "risk" | "callers" | "reports">,
   caller: Caller,
   standingRule: boolean,
-  backgroundReadOnly = false,
+  holds: readonly Hold[] = [],
 ): Decision {
   if (!mayCall(action, caller.kind)) {
     return deny(
@@ -58,15 +115,10 @@ export function decide(
       return allow;
     case "agent": {
       if (risk === "secret") return deny("Pip never touches credentials.");
-      // Work you didn't start, while background work is read-only: it reads and keeps its own
-      // notes, and the rest is refused rather than asked, so nothing wakes you for it. A read
-      // that would ask (an address only outside content showed it) is held too.
-      if (
-        backgroundReadOnly &&
-        caller.mode === "proactive" &&
-        (caller.askFirst || (risk !== "read" && risk !== "internal"))
-      )
-        return deny(HELD_FOR_BRIEF);
+      // Work you didn't start while background work is read-only, or a job's turn reaching past
+      // its ceiling: refused rather than asked, and noted for your brief, so nothing wakes you.
+      const held = heldBy(action, caller, holds);
+      if (held) return deny(held.reason);
       if (caller.askFirst) return ask(caller.askFirst);
       const untrusted = caller.origin === "untrusted";
       if (risk === "read" || risk === "internal") return allow;

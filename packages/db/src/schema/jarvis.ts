@@ -97,6 +97,8 @@ export const jarvisTurn = pgTable("jarvis_turn", {
   /** A routine's plain version, published if the model never manages it (D54). */
   fallback: jsonb("fallback").$type<unknown[]>(),
   cancelRequestedAt: ts("cancel_requested_at"),
+  /** The job (role) it ran for, whose ceiling and allowance apply (Spec 3). */
+  roleId: uuid("role_id"),
 });
 
 export const observation = pgTable("observation", {

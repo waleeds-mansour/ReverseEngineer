@@ -15,6 +15,7 @@ import {
 } from "@hearth/kernel";
 import { HEARTBEAT, runHeartbeat } from "./heartbeat.ts";
 import { applyOutcomes, type OutcomeSource } from "./outcomes.ts";
+import { type ReflexRole, reflexRoles } from "./roles.ts";
 
 export const ENGINE_CURSOR = "jarvis.reflexes";
 
@@ -67,10 +68,18 @@ export class ReflexEngine {
   async handle(event: HearthEvent): Promise<void> {
     if (event.kind === "clock.fired") await this.handleClock(event);
     const paused = await getSetting(this.kernel.db, "jarvis.paused");
-    for (const reflex of this.kernel.registry.reflexesFor(event.kind)) {
+    const reflexes = this.kernel.registry.reflexesFor(event.kind);
+    // Only proactive reflexes can be in a job (Spec 3), so most events need no look.
+    const roles = reflexes.some((r) => r.mode === "proactive")
+      ? await reflexRoles(this.kernel.db)
+      : new Map<string, ReflexRole>();
+    for (const reflex of reflexes) {
       if (event.actor === "jarvis" && !reflex.includeJarvisEvents) continue;
       if (paused && reflex.mode === "proactive") continue;
-      await this.runReflex(reflex, event, () => reflex.run(event, this.ctx()));
+      // A job that's off pauses what's in it.
+      const role = roles.get(reflex.name);
+      if (role && !role.active) continue;
+      await this.runReflex(reflex, event, () => reflex.run(event, this.ctx()), role?.id);
     }
   }
 
@@ -78,6 +87,7 @@ export class ReflexEngine {
     reflex: Pick<ReflexDef, "name" | "mode">,
     event: HearthEvent,
     decide: () => Promise<ReflexOutcome[]> | ReflexOutcome[],
+    roleId?: string,
   ): Promise<void> {
     let outcomes: ReflexOutcome[];
     try {
@@ -87,7 +97,12 @@ export class ReflexEngine {
       return;
     }
     if (outcomes.length === 0) return;
-    const src: OutcomeSource = { event, name: reflex.name, mode: reflex.mode };
+    const src: OutcomeSource = {
+      event,
+      name: reflex.name,
+      mode: reflex.mode,
+      ...(roleId ? { roleId } : {}),
+    };
     try {
       const res = await applyOutcomes(this.kernel, outcomes, src, (m) => this.log(m));
       if (res.turnsQueued > 0) this.onTurnQueued();
@@ -101,9 +116,15 @@ export class ReflexEngine {
     if (p.kind === "check") {
       const reflex = this.kernel.registry.reflex(String(p.reflex));
       if (!reflex?.onCheck) return;
-      if (reflex.mode === "proactive" && (await getSetting(this.kernel.db, "jarvis.paused")))
-        return;
-      await this.runReflex(reflex, event, () => reflex.onCheck!(p, { ...this.ctx(), event }));
+      let roleId: string | undefined;
+      if (reflex.mode === "proactive") {
+        if (await getSetting(this.kernel.db, "jarvis.paused")) return;
+        const role = (await reflexRoles(this.kernel.db)).get(reflex.name);
+        if (role && !role.active) return;
+        roleId = role?.id;
+      }
+      const check = () => reflex.onCheck!(p, { ...this.ctx(), event });
+      await this.runReflex(reflex, event, check, roleId);
       return;
     }
     if (p.kind !== "routine") return;

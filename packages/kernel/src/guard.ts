@@ -4,9 +4,11 @@
 // turn's tools means a reflex's "act", a self-test step and a turn's tool call all get the same
 // checks, and an approval you give later runs exactly what was checked and shown.
 import { normalizeUrl, type SiteRules } from "@hearth/core";
-import type { DbOrTx } from "@hearth/db";
+import { type DbOrTx, role } from "@hearth/db";
+import { eq } from "drizzle-orm";
 import { ActionError } from "./errors.ts";
 import type { Kernel } from "./kernel.ts";
+import { BACKGROUND_READ_ONLY, type Hold, roleHold } from "./policy.ts";
 import { getSetting } from "./settings.ts";
 import { checkActing, checkOpen, type TrustState } from "./trust.ts";
 import type { ActionDef, Caller } from "./types.ts";
@@ -40,6 +42,28 @@ export async function backgroundReadOnly(
 ): Promise<boolean> {
   if (caller.kind !== "agent" || caller.mode !== "proactive") return false;
   return getSetting(db, "jarvis.backgroundReadOnly");
+}
+
+/**
+ * What caps this call of Pip's, read fresh for every call so a change you make applies at once:
+ * background work while it's read-only (Spec 5), and the ceiling of the job its turn runs for
+ * (Spec 3). No other caller has any. A job that's gone caps nothing: removing it was yours.
+ */
+export async function holdsFor(
+  db: DbOrTx,
+  caller: Pick<Caller, "kind" | "mode" | "roleId">,
+): Promise<Hold[]> {
+  if (caller.kind !== "agent") return [];
+  const holds: Hold[] = [];
+  if (await backgroundReadOnly(db, caller)) holds.push(BACKGROUND_READ_ONLY);
+  if (caller.roleId) {
+    const [job] = await db
+      .select({ name: role.name, ceiling: role.riskCeiling })
+      .from(role)
+      .where(eq(role.id, caller.roleId));
+    if (job) holds.push(roleHold(job.name, job.ceiling));
+  }
+  return holds;
 }
 
 /** The input without a snapshot: Hearth fills that in, so what a caller put there is never shown. */

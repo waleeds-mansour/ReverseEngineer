@@ -13,6 +13,7 @@ export * from "./memory.ts";
 export * from "./notion.ts";
 export * from "./people.ts";
 export * from "./push.ts";
+export * from "./roles.ts";
 export * from "./sheets.ts";
 export * from "./slack.ts";
 export * from "./slack-bot.ts";

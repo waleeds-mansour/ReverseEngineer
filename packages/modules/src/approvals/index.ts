@@ -1,7 +1,7 @@
 // Approvals and standing rules. Deciding an approval is owner-only and goes through the
 // kernel directly (POST /api/approvals/:id), so it's not an action any agent can call.
 import { asUntrusted } from "@hearth/core";
-import { approval, standingRule } from "@hearth/db";
+import { approval, jarvisTurn, standingRule } from "@hearth/db";
 import { type DigestItem, defineAction, defineModule, writeStandingRule } from "@hearth/kernel";
 import { asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -73,7 +73,7 @@ export const approvalsModule = defineModule({
         "After you approve or deny something Pip asked for, it picks up where it left off.",
       mode: "reactive",
       on: ["approval.resolved"],
-      run(event) {
+      async run(event, ctx) {
         const p = event.payload as {
           approvalId: string;
           action: string;
@@ -94,6 +94,12 @@ export const approvalsModule = defineModule({
             : p.error
               ? `It was approved but failed: ${outside(p.error)}`
               : `It was approved and done. Result: ${outside(JSON.stringify(p.result ?? null).slice(0, 2000))}`;
+        // The asking turn's job, so the work goes on within its ceiling (Spec 3).
+        const [asked] = await ctx.db
+          .select({ roleId: jarvisTurn.roleId })
+          .from(approval)
+          .innerJoin(jarvisTurn, eq(jarvisTurn.id, approval.turnId))
+          .where(eq(approval.id, p.approvalId));
         return [
           {
             kind: "turn",
@@ -101,6 +107,7 @@ export const approvalsModule = defineModule({
             lane: "fast",
             conversationId: p.conversationId,
             dedupeKey: `approval:${p.approvalId}`,
+            ...(asked?.roleId ? { roleId: asked.roleId } : {}),
             prompt: `Your request "${p.action}" (approval ${p.approvalId}) was decided. ${outcome}\nContinue the work if anything is left; otherwise reply briefly or not at all.`,
           },
         ];

@@ -40,6 +40,8 @@ export interface TurnState {
   origin: Origin;
   /** Proactive when you didn't start it: held to reads and notes while background is read-only. */
   mode?: TurnMode;
+  /** The job (role) it runs for: a call past the job's ceiling is held for your brief (Spec 3). */
+  roleId?: string | null;
   causationId: string | null;
   calls: ToolCallRecord[];
   postedToSubject: boolean;
@@ -96,6 +98,7 @@ export function buildTools(kernel: Kernel, state: TurnState, log: LogFn): BrainT
       conversationId: state.conversationId,
       correlationId: state.turnId,
       ...(state.mode ? { mode: state.mode } : {}),
+      ...(state.roleId ? { roleId: state.roleId } : {}),
       ...(state.causationId ? { causationId: state.causationId } : {}),
       ...(state.asked ? { asked: true, ...(state.heard ? { heard: true } : {}) } : {}),
     }),
@@ -106,13 +109,13 @@ export function buildTools(kernel: Kernel, state: TurnState, log: LogFn): BrainT
     },
   });
 
-  // What background work was refused while read-only, noted once each for your brief (Spec 5).
+  // What was held (background read-only, or the job's ceiling), noted once each for your brief.
   const held = new Set<string>();
-  const holdForBrief = async (def: ActionDef, input: unknown) => {
+  const holdForBrief = async (def: ActionDef, input: unknown, reason: string) => {
     const what = heldWords(def, input);
     if (held.has(what)) return;
     held.add(what);
-    await noteHeld(kernel, what, caller());
+    await noteHeld(kernel, what, caller(), reason);
   };
 
   const tools: BrainTool[] = [];
@@ -141,7 +144,7 @@ export function buildTools(kernel: Kernel, state: TurnState, log: LogFn): BrainT
           status: res.status === "ok" ? "ok" : res.status,
           ...(res.status === "error" ? { code: res.code } : {}),
         });
-        if (wasHeld(res)) await holdForBrief(def, input);
+        if (wasHeld(res)) await holdForBrief(def, input, res.reason);
         // A site opened while the turn was still trusted can be acted on after it reads (D30).
         if (res.status === "ok" && url) vouchFor(state, url);
         if (

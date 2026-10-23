@@ -20,6 +20,8 @@ export interface TimelineTurn {
   via: string | null;
   /** The routine or reflex that queued it ("brief", "jarvis.heartbeat"). */
   source: string | null;
+  /** The job (role) it ran for (Spec 3): its name is in role.list. */
+  roleId: string | null;
   readOutside: boolean;
   conversationId: string | null;
   subjectId: string | null;
@@ -132,6 +134,19 @@ const OUTCOME: Record<TimelineAction["outcome"], { word: string; tone: Tone }> =
 /** How an action went, in a word, and its badge's tone. */
 export const outcomeOf = (o: TimelineAction["outcome"]) => OUTCOME[o] ?? OUTCOME.error;
 
+/**
+ * Whether a refusal was a hold: background work while read-only (Spec 5), or past a job's ceiling
+ * (Spec 3). The kernel ends every such reason the same way (policy.ts).
+ */
+export const isHeld = (error: string | null) =>
+  Boolean(error?.endsWith("so this was held for your brief."));
+
+const HELD = { word: "Held for your brief", tone: "warning" as Tone };
+
+/** How a run of actions went, a hold said as one rather than as not allowed. */
+export const runOutcome = (r: Pick<ActionRun, "outcome" | "error">) =>
+  r.outcome === "denied" && isHeld(r.error) ? HELD : outcomeOf(r.outcome);
+
 const RISK: Record<string, string> = {
   read: "Read only",
   internal: "In Nook",
@@ -174,7 +189,12 @@ export function runsOf(g: Pick<TimelineGroup, "actions" | "approvals">): ActionR
       last.error ??= a.error;
       continue;
     }
-    const status = a.outcome === "pending_approval" ? "pending_approval" : "done";
+    const status =
+      a.outcome === "pending_approval"
+        ? "pending_approval"
+        : a.outcome === "denied"
+          ? "refused"
+          : "done";
     runs.push({
       key: a.id,
       action: a.action,

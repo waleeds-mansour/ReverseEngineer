@@ -12,7 +12,8 @@ memory, an approval gate and browser control. What's worth taking is a short lis
 - [plan.md](plan.md): the overall plan, Pip next to dots and Grok Bot, and six tracks.
 - [spec-1-activity-view.md](spec-1-activity-view.md): "What Pip did, and why". To build first.
 - [spec-2-code-worktree.md](spec-2-code-worktree.md): Pip's code work in a native git worktree.
-- [spec-3-pip-jobs.md](spec-3-pip-jobs.md): jobs, role-scoped profiles for one Pip.
+- [spec-3-pip-jobs.md](spec-3-pip-jobs.md): jobs, role-scoped profiles for one Pip. Built, as
+  `role` in code.
 - [spec-4-connect-tool.md](spec-4-connect-tool.md): a Connect card mid-task, then Pip picks it up again.
 - [spec-5-readonly-background-mode.md](spec-5-readonly-background-mode.md): background turns capped at read and internal.
 - [spec-6-event-workflows.md](spec-6-event-workflows.md): "when X happens, do Y" triggers you write.
@@ -20,14 +21,15 @@ memory, an approval gate and browser control. What's worth taking is a short lis
 - [spec-8-calendar-providers.md](spec-8-calendar-providers.md): one calendar interface, with Google
   as its first adapter and Microsoft Graph and CalDAV after it.
 
-Specs 2, 3, 6, 7 and 8 are designs only for now. The plan numbers its tracks differently from the
+Specs 2, 6, 7 and 8 are designs only for now. The plan numbers its tracks differently from the
 specs: its Track 4 is Spec 2, and its Tracks 2 (learn by demonstration), 3 (rules you edit) and 5
 (several agents) have no spec yet.
 
 ## Build order
-**1, then 5, 3, 4, 6.** Spec 2 fits in whenever code work is wanted, and Spec 7 any time after 1.
+**1, then 5, 3, 4, 6.** Specs 1, 5, 4 and 3 are built; Spec 6 is next. Spec 2 fits in whenever
+code work is wanted, and Spec 7 any time after 1.
 - Spec 5 comes before Spec 3: a job's risk ceiling reuses Spec 5's check in `decide()`
-  (`packages/kernel/src/policy.ts`).
+  (`packages/kernel/src/policy.ts`). Built that way: both are a `Hold` there.
 - Spec 1 comes first because 4, 5 and 6 hold or chain actions, which you can't see without it.
 - Spec 7's re-plan reflex is an ordinary compiled reflex, so it doesn't wait for Spec 6.
 - Spec 8 doesn't wait on the others. Its first phase moves Google behind the interface and changes

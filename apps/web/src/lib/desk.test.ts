@@ -17,6 +17,7 @@ const turn = (t: Partial<DeskTurn>): DeskTurn => ({
   asked: null,
   via: null,
   source: null,
+  roleId: null,
   readOutside: false,
   conversationId: null,
   subjectId: null,

@@ -277,6 +277,8 @@ export const chatModule = defineModule({
     }),
     defineAction({
       name: "comment.create",
+      // How a routine reports back: within any job's ceiling (Spec 3).
+      reports: true,
       description: "Comment on any record. @mention Pip in the comment to ask it something there.",
       input: z.object({ parentId: id, body: body.min(1) }),
       risk: "internal",

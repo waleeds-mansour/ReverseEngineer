@@ -23,6 +23,8 @@ export interface ConnectWait {
   /** A background turn's card is an interrupt, so it counts against the day's. */
   mode: "reactive" | "proactive";
   origin: Origin;
+  /** The job (role) the turn ran for, so its work picks up within the job's ceiling (Spec 3). */
+  roleId?: string | null;
   /** When it started waiting (ISO). */
   since: string;
   step: "remind" | "give_up";
@@ -76,6 +78,7 @@ export function resumeTurn(w: ConnectWait): ReflexOutcome {
     origin: w.origin,
     // Background work stays background work: answering you doesn't make it yours.
     ...(w.mode === "proactive" ? { proactive: true } : {}),
+    ...(w.roleId ? { roleId: w.roleId } : {}),
     context: { resumes: w.turnId, connected: w.provider },
     prompt: `${label} is connected now. Earlier in this conversation you needed it, and the owner was asked to connect it. Pick that work up again where you left off; if nothing is left, reply briefly or not at all.`,
     fallback: [
