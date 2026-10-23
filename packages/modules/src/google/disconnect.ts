@@ -11,7 +11,6 @@ import {
   mailMessage,
   mailOp,
   mailThread,
-  storedFile,
 } from "@hearth/db";
 import { type ActionContext, ActionError, defineAction } from "@hearth/kernel";
 import { and, eq, inArray, ne } from "drizzle-orm";
@@ -20,6 +19,7 @@ import { dropCalendars, handOver } from "../calendar/calendars.ts";
 import { closeCalendarAlerts } from "../calendar/health.ts";
 import { BLOB_SERVICE, type BlobStore } from "../mail/blobs.ts";
 import { recomputeThread } from "../mail/flags.ts";
+import { blobsInUse } from "../mail/repair.ts";
 import { accountId, holdSyncs } from "../mail/sync.ts";
 import { closeMailAlerts } from "../mail/sync-state.ts";
 import { GOOGLE_SERVICE, type GoogleClient } from "./client.ts";
@@ -233,18 +233,6 @@ async function forgetFiles(ctx: ActionContext, hashes: string[]) {
   } catch {
     return;
   }
-  const still = new Set<string>();
-  for (let i = 0; i < hashes.length; i += 5000) {
-    const some = hashes.slice(i, i + 5000);
-    const rows = await ctx.tx
-      .selectDistinct({ hash: mailMessage.rawHash })
-      .from(mailMessage)
-      .where(inArray(mailMessage.rawHash, some));
-    const files = await ctx.tx
-      .selectDistinct({ hash: storedFile.hash })
-      .from(storedFile)
-      .where(inArray(storedFile.hash, some));
-    for (const r of [...rows, ...files]) still.add(r.hash);
-  }
+  const still = await blobsInUse(ctx, hashes);
   void blobs.remove(hashes.filter((h) => !still.has(h))).catch(() => 0);
 }

@@ -1,4 +1,4 @@
-// Files you add (pasted, dropped or uploaded). Mirrors migrations/0050_files.up.sql.
+// Files you add (pasted, dropped or uploaded). Mirrors migrations/0052_files.up.sql.
 import { index, integer, pgTable, text, uuid } from "drizzle-orm/pg-core";
 
 export const storedFile = pgTable(

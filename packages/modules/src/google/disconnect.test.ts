@@ -172,6 +172,26 @@ describe("disconnecting a Google account", () => {
     expect(await blobs.has(myFile!)).toBe(true);
   });
 
+  it("keeps a file you added that has the same bytes as one of its emails", async () => {
+    const [shared] = await t.tdb.db
+      .select({ hash: mailMessage.rawHash })
+      .from(mailMessage)
+      .where(eq(mailMessage.accountId, `gmail:${WORK}`));
+    // Saved from the email, say: the same bytes, kept once.
+    await ok("file.create", {
+      hash: shared!.hash,
+      name: "Q4.eml",
+      mime: "message/rfc822",
+      size: 1,
+    });
+    const remove = vi.spyOn(blobs, "remove");
+    await ok("google.disconnect", { email: WORK });
+    await vi.waitFor(() => expect(remove).toHaveBeenCalled(), { timeout: 10_000 });
+    await remove.mock.results[0]!.value;
+    expect(remove.mock.calls[0]![0]).not.toContain(shared!.hash);
+    expect(await blobs.has(shared!.hash)).toBe(true);
+  });
+
   /** A sync of the account under way, holding the lock the sync takes (mail/sync.ts). */
   async function syncing(address: string) {
     let locked!: () => void;

@@ -1,4 +1,4 @@
--- Files you add to Hearth (pasted, dropped or uploaded). Each is a record of type "file", named
+-- Files you add to Nook (pasted, dropped or uploaded). Each is a record of type "file", named
 -- for the file; its bytes are kept once, by their SHA-256, in the data folder's blobs beside
 -- mail's originals. Trashing one keeps its bytes, so it can come back, and mail's sweep keeps
 -- the bytes of every row here.

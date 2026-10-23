@@ -42,7 +42,7 @@ export interface FileView {
 
 export const filesModule = defineModule({
   name: "files",
-  description: "Files you add to Hearth: images and documents pasted, dropped or uploaded.",
+  description: "Files you add to Nook: images and documents pasted, dropped or uploaded.",
   entityTypes: ["file"],
   events: [],
   reflexes: [],

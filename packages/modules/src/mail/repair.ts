@@ -4,7 +4,7 @@
 // same pass reads mail from before 0032 for whether it was sent to many at once (6.9).
 import { mailAccount, mailMessage, storedFile } from "@hearth/db";
 import { type ActionContext, defineAction } from "@hearth/kernel";
-import { and, asc, eq, gt } from "drizzle-orm";
+import { and, asc, eq, gt, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { id } from "../shared.ts";
 import { BLOB_SERVICE, type BlobStore } from "./blobs.ts";
@@ -57,14 +57,31 @@ async function restore(
 }
 
 /**
- * Deletes stored bytes nothing needs any more: no message's original, and no file you added
- * (files/index.ts), even one in the trash, which can come back.
+ * The stored bytes something still needs: a message's original, or a file you added
+ * (files/index.ts), even one in the trash, which can come back. Only those among `among`, when
+ * it's given, looked up a few thousand at a time.
  */
+export async function blobsInUse(ctx: ActionContext, among?: string[]): Promise<Set<string>> {
+  const used = new Set<string>();
+  const look = async (some?: string[]) => {
+    const mail = await ctx.tx
+      .selectDistinct({ hash: mailMessage.rawHash })
+      .from(mailMessage)
+      .where(some ? inArray(mailMessage.rawHash, some) : undefined);
+    const files = await ctx.tx
+      .selectDistinct({ hash: storedFile.hash })
+      .from(storedFile)
+      .where(some ? inArray(storedFile.hash, some) : undefined);
+    for (const r of [...mail, ...files]) used.add(r.hash);
+  };
+  if (!among) await look();
+  else for (let i = 0; i < among.length; i += 5000) await look(among.slice(i, i + 5000));
+  return used;
+}
+
+/** Deletes stored bytes nothing needs any more (blobsInUse). */
 export async function sweepBlobs(ctx: ActionContext): Promise<number> {
-  const mail = await ctx.tx.selectDistinct({ hash: mailMessage.rawHash }).from(mailMessage);
-  const files = await ctx.tx.selectDistinct({ hash: storedFile.hash }).from(storedFile);
-  const keep = new Set([...mail, ...files].map((r) => r.hash));
-  return ctx.service<BlobStore>(BLOB_SERVICE).sweep(keep);
+  return ctx.service<BlobStore>(BLOB_SERVICE).sweep(await blobsInUse(ctx));
 }
 
 /**
