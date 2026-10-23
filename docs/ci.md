@@ -10,6 +10,7 @@ live Hearth, fenced off from it (D66).
 
 | Job | Runner | Labels | What it is |
 | --- | --- | --- | --- |
+| `changes` | GitHub's `ubuntu-latest` | | Reads which files changed, from GitHub's API; nothing of the PC's |
 | `check` | `hearth-pc-linux` | self-hosted, Linux, X64, hearth-ci | A Docker Desktop container from `ops/ci-runner/linux`, with PostgreSQL 16 and Chromium's libraries |
 | `windows` | `hearth-pc-win` | self-hosted, Windows, X64, hearth-ci | GitHub's runner in `D:\hearth-ci\runner-win`, as you, unelevated, at below-normal priority |
 | `windows` in `desktop.yml` | GitHub's `windows-latest` | | The Tauri build; runs only when GitHub's billing allows |
@@ -17,6 +18,13 @@ live Hearth, fenced off from it (D66).
 Each runner takes one job at a time; the two can run at once. Fork pull requests never run here:
 each job skips a pull request whose branch isn't in this repository, and the repository's setting
 for running workflows from forks stays off.
+
+A change to docs alone (anything in `docs/`, and Markdown outside a `src` folder: Jarvis's prompt
+and the desktop app's release notes are code) skips the `windows` job, and the `check` job only
+lints and checks file sizes; both report the rest as skipped. `changes` decides, and counts as code
+whatever it can't tell: a manual run, a new branch, a forced push, a list of 300 files or more, a
+failure (then everything runs). No check is required to merge (the deploy branch has no protection
+rules), so a skipped one holds nothing up.
 
 ## Why
 
@@ -110,7 +118,10 @@ run on your PC always could.
   to the live Hearth. The tests run 4 files at a time (`pnpm test --maxWorkers=4`; with `--` in
   between, pnpm passes the `--` on and vitest ignores what follows it). 45 minutes at most.
 - **Linux:** the container gets 4 CPUs, 8 GB of memory (no swap) and 1 GB of shared memory
-  (Chromium and Postgres use it). Tests run 4 files at a time. 30 minutes at most.
+  (Chromium and Postgres use it). Tests run 4 files at a time. 30 minutes at most, and 3-5 for
+  each end-to-end step (at least five times the longest one took), so a hang fails that step in
+  minutes rather than taking the job's 30. The Windows job's steps get no limit of their own: one
+  running out cancels the step, which on your desktop can flash console windows.
 - Both at once use about half of the PC's 16 cores at their busiest.
 - `HEARTH_PERF_SLACK` is 3 on both: timed tests get three times a developer's PC's budget, since
   CI runs beside the live Hearth at lower priority (Windows) or under a CPU quota (Linux), where a

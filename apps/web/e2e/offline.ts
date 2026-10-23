@@ -277,13 +277,20 @@ try {
     });
     await stop();
     await start(newest);
+    // Until it's the active one, read from the registration rather than awaited as controllerchange:
+    // the page may have moved itself on to the new build when Hearth came back, taking the new
+    // worker in before this asks, and an event that had come and gone held CI for 23 min.
     await page.evaluate(`(async () => {
       const reg = await navigator.serviceWorker.getRegistration();
-      const taken = new Promise((r) =>
-        navigator.serviceWorker.addEventListener("controllerchange", r, { once: true }),
-      );
       await reg.update();
-      await taken;
+      for (let i = 0; reg.installing || reg.waiting || reg.active?.state !== "activated"; i++) {
+        if (i === 100) {
+          const s = (w) => (w ? w.state : "none");
+          throw new Error("the new service worker didn't take over within 20 s: installing " +
+            s(reg.installing) + ", waiting " + s(reg.waiting) + ", active " + s(reg.active));
+        }
+        await new Promise((r) => setTimeout(r, 200));
+      }
     })()`);
     const now = await kept();
     if (now.build !== "newer") throw new Error(`the kept page is ${now.build}'s`);

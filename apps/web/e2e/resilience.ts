@@ -307,7 +307,9 @@ try {
       }),
     );
     await p.route("**/api/events**", badGateway);
-    await boot(p);
+    // Not boot(): with nothing on it to lose, the page reloads itself into the newer build once,
+    // and that can land while boot marks it (run 39927193297).
+    await p.goto(base);
     const banner = p.getByRole("status").filter({ hasText: "Reconnecting…" });
     const updated = p.getByText("Nook was updated.");
     const reload = p.getByRole("button", { name: "Reload" });

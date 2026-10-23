@@ -19,9 +19,64 @@ permissions:
   contents: read
 
 jobs:
+  # Whether this pull request or push changes only docs: anything in docs/, and Markdown outside a
+  # src folder (packages/jarvis/src/prompts/jarvis.md is Jarvis's prompt, and the desktop app builds
+  # in its release notes). Then the Windows job is skipped and the Linux job only lints and checks
+  # file sizes: the code is what the deploy branch already passed. Docs PRs #156, #161 and #162 each
+  # held the PC's one Windows runner for 14-26 min. It runs on GitHub's machine (free: the
+  # repository is public) and reads only file names, so it never waits for the PC's runners. What
+  # it can't tell counts as code: a manual run, a new branch, a forced push, a list that may be cut
+  # short, an error. If this job fails, the jobs below still run everything.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      docs_only: ${{ steps.files.outputs.docs_only }}
+    steps:
+      - name: Only docs changed?
+        id: files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          FORCED: ${{ github.event.forced }}
+        run: |
+          # A renamed file counts under both names: a prompt moved into docs/ is gone from the code.
+          names='.filename, (.previous_filename // empty)'
+          : > files.txt
+          if [ "$EVENT" = pull_request ]; then
+            gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" --jq ".[] | $names" > files.txt ||
+              { echo "::warning::Couldn't list the pull request's files; running everything."; : > files.txt; }
+          # (A new branch has no commit before it: all zeros.)
+          elif [ "$EVENT" = push ] && [ "$FORCED" != true ] && [[ ! "$BEFORE" =~ ^0+$ ]]; then
+            gh api "repos/$REPO/compare/$BEFORE...$AFTER" --jq ".files[]? | $names" > files.txt ||
+              { echo "::warning::Couldn't compare $BEFORE...$AFTER; running everything."; : > files.txt; }
+          fi
+          count=$(wc -l < files.txt)
+          # GitHub lists at most 300 files of a comparison (3000 of a pull request): one that long
+          # may be cut short. None listed is nothing known.
+          docs=$([ "$count" -gt 0 ] && [ "$count" -lt 300 ] && echo true || echo false)
+          while read -r f; do
+            case "$f" in
+              docs/*) ;;
+              src/* | */src/*) docs=false ;;
+              *.md) ;;
+              *) docs=false ;;
+            esac
+          done < files.txt
+          echo "$count file names (a rename has two); docs only: $docs"
+          echo "docs_only=$docs" >> "$GITHUB_OUTPUT"
+
   check:
-    # Never a fork's code on the owner's PC.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: changes
+    # Never a fork's code on the owner's PC. Whatever became of `changes`, short of a cancel.
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: [self-hosted, Linux, hearth-ci]
     # Each job queues on its own, so a merge's Linux check never waits for the Windows job before it
     # (which a busy PC can hold for an hour). A new push to a PR replaces its running check; a merge
@@ -90,20 +145,31 @@ jobs:
         run: pg_dump --version && pg_restore --version
       - name: Lint and format
         run: pnpm lint
-      - name: Typecheck
-        run: pnpm typecheck
       - name: File size limit
         run: pnpm check:size
+      # A change to docs alone (the `changes` job) ends here: nothing below can see it.
+      - name: Typecheck
+        if: needs.changes.outputs.docs_only != 'true'
+        run: pnpm typecheck
       - name: Chromium (page tests and the browser smoke test; its libraries are in the image)
+        if: needs.changes.outputs.docs_only != 'true'
         run: pnpm --filter @hearth/web exec playwright install chromium
       - name: Tests
+        if: needs.changes.outputs.docs_only != 'true'
         # Four test files at a time, one per core the container has.
         run: pnpm test --maxWorkers=4
       - name: Build the web app
+        if: needs.changes.outputs.docs_only != 'true'
         run: pnpm build:web
       - name: Main bundle size, and no Loro or WebAssembly in it
+        if: needs.changes.outputs.docs_only != 'true'
         run: pnpm check:bundle
+      # Each end-to-end step gets at least five times the longest it took in the 40 runs before
+      # 2026-10-23 (17-49 s), so a hang fails in minutes, not at the job's 30: run 39928093984 sat
+      # 23 min in the offline one.
       - name: Browser smoke test
+        if: needs.changes.outputs.docs_only != 'true'
+        timeout-minutes: 4
         run: |
           node ops/ci-runner/guard.ts
           export HEARTH_WEB_DIST="$PWD/apps/web/dist"
@@ -112,6 +178,8 @@ jobs:
           for i in $(seq 1 30); do curl -sf "localhost:$HEARTH_PORT/api/health" > /dev/null && break; sleep 1; done
           HEARTH_E2E_SETUP_CODE="$CODE" pnpm --filter @hearth/web e2e
       - name: Browser extension end-to-end
+        if: needs.changes.outputs.docs_only != 'true'
+        timeout-minutes: 5
         env:
           HEARTH_DEV_AUTH: "1"
           HEARTH_PORT: "4481"
@@ -124,6 +192,8 @@ jobs:
           for i in $(seq 1 30); do curl -sf "localhost:$HEARTH_PORT/api/health" > /dev/null && break; sleep 1; done
           pnpm --filter @hearth/web e2e:browser
       - name: Hearth opens Chrome by itself, end-to-end
+        if: needs.changes.outputs.docs_only != 'true'
+        timeout-minutes: 4
         # The one server that may open a browser: Playwright's Chromium, in a profile in RUNNER_TEMP.
         env:
           HEARTH_DEV_AUTH: "1"
@@ -141,6 +211,8 @@ jobs:
           for i in $(seq 1 30); do curl -sf "localhost:$HEARTH_PORT/api/health" > /dev/null && break; sleep 1; done
           pnpm --filter @hearth/web e2e:chrome-launch
       - name: The app rides through outages, end-to-end
+        if: needs.changes.outputs.docs_only != 'true'
+        timeout-minutes: 4
         env:
           HEARTH_DEV_AUTH: "1"
           HEARTH_PORT: "4483"
@@ -153,16 +225,22 @@ jobs:
           for i in $(seq 1 30); do curl -sf "localhost:$HEARTH_PORT/api/health" > /dev/null && break; sleep 1; done
           pnpm --filter @hearth/web e2e:resilience
       - name: The app opens while Hearth is stopped or not answering, end-to-end
+        if: needs.changes.outputs.docs_only != 'true'
+        timeout-minutes: 5
         # Starts and stops its own server, on the job's HEARTH_E2E_PORT (4484).
         run: |
           node ops/ci-runner/guard.ts
           pnpm --filter @hearth/web e2e:offline
       - name: Hearth's window on this PC signs in with Windows Hello, end-to-end
+        if: needs.changes.outputs.docs_only != 'true'
+        timeout-minutes: 3
         # Starts and stops its own server too, on the same port, with an https address of its own.
         run: |
           node ops/ci-runner/guard.ts
           pnpm --filter @hearth/web e2e:window
       - name: Split panes, the trash and triage by touch, end-to-end
+        if: needs.changes.outputs.docs_only != 'true'
+        timeout-minutes: 3
         env:
           HEARTH_DEV_AUTH: "1"
           HEARTH_PORT: "4485"
@@ -190,7 +268,9 @@ jobs:
   # session restore fails under Windows Chromium (stream F's work), and chrome-launch drives Chrome
   # the Linux way. The Windows "task" launch is covered by unit tests with a fake runner.
   windows:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: changes
+    # Skipped for a change to docs alone; otherwise as `check`.
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: [self-hosted, Windows, hearth-ci]
     # A running Windows job is never cancelled by a newer push, on a PR or a merge: on the owner's
     # desktop that can flash console windows. The newer one waits, and waiting ones are dropped
