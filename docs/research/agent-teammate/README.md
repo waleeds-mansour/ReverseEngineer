@@ -2,6 +2,8 @@
 
 Written 2026-10-22. dots and Grok Bot were studied from their launch pages, and each spec says
 which claims it builds on. Spec 7 comes from the Morgen research ([../morgen.md](../morgen.md)).
+Spec 8 comes from Hearth's own calendar code and the providers' public docs (RFC 4791 and
+Microsoft Graph's).
 
 **Verdict: both arrived at the shape Pip already has.** An always-on agent, a proactive loop,
 memory, an approval gate and browser control. What's worth taking is a short list of gaps, below.
@@ -15,8 +17,10 @@ memory, an approval gate and browser control. What's worth taking is a short lis
 - [spec-5-readonly-background-mode.md](spec-5-readonly-background-mode.md): background turns capped at read and internal.
 - [spec-6-event-workflows.md](spec-6-event-workflows.md): "when X happens, do Y" triggers you write.
 - [spec-7-day-planner.md](spec-7-day-planner.md): one plan for your day, held until you approve it.
+- [spec-8-calendar-providers.md](spec-8-calendar-providers.md): one calendar interface, with Google
+  as its first adapter and Microsoft Graph and CalDAV after it.
 
-Specs 2, 3, 6 and 7 are designs only for now. The plan numbers its tracks differently from the
+Specs 2, 3, 6, 7 and 8 are designs only for now. The plan numbers its tracks differently from the
 specs: its Track 4 is Spec 2, and its Tracks 2 (learn by demonstration), 3 (rules you edit) and 5
 (several agents) have no spec yet.
 
@@ -26,6 +30,8 @@ specs: its Track 4 is Spec 2, and its Tracks 2 (learn by demonstration), 3 (rule
   (`packages/kernel/src/policy.ts`).
 - Spec 1 comes first because 4, 5 and 6 hold or chain actions, which you can't see without it.
 - Spec 7's re-plan reflex is an ordinary compiled reflex, so it doesn't wait for Spec 6.
+- Spec 8 doesn't wait on the others. Its first phase moves Google behind the interface and changes
+  nothing you can see. Its Connect card for a missing calendar needs Spec 4.
 
 ## Rules these keep
 - D8 (`docs/decisions.md`): Pip is never containerized, so code work is a native worktree.
