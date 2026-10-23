@@ -2315,3 +2315,89 @@ Password Manager's was, would have to be added again later.
 nothing could sign in. Being at the PC's terminal already means full control of Hearth, and that
 is the trust the first passkey's setup code relies on. A recovery code from the same terminal adds
 no new way in.
+
+## D82. Each of Pip's jobs runs on the model it needs: Haiku, Sonnet or Opus (2026-10-19)
+
+*This amends D54's lane models: `HEARTH_JARVIS_MODEL` and `HEARTH_JARVIS_FAST_MODEL` are gone,
+and the lane now sets only the time limit.*
+
+**Decision:** Every turn has a job, from what started it (`jobOf` in `packages/jarvis/src/models.ts`),
+and the job picks a tier and, for Sonnet, how hard it thinks. All of it is one map in that file.
+
+| Job | Tier | Was |
+|---|---|---|
+| Anything about code: an ask, a task, a turn GitHub started | Opus | Sonnet or Opus |
+| Working on a task assigned to Pip (deep) | Opus | Opus |
+| Chat, quick (fast lane) | Sonnet, low effort | Sonnet |
+| Chat, a long ask (deep lane) | Sonnet, high effort | Opus |
+| A task's own thread (fast) | Sonnet, medium | Sonnet |
+| Carrying out what you approved | Sonnet, low | Sonnet |
+| Answering a Slack member | Sonnet, low | Sonnet |
+| Heartbeat, when an email needs a reply drafted | Sonnet, medium | Sonnet |
+| Reply drafts, follow-ups | Sonnet, medium | Sonnet |
+| Morning brief, meeting prep, nightly memory, evening journal | Sonnet, medium | Opus |
+| A reflex's turn (meeting notes and the like) | Sonnet, medium | Opus |
+| Your own routines | Sonnet, high | Opus |
+| Heartbeat, sorting what came in | Haiku | Sonnet |
+| A watch firing | Haiku | Sonnet |
+| Tidying what you said by voice | Haiku, low | Sonnet |
+| The health check's "are you there" | Haiku, low | Sonnet |
+
+**Code is always Opus.** A chat message or an @mention is about code when it has a code block,
+inline code, an error or stack trace, a file name with a code extension, a GitHub link, or code
+words (code, script, function, bug, error, commit, branch, repo, a PR and so on), checked without
+a model call (`looksLikeCode` in `packages/modules/src/chat/code.ts`), with everyday phrases like
+"zip code" taken out first. When it's unclear it leans to yes: a wrong yes costs a little, a wrong
+no gets a worse answer. A task is about code when it's linked to a GitHub pull request or its
+words pass the same check; its work and its thread both count. Any turn a `github.*` event
+started is about code. The reflex that queues the turn marks it (`context.code`), so `jobOf`
+stays a function of the turn alone. Spec 2's code runs in a worktree
+(`docs/research/agent-teammate/spec-2-code-worktree.md`) will use the same job when they're
+built.
+
+The journal stays on Sonnet: the nightly memory is built from it, and it runs once a day. (Its
+eval fails on all three models: the day's facts don't list what got done, and none looked it up.)
+The heartbeat asks for drafts only when an email needs a reply (`drafts` in its context); your
+routines are told apart from the built-in ones by the reflex that runs them, since every timed
+turn carries a schedule.
+
+- **Overrides:** `HEARTH_MODEL_HAIKU`, `HEARTH_MODEL_SONNET` and `HEARTH_MODEL_OPUS` set the model
+  a tier runs. `HEARTH_JARVIS_JOBS=brief=opus,watch=sonnet` moves jobs to another tier. Jarvis
+  logs the tiers and anything moved when it starts.
+- **Escalation:** once a turn, one step up, never past Opus. Haiku hands the turn to Sonnet when it
+  runs out of steps without browsing, or leaves a tool call wrong: an action that doesn't exist,
+  input that doesn't fit, or a record that isn't there, with no later call of that action putting
+  it right. Sonnet hands it to Opus only for a call left wrong; a long Sonnet turn still just
+  carries on (D54). The stronger model continues the same session with a note to check what's
+  done and finish. Refusals, outages (the Gmail quota) and conflicts never escalate: a bigger
+  model wouldn't change them.
+- **Caching:** the system prompt goes to Claude Code in two parts with its boundary between them:
+  the instructions and day rules, the same every turn, and this turn's own part (the time, why it
+  started, how far its origin is trusted, the subject, memory). The tool list is already in a
+  fixed order. Claude caches everything up to the boundary, so after the first turn the
+  instructions and tools are read at a tenth of the price. Nothing is recorded (`snapshot: false`),
+  so each turn still gets its own time and trust (D25).
+- **Only Hearth's own:** a turn loads none of the owner's Claude Code settings, connectors or
+  memory (`settingSources: []`, `strictMcpConfig`, auto-memory off). Run from a session that had
+  claude.ai connectors, an eval turn carried about 350k tokens of their tools on every step, and
+  re-cached them every step after Claude Code compacted.
+- **Usage:** each turn's log line says its job and its tokens by model (input, cache writes, cache
+  reads, output). `hearth eval` prints the same for each scenario with the list price, and
+  `hearth eval --model <id>` runs every tier on one model to compare.
+- **Checked:** the eval scenarios, run live, passed and failed alike on the new tiers and the old
+  lanes. With every cache warm, the 11 everyday ones cost $0.47 at list price against $0.71, and
+  the Haiku jobs about a twentieth. Four code asks ran on Opus and two everyday asks with "build"
+  and "run" stayed on Sonnet; on Opus a code ask costs about 40% more than it did on Sonnet,
+  because cache reads cost the same on both. Each model has its own hour-long cache, so the first
+  Opus turn in an hour also writes it again (about 52k tokens, $0.42).
+
+**Alternatives:** Keeping the two lanes and adding only caching: the deep routines, most of Pip's
+turns, would stay on Opus. Haiku for everything, escalating when it struggles: the tool-heavy
+turns (the brief, drafts) would often run twice. A Haiku call that picks the model for each turn:
+one more call every turn, when what started the turn already says what the job is. Calling the API
+with a key for the cheap jobs: paid per token outside the owner's plan.
+
+**Why:** The owner, 2026-10-19: "with the introduction of haiku 5.5, sonnet 5.5, and opus 5.5, we
+can properly tier each task to these 3 models... it will significantly use my weekly usage unless
+we optimize this", so they can connect all their connectors and start Pip again every day. On
+approving the table, 2026-10-23: "anything coding related would have to be opus though."

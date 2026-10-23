@@ -1,0 +1,39 @@
+{
+  "scenario": "code-pr",
+  "recordedWith": "tiers",
+  "recordedAt": "2026-10-23T08:37:47.866Z",
+  "turns": [
+    {
+      "promptStart": "why is CI failing on https://github.com/acme/widgets/pull/42",
+      "steps": [
+        {
+          "call": "github_prs",
+          "input": {
+            "limit": 50
+          }
+        },
+        {
+          "call": "browser_open",
+          "input": {
+            "url": "https://github.com/acme/widgets/pull/42/checks",
+            "newTab": false
+          }
+        },
+        {
+          "call": "github_status",
+          "input": {}
+        },
+        {
+          "call": "mail_search",
+          "input": {
+            "query": "acme/widgets #42",
+            "limit": 10
+          }
+        },
+        {
+          "say": "I couldn't find out why CI is failing on acme/widgets#42. None of the ways I have to reach it worked:\n\n- **GitHub isn't connected to Nook.** No repos are followed, so I have no data on PR #42.\n- **The browser isn't available in this session,** so I couldn't open the PR's checks page.\n- **Your email has nothing on it.** I searched for \"acme/widgets #42\" and found no GitHub notifications.\n\nAny of these would let me answer:\n\n1. Connect GitHub in Nook's settings and follow `acme/widgets`. Then I can read the PR and its checks directly.\n2. Ask again from a session where Chrome is reachable, and I'll read the failing job's log on the PR's Checks tab.\n3. Paste the failing job's log output here and I'll work out the cause."
+        }
+      ]
+    }
+  ]
+}

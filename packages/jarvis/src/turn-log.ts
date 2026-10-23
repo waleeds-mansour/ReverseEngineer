@@ -3,6 +3,7 @@
 // old ones are kept, so it never fills the disk.
 import { appendFileSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { dirname } from "node:path";
+import type { Usage } from "./brain.ts";
 
 export interface TurnLogLine {
   at: string;
@@ -17,6 +18,9 @@ export interface TurnLogLine {
   durationMs: number;
   firstTokenMs: number | null;
   tools: number;
+  /** Which of Pip's jobs it was, and the tokens each model used on it (D82). */
+  job?: string;
+  usage?: Usage;
 }
 
 export type TurnLog = (line: TurnLogLine) => void;

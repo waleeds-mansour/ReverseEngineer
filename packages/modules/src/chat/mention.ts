@@ -13,6 +13,7 @@ import { entity, event } from "@hearth/db";
 import type { ReadContext, ReflexDef, ReflexOutcome } from "@hearth/kernel";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { DOC_TYPES } from "../docs/store.ts";
+import { looksLikeCode } from "./code.ts";
 import { routeLane } from "./log.ts";
 
 /** How long a doc must be still before Jarvis reads the request. */
@@ -52,7 +53,12 @@ function answer(entityId: string, p: Mentioned, context: string, untrusted = fal
     lane: routeLane(context),
     subjectId,
     dedupeKey: `mention:${entityId}:${p.anchor}`,
-    context: { sourceId: entityId, sourceType: p.type },
+    context: {
+      sourceId: entityId,
+      sourceType: p.type,
+      // About code, or in a pull request: Opus answers (D82).
+      ...(looksLikeCode(context) || p.type === "github_pr" ? { code: true } : {}),
+    },
     prompt: `You were @mentioned in a ${p.type}. Read the record, then answer or do what was asked:\n\n${untrusted ? asUntrusted(context, p.type) : context}`,
     ...(untrusted ? { untrusted: true } : {}),
   } satisfies ReflexOutcome;

@@ -6,6 +6,7 @@ import {
   type HookCallback,
   query,
   type SDKMessage,
+  SYSTEM_PROMPT_DYNAMIC_BOUNDARY,
   tool,
 } from "@anthropic-ai/claude-agent-sdk";
 import {
@@ -13,13 +14,18 @@ import {
   type BrainEvents,
   type BrainRequest,
   type BrainResult,
+  type ModelTokens,
   replyText,
+  sumUsage,
+  TURN_PART,
+  type Usage,
 } from "../brain.ts";
 import { BrainError, classifyFailure } from "../failures.ts";
+import { TIER_MODELS } from "../models.ts";
 import { forModel } from "./schema.ts";
 
 export interface ClaudeBrainOptions {
-  /** Model per lane: Sonnet answers quickly, Opus does the deep work (D54). */
+  /** Model per lane, for a request that doesn't name its job's model (D54, D82). */
   models?: { fast: string; deep: string };
   /** Allow WebSearch and WebFetch. */
   web?: boolean;
@@ -95,6 +101,66 @@ export function webTracker(events: Pick<BrainEvents, "onExternalContent">) {
   };
 }
 
+/**
+ * The system prompt as Claude Code takes it: the part that's the same every turn, then the
+ * boundary, then this turn's own part. Claude caches everything up to the boundary, so the
+ * instructions and tools are read at a tenth of the price after the first turn (D82). Rendered
+ * fresh for every request: a recorded one would keep the first turn's time and trust (D25).
+ */
+export function systemPrompt(system: string) {
+  const at = system.indexOf(TURN_PART);
+  const prompt =
+    at < 0 ? [system] : [system.slice(0, at), SYSTEM_PROMPT_DYNAMIC_BOUNDARY, system.slice(at)];
+  return { type: "custom" as const, prompt, snapshot: false };
+}
+
+/**
+ * Adds up the tokens of a go's model messages, once each. A message arrives in pieces that each
+ * repeat its usage as it stood then; the output count is only whole in the stream's last word on
+ * it (message_delta), so each count keeps the most it was seen at.
+ */
+export function usageCounter() {
+  const seen = new Map<string, { model: string; tokens: ModelTokens }>();
+  let current: string | null = null;
+  const n = (v: unknown) => (typeof v === "number" ? v : 0);
+  const note = (id: string, model: string | null, raw: object | undefined) => {
+    if (!raw) return;
+    const u = raw as Record<string, unknown>;
+    const was = seen.get(id);
+    const t = was?.tokens ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+    const tokens = {
+      input: Math.max(t.input, n(u.input_tokens)),
+      output: Math.max(t.output, n(u.output_tokens)),
+      cacheRead: Math.max(t.cacheRead, n(u.cache_read_input_tokens)),
+      cacheWrite: Math.max(t.cacheWrite, n(u.cache_creation_input_tokens)),
+    };
+    seen.set(id, { model: model ?? was?.model ?? "unknown", tokens });
+    current = id;
+  };
+  return {
+    add(msg: SDKMessage): void {
+      if (msg.type === "assistant" && !msg.error) {
+        const m = msg.message as { id: string; model: string; usage?: object };
+        note(m.id, m.model, m.usage);
+      }
+      if (msg.type !== "stream_event") return;
+      const ev = msg.event as {
+        type: string;
+        message?: { id: string; model: string; usage?: object };
+        usage?: object;
+      };
+      if (ev.type === "message_start" && ev.message)
+        note(ev.message.id, ev.message.model, ev.message.usage);
+      if (ev.type === "message_delta" && current) note(current, null, ev.usage);
+    },
+    total(): Usage | undefined {
+      let out: Usage | undefined;
+      for (const { model, tokens } of seen.values()) out = sumUsage(out, { [model]: tokens });
+      return out;
+    },
+  };
+}
+
 /** Refuses a web fetch the turn isn't allowed to make (D25). */
 export function fetchGuard(events: Pick<BrainEvents, "mayFetch">): HookCallback {
   return async (input) => {
@@ -118,7 +184,7 @@ export class ClaudeBrain implements Brain {
 
   constructor(opts: ClaudeBrainOptions = {}) {
     this.opts = {
-      models: opts.models ?? { fast: "sonnet", deep: "opus" },
+      models: opts.models ?? { fast: TIER_MODELS.sonnet, deep: TIER_MODELS.opus },
       web: opts.web ?? true,
       maxTurns: opts.maxTurns ?? 40,
       ...(opts.cwd ? { cwd: opts.cwd } : {}),
@@ -156,16 +222,22 @@ export class ClaudeBrain implements Brain {
     let lastSaid = "";
     let outOfSteps: { steps: number } | null = null;
 
+    const lane = req.lane === "deep" ? this.opts.models.deep : this.opts.models.fast;
     const q = query({
       prompt: req.prompt,
       options: {
-        systemPrompt: req.system,
-        model: req.lane === "deep" ? this.opts.models.deep : this.opts.models.fast,
+        systemPrompt: systemPrompt(req.system),
+        model: req.model?.model ?? lane,
+        ...(req.model?.effort ? { effort: req.model.effort } : {}),
         mcpServers: { hearth: server },
         tools: builtIn,
         allowedTools: [...builtIn, ...req.tools.map((t) => `${MCP_PREFIX}${t.name}`)],
         permissionMode: "dontAsk",
+        // Only Hearth's own: none of your Claude Code settings, connectors or memory, which
+        // would add their tools and notes to every turn (D82).
         settingSources: [],
+        strictMcpConfig: true,
+        settings: { autoMemoryEnabled: false },
         includePartialMessages: true,
         maxTurns: req.maxTurns ?? this.opts.maxTurns,
         abortController: abort,
@@ -193,9 +265,11 @@ export class ClaudeBrain implements Brain {
       });
     };
     const trackWeb = webTracker(events);
+    const usage = usageCounter();
     try {
       for await (const msg of q) {
         trackWeb(msg);
+        if ("parent_tool_use_id" in msg && msg.parent_tool_use_id === null) usage.add(msg);
         if (msg.type === "system" && msg.subtype === "init") sessionId = msg.session_id;
         if (msg.type === "rate_limit_event" && msg.rate_limit_info.status === "rejected") {
           const at = msg.rate_limit_info.resetsAt;
@@ -240,6 +314,13 @@ export class ClaudeBrain implements Brain {
       if (err instanceof BrainError || req.signal.aborted) throw err;
       throw failed(err instanceof Error ? err.message : String(err));
     }
-    return { text: finalText, sessionId, firstTokenMs, ...(outOfSteps ? { outOfSteps } : {}) };
+    const used = usage.total();
+    return {
+      text: finalText,
+      sessionId,
+      firstTokenMs,
+      ...(outOfSteps ? { outOfSteps } : {}),
+      ...(used ? { usage: used } : {}),
+    };
   }
 }

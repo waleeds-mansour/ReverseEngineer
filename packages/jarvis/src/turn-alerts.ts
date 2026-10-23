@@ -3,6 +3,7 @@
 import { localDate } from "@hearth/core";
 import type { jarvisTurn } from "@hearth/db";
 import { getSetting, systemCaller } from "@hearth/kernel";
+import type { BrainRequest } from "./brain.ts";
 import type { Failure } from "./failures.ts";
 import { failureStreak, STREAK_ALERT } from "./health.ts";
 import type { EndEnv } from "./turn-end.ts";
@@ -62,6 +63,15 @@ export async function alertFailure(
       `The latest: ${said}`,
       `jarvis_streak:${start}`,
     );
+}
+
+const WEB_TOOLS = new Set(["WebSearch", "WebFetch"]);
+
+/** A request without the tools Claude rejected, so one bad definition can't stop every turn. */
+export function withoutTools(req: BrainRequest, leftOut: Set<string>): BrainRequest {
+  if (leftOut.size === 0) return req;
+  const web = [...leftOut].some((t) => WEB_TOOLS.has(t)) ? { web: false } : {};
+  return { ...req, ...web, tools: req.tools.filter((t) => !leftOut.has(t.name)) };
 }
 
 /** Tells the owner a tool was left out because Claude rejected it: once per tool per restart. */

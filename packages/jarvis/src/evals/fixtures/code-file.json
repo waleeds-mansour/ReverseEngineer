@@ -1,0 +1,15 @@
+{
+  "scenario": "code-file",
+  "recordedWith": "tiers",
+  "recordedAt": "2026-10-23T08:36:45.952Z",
+  "turns": [
+    {
+      "promptStart": "fix the bug in packages/jarvis/src/heartbeat.ts where it run",
+      "steps": [
+        {
+          "say": "I can't fix this from here. None of my tools can read or edit files in the repo, so I can't open `packages/jarvis/src/heartbeat.ts`, change it, or run the tests. I can only see GitHub pull requests, and only to read them.\n\nTo get it fixed:\n\n- **Paste the file here** (and the code that starts the heartbeat, if it's in another file). I'll find why it runs twice and give you the fix to apply. Two common causes: the start function gets called from two places, or a timer is set again without clearing the old one.\n- **Use a coding session in the worktree** (`D:\\hearth-build\\wt\\model-tiers`). It can edit the file on a branch and run the tests, and you merge it.\n- **Make it a task.** I can add \"Fix heartbeat double-run in jarvis\" to your list now so it doesn't get lost."
+        }
+      ]
+    }
+  ]
+}

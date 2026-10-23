@@ -1,0 +1,56 @@
+{
+  "scenario": "not-code-errands",
+  "recordedWith": "tiers",
+  "recordedAt": "2026-10-23T08:39:06.834Z",
+  "turns": [
+    {
+      "promptStart": "run through my errands for Saturday and tell me what order m",
+      "steps": [
+        {
+          "call": "task_list",
+          "input": {
+            "includeClosed": false,
+            "limit": 100
+          }
+        },
+        {
+          "call": "calendar_events",
+          "input": {
+            "from": "2026-10-03T00:00:00-04:00",
+            "to": "2026-10-04T00:00:00-04:00",
+            "includeCancelled": false
+          }
+        },
+        {
+          "call": "entity_search",
+          "input": {
+            "query": "errand",
+            "limit": 15
+          }
+        },
+        {
+          "call": "memory_recall",
+          "input": {
+            "about": "errands Saturday"
+          }
+        },
+        {
+          "call": "entity_search",
+          "input": {
+            "query": "Saturday",
+            "limit": 15
+          }
+        },
+        {
+          "call": "note_list",
+          "input": {
+            "limit": 20
+          }
+        },
+        {
+          "say": "I can't build an order yet because I found no errands for Saturday (2026-10-03). I checked:\n- Tasks: none open.\n- Calendar: nothing on Saturday.\n- Notes and records: nothing that mentions errands.\n\nSend me the list, even as a rough dump. Tell me where each stop is, or at least the area. Also tell me any fixed times, like a store that closes early or a pickup window, and whether anything needs to stay cold or be dropped off first.\n\nI'll sort it into a route, usually with fixed times first, then drop-offs, then shopping, and perishables last. I can also add the errands as tasks or put a block on your calendar."
+        }
+      ]
+    }
+  ]
+}

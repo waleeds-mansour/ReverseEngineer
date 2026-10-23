@@ -27,6 +27,8 @@ export interface ToolCallRecord {
   action: string;
   risk: Risk;
   status: "ok" | "pending_approval" | "denied" | "error";
+  /** Why it failed, when it did: a call the model got wrong is worth a stronger model (D82). */
+  code?: string;
 }
 
 /** What a turn knows while it runs. Origin can only go down (web content makes it untrusted). */
@@ -136,6 +138,7 @@ export function buildTools(kernel: Kernel, state: TurnState, log: LogFn): BrainT
           action: def.name,
           risk: def.risk,
           status: res.status === "ok" ? "ok" : res.status,
+          ...(res.status === "error" ? { code: res.code } : {}),
         });
         if (wasHeld(res)) await holdForBrief(def, input);
         // A site opened while the turn was still trusted can be acted on after it reads (D30).

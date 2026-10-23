@@ -1,0 +1,68 @@
+{
+  "scenario": "plan",
+  "recordedWith": "tiers",
+  "recordedAt": "2026-10-19T09:49:23.003Z",
+  "turns": [
+    {
+      "promptStart": "plan my week: I need to finish the budget, call the bank, an",
+      "steps": [
+        {
+          "call": "calendar_events",
+          "input": {
+            "from": "2026-10-01T10:00:00-04:00",
+            "to": "2026-10-09T00:00:00-04:00",
+            "includeCancelled": false
+          }
+        },
+        {
+          "call": "calendar_free_time",
+          "input": {
+            "minutes": 30,
+            "from": "2026-10-01T10:00:00-04:00",
+            "days": 7
+          }
+        },
+        {
+          "call": "task_list",
+          "input": {
+            "includeClosed": false,
+            "limit": 100
+          }
+        },
+        {
+          "call": "task_create",
+          "input": {
+            "title": "Call the bank",
+            "priority": "medium",
+            "dueAt": "2026-10-01T17:00:00-04:00",
+            "estimateMinutes": 30,
+            "assignee": "owner"
+          }
+        },
+        {
+          "call": "task_create",
+          "input": {
+            "title": "Finish the budget",
+            "priority": "high",
+            "dueAt": "2026-10-02T13:00:00-04:00",
+            "estimateMinutes": 120,
+            "assignee": "owner"
+          }
+        },
+        {
+          "call": "task_create",
+          "input": {
+            "title": "Book flights to Denver",
+            "priority": "medium",
+            "dueAt": "2026-10-02T17:00:00-04:00",
+            "estimateMinutes": 45,
+            "assignee": "owner"
+          }
+        },
+        {
+          "say": "I made a task for each item. Your calendar is empty through 2026-10-08, so nothing conflicts.\n\n| Task | Due | Estimate | Priority |\n|---|---|---|---|\n| T-1 Call the bank | Today (2026-10-01), 5 p.m. | 30 min | Medium |\n| T-2 Finish the budget | Tomorrow (2026-10-02), 1 p.m. | 2 hours | High |\n| T-3 Book flights to Denver | Tomorrow (2026-10-02), 5 p.m. | 45 min | Medium |\n\n- **Today:** Call the bank this afternoon, before they close. If the call changes anything in the budget, you'll know before you finish it.\n- **Tomorrow morning:** Finish the budget, which is the biggest item. The day is open from 9 a.m.\n- **Tomorrow afternoon:** Book the flights after the budget, so you know what you can spend.\n\nI haven't put the budget on your calendar. Nook may add a focus block for it by itself. If you'd rather have a block on your calendar, say so.\n\nI don't have your Denver dates. Send them and I'll add them to the flights task. I can also move the flights to next week if tomorrow gets tight."
+        }
+      ]
+    }
+  ]
+}

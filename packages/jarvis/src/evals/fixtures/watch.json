@@ -1,0 +1,36 @@
+{
+  "scenario": "watch",
+  "recordedWith": "tiers",
+  "recordedAt": "2026-10-19T09:48:47.268Z",
+  "turns": [
+    {
+      "promptStart": "Something you were watching for happened: When the task 'Sen",
+      "steps": [
+        {
+          "call": "jarvis_watches",
+          "input": {}
+        },
+        {
+          "call": "task_create",
+          "input": {
+            "title": "Invoice Acme",
+            "body": "Follow-up from T-1 \"Send the contract to Acme\", completed 2026-10-01.",
+            "status": "not_started",
+            "priority": "none",
+            "dueAt": "2026-10-08T17:00:00-04:00",
+            "dueIsDate": true
+          }
+        },
+        {
+          "call": "jarvis_unwatch",
+          "input": {
+            "id": "01a15390-2b7d-7964-a885-0bf7a1c244ab"
+          }
+        },
+        {
+          "say": "I created T-2, \"Invoice Acme\", due Thursday, 2026-10-08. I ended the watch, since it only covered this one completion."
+        }
+      ]
+    }
+  ]
+}

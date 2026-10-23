@@ -14,6 +14,7 @@ import {
 import { and, asc, desc, eq, gt, ilike, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { body, describeRow, id, liveEntity, preview } from "../shared.ts";
+import { looksLikeCode } from "./code.ts";
 import { appendLog, routeLane } from "./log.ts";
 import { answerMention } from "./mention.ts";
 import { type OnScreen, onScreen, onScreenLine } from "./screen.ts";
@@ -230,6 +231,8 @@ export const chatModule = defineModule({
         // From your DM with Jarvis: its turn tells Slack how it went (D62).
         const fromSlack = ctx.caller.via === "slack" ? { via: "slack" } : {};
         const chosen = i.lane ?? routeLane(i.text);
+        // An ask about code runs on Opus (D82), decided here without a model call.
+        const code = looksLikeCode(i.text) || looking?.type === "github_pr";
         // Heard, or sent by a device on its own say-so (D42): kept as such, so the nightly memory
         // update doesn't take it for your words (D58).
         const heard = i.heard === true || ctx.caller.origin === "untrusted";
@@ -262,6 +265,7 @@ export const chatModule = defineModule({
             conversationId,
             text: i.text,
             lane: chosen,
+            ...(code ? { code } : {}),
             idx,
             heard: i.heard === true,
             ...fromSlack,
@@ -319,6 +323,7 @@ export const chatModule = defineModule({
           conversationId: string;
           text: string;
           lane: "fast" | "deep";
+          code?: boolean;
           heard?: boolean;
           idx: number;
           via?: string;
@@ -344,6 +349,7 @@ export const chatModule = defineModule({
         const context = {
           ...(p.via === "slack" ? { via: "slack" } : {}),
           ...(spoken ? { spoken } : {}),
+          ...(p.code ? { code: true } : {}),
         };
         return [
           {
@@ -367,4 +373,5 @@ ${onScreenLine(p.looking)}`
   ],
 });
 
+export { looksLikeCode } from "./code.ts";
 export { appendLog, type LogEntry, type LogKind, routeLane } from "./log.ts";

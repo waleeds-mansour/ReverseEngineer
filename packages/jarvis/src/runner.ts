@@ -11,12 +11,13 @@ import { claimNextTurn, type TurnRow } from "./claim.ts";
 import { classifyFailure, type Failure, failure } from "./failures.ts";
 import { reportJarvisHealth } from "./health.ts";
 import { type MemberTurnEnv, runMemberTurn } from "./member-turn.ts";
+import { modelFor } from "./models.ts";
 import { buildSystemPrompt } from "./prompt.ts";
 import { keepTaint, readFrom, restoreTaint } from "./taint.ts";
 import { ensureConversation, recapConversation, streamer, withRecap, writeLog } from "./threads.ts";
 import { buildTools, readRecord, type ToolCallRecord, type TurnState } from "./tools.ts";
 import { checkOpen } from "./trust.ts";
-import { alertLeftOut } from "./turn-alerts.ts";
+import { alertLeftOut, withoutTools } from "./turn-alerts.ts";
 import {
   bounded,
   Deadline,
@@ -33,6 +34,7 @@ import {
   type Ending,
   expireQueued,
   failTurn,
+  keepUsage,
   newEnding,
   recordEnd,
   recoverInterrupted,
@@ -60,14 +62,6 @@ export interface RunnerOptions {
 const REPLY_IN_THREAD = new Set(["mention", "assignment", "watch", "approval"]);
 /** Turns whose answer is pasted where nothing can approve it: they only rewrite text (D42). */
 const NO_TOOLS = new Set(["voice_command"]);
-const WEB_TOOLS = new Set(["WebSearch", "WebFetch"]);
-
-/** A request without the tools Claude rejected, so one bad definition can't stop every turn. */
-function withoutTools(req: BrainRequest, leftOut: Set<string>): BrainRequest {
-  if (leftOut.size === 0) return req;
-  const web = [...leftOut].some((t) => WEB_TOOLS.has(t)) ? { web: false } : {};
-  return { ...req, ...web, tools: req.tools.filter((t) => !leftOut.has(t.name)) };
-}
 
 export class TurnRunner {
   private readonly kernel: Kernel;
@@ -288,6 +282,7 @@ export class TurnRunner {
       system,
       prompt: turn.prompt,
       lane: turn.lane,
+      model: modelFor(turn),
       tools,
       ...(bare ? { web: false } : {}),
       sessionId: conv?.agentSessionId ?? null,
@@ -358,7 +353,7 @@ export class TurnRunner {
     let recapped = false;
     for (;;) {
       try {
-        return await untilEnded(signal, () => this.brain.run(req, events));
+        return keepUsage(end, await untilEnded(signal, () => this.brain.run(req, events)));
       } catch (err) {
         if (signal.aborted || usedTools(end)) throw err;
         const f = classifyFailure(err);

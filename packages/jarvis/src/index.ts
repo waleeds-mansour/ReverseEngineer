@@ -11,6 +11,7 @@ export * from "./engine.ts";
 export * from "./failures.ts";
 export * from "./health.ts";
 export * from "./heartbeat.ts";
+export * from "./models.ts";
 export * from "./outcomes.ts";
 export * from "./prompt.ts";
 export * from "./runner.ts";

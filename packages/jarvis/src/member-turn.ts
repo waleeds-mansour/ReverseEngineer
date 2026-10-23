@@ -42,6 +42,7 @@ import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { BrainEvents, BrainRequest, BrainResult, BrainTool } from "./brain.ts";
 import { afreshDue, answered, forgetSession, keepIfUnchanged } from "./member-session.ts";
+import { modelForJob } from "./models.ts";
 import { buildMemberPrompt, memberMessage } from "./prompts/member.ts";
 import { recapConversation, writeLog } from "./threads.ts";
 import { type ToolCallRecord, toModelJson, toolName } from "./tools.ts";
@@ -241,6 +242,7 @@ export async function runMemberTurn(
       system,
       prompt,
       lane: "fast",
+      model: modelForJob("slack_member"),
       tools: bounded(tools, deadline, ENDED),
       web: false,
       sessionId,

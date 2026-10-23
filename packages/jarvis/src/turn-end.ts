@@ -15,8 +15,10 @@ import {
 } from "@hearth/kernel";
 import type { LogEntry } from "@hearth/modules";
 import { and, count, eq, isNotNull, lt, sql } from "drizzle-orm";
+import { type BrainResult, sumUsage, type Usage } from "./brain.ts";
 import { BACKOFF_MINUTES, type Failure, failure, friendlyError, PASSING } from "./failures.ts";
 import { releaseHeartbeat } from "./heartbeat.ts";
+import { jobOf } from "./models.ts";
 import { applyOutcomes } from "./outcomes.ts";
 import { tellSlack } from "./slack-owner.ts";
 import { writeLog } from "./threads.ts";
@@ -66,6 +68,14 @@ export interface Ending {
   /** Whether the attempt has read outside content (an email, a web page) so far, or started
    * from some: its row says so once it ends, for what Today shows of it (D58). */
   readOutside: () => boolean;
+  /** Tokens its goes used so far, by model (D82). */
+  usage?: Usage;
+}
+
+/** Counts a go's tokens toward its attempt, for the turn log (D82). */
+export function keepUsage(e: Ending, result: BrainResult): BrainResult {
+  e.usage = sumUsage(e.usage, result.usage);
+  return result;
 }
 
 /** An attempt at a turn, before anything has happened in it. */
@@ -126,6 +136,8 @@ export async function recordEnd(
     durationMs: e.durationMs,
     firstTokenMs: e.firstTokenMs,
     tools: e.calls.length,
+    job: jobOf(turn),
+    ...(e.usage ? { usage: e.usage } : {}),
   });
   if (!conversationId) return;
   await writeLog(kernel, conversationId, [
