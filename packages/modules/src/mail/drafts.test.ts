@@ -218,6 +218,19 @@ describe("drafts and sending", () => {
     expect(g.gmail.sent).toHaveLength(1);
   });
 
+  it("tells the screens showing a draft when only who it's to changes", async () => {
+    const draft = await ok<DraftView>("mail.draft", { to: ["bo@x.example"], text: "Hi" });
+    const told = async () =>
+      (await t.events("entity.updated"))
+        .filter((e) => e.entityId === draft.id)
+        .map((e) => e.payload.changed);
+    const save = (input: object, baseVersion: number) =>
+      ok("mail.draft_update", { id: draft.id, text: "Hi", ...input, baseVersion });
+    await save({ to: ["sam@x.example"] }, 0);
+    await save({ text: "Hi Sam" }, 1);
+    expect(await told()).toEqual([["recipients"], ["body"]]);
+  });
+
   it("throws a draft away to the trash, and Undo brings it back", async () => {
     const draft = await ok<DraftView>("mail.draft", { to: ["bo@x.example"], text: "Hi" });
     await ok("mail.discard", { id: draft.id });

@@ -68,6 +68,8 @@ const lose = new Set<string>();
 let first: (() => void) | undefined;
 /** Every request Hearth got, by action (or approval). */
 let asked: string[] = [];
+/** The ones that give up if Hearth doesn't answer in time. */
+let timed: string[] = [];
 
 const reply = (body: unknown, status = 200) => Response.json(body, { status });
 const draft = (h: Hearth): MailDraft => ({
@@ -103,6 +105,7 @@ beforeEach(() => {
   lose.clear();
   first = undefined;
   asked = [];
+  timed = [];
   feed.clear();
   kept.clear();
   locked.clear();
@@ -116,6 +119,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
     const name = url.split("/").pop()!;
     asked.push(name);
+    if (init.signal) timed.push(name);
     await gates.get(name);
     if (lose.delete(name)) throw new TypeError("Failed to fetch");
     if (url.startsWith("/api/approvals/")) return reply({ status: "ok", result: {} });
@@ -242,6 +246,8 @@ describe("drafts kept on this device", () => {
     });
     expect([...kept.keys()]).toEqual(["draft:d2#bbbb"]);
     expect(asked.filter((n) => n === "mail.draft_update")).toHaveLength(2);
+    // A stalled one gives up, so it holds neither the copy nor the sends after it.
+    expect(timed).toEqual(asked);
   });
 
   it("keeps the copy of a draft Hearth no longer has, or can't be reached for", async () => {
@@ -272,5 +278,24 @@ describe("drafts kept on this device", () => {
     queryClient.setQueryData(["approval.list", {}], [{ ...send, id: "ap2" }]);
     expect((await decideQuietly("ap2", "approve")).outcome).toBe("done");
     expect(asked).toEqual(["ap1", "ap2"]);
+  });
+
+  it("tells a composer when another screen's changes to its draft wait here", async () => {
+    // A closed composer's copy, held as it goes to Hearth, so this one can't take it in.
+    kept.set("draft:d1#aaaa", leftHere("draft:d1#aaaa", "Hi Ana,\nRunning late."));
+    let letGo = () => {};
+    void locks.request("draft:d1#aaaa", () => new Promise<void>((done) => (letGo = done)));
+    const c = await compose();
+    expect(c.shown().text).toBe("Hi Ana,");
+    expect(await c.saver.othersKept()).toBe(true);
+    letGo();
+    const { sendKeptDrafts } = await import("./keptDrafts.ts");
+    await sendKeptDrafts();
+    expect(server?.text).toBe("Hi Ana,\nRunning late.");
+    // Its own copy doesn't count.
+    c.type("Hi Ana,\nRunning late!");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(kept.size).toBe(1);
+    expect(await c.saver.othersKept()).toBe(false);
   });
 });

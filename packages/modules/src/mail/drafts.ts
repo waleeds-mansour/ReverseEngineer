@@ -17,6 +17,7 @@ import {
   createEntity,
   defineAction,
   type ReadContext,
+  touchEntity,
   trashEntity,
   updateEntity,
 } from "@hearth/kernel";
@@ -315,6 +316,11 @@ export const draftActions = [
           version: sql`${mailDraft.version} + 1`,
         })
         .where(eq(mailDraft.entityId, i.id));
+      // Its words are the same, so updateEntity told no screen: they hear of the rest here.
+      const worded =
+        (i.subject !== undefined && i.subject !== before.subject) ||
+        (i.text !== undefined && i.text !== before.text);
+      if (!worded) await touchEntity(ctx, i.id, ["recipients"]);
       const d = (await loadDraft(ctx.tx, i.id))!;
       // What's in the draft now, for a Send that must match it.
       return { ...d, snapshot: snapshotOf(d) };

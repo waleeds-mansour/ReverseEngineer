@@ -15,7 +15,7 @@ import { randomHex } from "@hearth/core";
 import { createSignal } from "solid-js";
 import { ApiError, action, isOffline, isTransient, notYet } from "./api.ts";
 import { closedCopies, holdCopy, whenLetGo } from "./copyLocks.ts";
-import { dropUnsaved, saveUnsaved, takeOverUnsaved } from "./docStore.ts";
+import { dropUnsaved, saveUnsaved, takeOverUnsaved, unsavedCopies } from "./docStore.ts";
 import { backoff, onLiveEvent } from "./live.ts";
 import type { Remote, SaverOptions } from "./saverOptions.ts";
 
@@ -353,6 +353,8 @@ export function createSaver<T>(o: SaverOptions<T>) {
     },
     /** Whether a new name is waiting to be saved (so a copy from elsewhere doesn't undo it). */
     renaming: () => title !== undefined,
+    /** Whether this device keeps changes to it besides this screen's own copy. */
+    othersKept: async () => (await unsavedCopies(o.key)).some((k) => k.key !== own),
     /** Saves now: the version Hearth has it as, or null while it isn't all saved. */
     flush: () => save().then(() => (loaded() && !gone() && !unsaved() ? version : null)),
     /** Saves now and stops listening (closing it). */
