@@ -164,6 +164,8 @@ export const inboxModule = defineModule({
     }),
     defineAction({
       name: "inbox.notify",
+      // Telling you is within any job's ceiling (Spec 3).
+      reports: true,
       description:
         "Put something in the owner's inbox. Use urgency interrupt only for things that can't wait (it is rationed); otherwise normal.",
       input: z.object({

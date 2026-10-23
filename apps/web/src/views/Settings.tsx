@@ -22,6 +22,7 @@ import { NotionSettings } from "./NotionSettings.tsx";
 import { PasskeySettings } from "./PasskeySettings.tsx";
 import { PhoneSettings } from "./PhoneSettings.tsx";
 import { ReminderSettings } from "./ReminderSettings.tsx";
+import { RoleSettings } from "./RoleSettings.tsx";
 import { RoutineSettings } from "./RoutineSettings.tsx";
 import { Anchor, SettingsNav } from "./SettingsNav.tsx";
 import { SignInSettings } from "./SignInSettings.tsx";
@@ -174,6 +175,9 @@ export function Settings() {
         </Anchor>
         <Anchor id="routines">
           <RoutineSettings />
+        </Anchor>
+        <Anchor id="jobs">
+          <RoleSettings />
         </Anchor>
 
         <Anchor id="passkeys">

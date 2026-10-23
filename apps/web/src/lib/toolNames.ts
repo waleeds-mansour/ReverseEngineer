@@ -98,13 +98,15 @@ export function toolDoing(name: string): string {
  */
 export function toolSentence(
   name: string,
-  status: "running" | "done" | "pending_approval",
+  status: "running" | "done" | "pending_approval" | "refused",
   failed = false,
 ): string {
   const action = actionOf(name);
   const words = action.replace(/[._]/g, " ");
   const [doing, done] = SAID[action] ?? [`Using ${words}`, `Used ${words}`];
   if (failed) return `${doing} failed`;
+  // Refused or held: it never happened, so the line says it was only tried.
+  if (status === "refused") return `Tried ${lowerFirst(doing)}`;
   if (status === "running") return `${doing}…`;
   if (status === "pending_approval") return `Asked before ${lowerFirst(doing)}`;
   return done;

@@ -81,6 +81,8 @@ export const assistantModule = defineModule({
     deskAction,
     defineAction({
       name: "jarvis.observe",
+      // A note for your brief: within any job's ceiling (Spec 3).
+      reports: true,
       description:
         "Note something for the owner's next brief instead of interrupting them. Kinds: finding, risk, followup, fyi.",
       input: z.object({

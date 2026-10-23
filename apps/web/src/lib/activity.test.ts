@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   approvalOf,
   fromSlack,
+  runOutcome,
   runsOf,
   startedBy,
   type TimelineAction,
@@ -21,6 +22,7 @@ const turn = (t: Partial<TimelineTurn>): TimelineTurn => ({
   asked: null,
   via: null,
   source: null,
+  roleId: null,
   readOutside: false,
   conversationId: null,
   subjectId: null,
@@ -123,5 +125,40 @@ describe("a card's actions", () => {
     expect(approvalOf("pending")).toEqual({ word: "Waiting on you", tone: "warning" });
     expect(approvalOf("executed").word).toBe("You said yes");
     expect(approvalOf("odd").word).toBe("odd");
+  });
+});
+
+describe("a held call", () => {
+  it("says it was held for your brief, from read-only background work or a job", () => {
+    const held = (error: string | null) => runOutcome({ outcome: "denied", error });
+    expect(held("Pip's Research job only reads, so this was held for your brief.")).toEqual({
+      word: "Held for your brief",
+      tone: "warning",
+    });
+    expect(held("Pip's background work is read-only, so this was held for your brief.").word).toBe(
+      "Held for your brief",
+    );
+    expect(held("Slack members can't do this.").word).toBe("Not allowed");
+    expect(runOutcome({ outcome: "ok", error: null }).word).toBe("Done");
+  });
+
+  it("says a held or refused call was only tried", () => {
+    const [run] = runsOf({
+      approvals: [],
+      actions: [
+        {
+          id: "a1",
+          at: "2026-10-01T14:00:00Z",
+          action: "task.create",
+          risk: "internal",
+          outcome: "denied",
+          error: "Pip's Research job only reads, so this was held for your brief.",
+          durationMs: 0,
+          approvalId: null,
+          what: "Study for the test",
+        },
+      ],
+    });
+    expect(run).toMatchObject({ said: "Tried making a task", whats: ["Study for the test"] });
   });
 });

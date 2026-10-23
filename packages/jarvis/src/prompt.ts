@@ -2,7 +2,9 @@
 // the record it's about.
 import { readFileSync } from "node:fs";
 import { type DayRules, formatDateTime, localParts } from "@hearth/core";
-import type { TurnTrigger } from "@hearth/db";
+import type { DbOrTx, RoleCeiling, TurnMode, TurnTrigger } from "@hearth/db";
+import { backgroundReadOnly, getSetting } from "@hearth/kernel";
+import { type PromptRole, promptRole } from "./roles.ts";
 
 const BASE = readFileSync(new URL("./prompts/jarvis.md", import.meta.url), "utf8");
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -44,7 +46,17 @@ export interface PromptInput {
    * (D58): what it read, in a few words. Your message is still yours; what was read isn't.
    */
   readEarlier?: string | null;
+  /** The job (role) the turn runs for, if any (Spec 3). */
+  role?: PromptRole | null;
 }
+
+/** What a job's ceiling lets its turns do, for the turn's own lines. */
+const CEILING: Record<RoleCeiling, string> = {
+  read: "only reads: you can still note what you find for the owner's brief, put it in their inbox or comment on a record",
+  internal: "reads and changes things in Nook, but nothing outside it",
+  self_external: "can change the owner's own accounts, but does nothing other people would see",
+  outward: "can do what others see (asking first, as usual), but nothing hard to undo",
+};
 
 export function buildSystemPrompt(p: PromptInput): string {
   const day = DAYS[localParts(p.now, p.rules.timeZone).weekday];
@@ -70,6 +82,13 @@ export function buildSystemPrompt(p: PromptInput): string {
     lines.push(
       "- Background work is read-only: read, and keep notes, tasks and drafts in Nook. Anything else is refused and noted for the owner's brief, so don't try it.",
     );
+  if (p.role) {
+    lines.push(
+      `- You're doing your ${p.role.name} job, which ${CEILING[p.role.ceiling]}. Anything beyond that is held for the owner's brief, so don't try it.`,
+    );
+    // The owner's few lines for the job go last of this turn's: they slant it, nothing more.
+    if (p.role.personaNote) lines.push(`- For this job the owner wrote: ${p.role.personaNote}`);
+  }
   if (p.subject) lines.push("", "## The record this is about", "", p.subject);
   // Memory goes last, as data: it informs the turn but can't instruct it.
   if (p.memory)
@@ -81,4 +100,20 @@ export function buildSystemPrompt(p: PromptInput): string {
       p.memory,
     );
   return lines.join("\n");
+}
+
+/** A turn of Pip's own: the settings that bear on it, and its job, read for buildSystemPrompt. */
+export async function turnSystemPrompt(
+  db: DbOrTx,
+  turn: { trigger: TurnTrigger; mode: TurnMode; roleId: string | null },
+  p: Pick<PromptInput, "now" | "origin" | "subject" | "memory" | "readEarlier">,
+): Promise<string> {
+  return buildSystemPrompt({
+    ...p,
+    rules: await getSetting(db, "owner.dayRules"),
+    trigger: turn.trigger,
+    paused: await getSetting(db, "jarvis.paused"),
+    readOnly: await backgroundReadOnly(db, { kind: "agent", mode: turn.mode }),
+    role: await promptRole(db, turn.roleId),
+  });
 }

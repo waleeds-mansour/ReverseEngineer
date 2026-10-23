@@ -8,8 +8,9 @@ import { OutsideMark } from "../../components/OutsideMark.tsx";
 import { Badge, TextButton } from "../../components/ui.tsx";
 import {
   approvalOf,
-  outcomeOf,
+  isHeld,
   riskOf,
+  runOutcome,
   runsOf,
   startedBy,
   type TimelineGroup,
@@ -35,6 +36,8 @@ export function TimelineCard(props: {
   go: (route: PaneRoute, beside: boolean) => void;
   /** Opens a waiting approval's card in Updates. */
   answer: (approvalId: string, beside: boolean) => void;
+  /** The name of the job its turn ran for, if any (Spec 3). */
+  job?: string | undefined;
 }) {
   const g = () => props.group;
   const turn = () => g().turn;
@@ -60,6 +63,7 @@ export function TimelineCard(props: {
             {startedBy(g())}
           </TextButton>
         </Show>
+        <Show when={props.job}>{(job) => <Badge tone="accent">{job()}</Badge>}</Show>
         <Show when={turn()?.mode === "proactive"}>
           <Badge>On its own</Badge>
         </Show>
@@ -97,9 +101,12 @@ export function TimelineCard(props: {
                   <Show when={r.outcome === "error" && r.error}>
                     <span class="block text-meta text-danger">{r.error}</span>
                   </Show>
+                  <Show when={r.outcome === "denied" && isHeld(r.error) && r.error}>
+                    {(why) => <span class="block text-meta text-muted">{why()}</span>}
+                  </Show>
                 </span>
                 <Badge>{riskOf(r.risk)}</Badge>
-                <Badge tone={outcomeOf(r.outcome).tone}>{outcomeOf(r.outcome).word}</Badge>
+                <Badge tone={runOutcome(r).tone}>{runOutcome(r).word}</Badge>
               </li>
             )}
           </For>

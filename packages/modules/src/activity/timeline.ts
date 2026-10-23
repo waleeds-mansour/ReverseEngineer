@@ -8,7 +8,7 @@
 // a page is the latest `limit` turns, and the window runs from the oldest of them.
 import { PRINCIPAL } from "@hearth/core";
 import { approval, audit, entity, event, heartbeatItem, jarvisTurn, type Tx } from "@hearth/db";
-import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, or, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, or, type SQL, sql } from "drizzle-orm";
 import {
   HOW,
   type How,
@@ -33,17 +33,25 @@ const MAX_TOUCHED = 20;
 /** Events are stamped by their writer's clock, so seq order and time order can differ a little. */
 const SKEW_MS = 60_000;
 
-/** A page of the timeline, newest first: the latest `limit` turns and all Pip did around them. */
+/**
+ * A page of the timeline, newest first: the latest `limit` turns and all Pip did around them. With
+ * a job (`roleId`, Spec 3), only that job's turns and what they did.
+ */
 export async function readTimeline(
   tx: Tx,
-  i: { limit: number; before?: string | undefined },
+  i: { limit: number; before?: string | undefined; roleId?: string | undefined },
   now: Date,
 ): Promise<Timeline> {
   const end = i.before ? new Date(i.before) : now;
   const turns: TurnRow[] = await tx
     .select(TURN)
     .from(jarvisTurn)
-    .where(i.before ? lt(jarvisTurn.queuedAt, end) : undefined)
+    .where(
+      and(
+        i.before ? lt(jarvisTurn.queuedAt, end) : undefined,
+        i.roleId ? eq(jarvisTurn.roleId, i.roleId) : undefined,
+      ),
+    )
     .orderBy(desc(jarvisTurn.queuedAt))
     .limit(i.limit);
   const full = turns.length === i.limit;
@@ -55,8 +63,10 @@ export async function readTimeline(
   const upTo = (col: Parameters<typeof lt>[0]) => (i.before ? lt(col, end) : undefined);
 
   // Everything Pip did in the window, and anything the page's turns did after it (a yes later).
-  const ofTurns = (col: Parameters<typeof inArray>[0]): SQL | undefined =>
-    turnIds.length ? inArray(col, turnIds) : undefined;
+  // A job's page has only what its turns did: Pip's other work isn't the job's.
+  const ofTurns = (col: Parameters<typeof inArray>[0]): SQL =>
+    turnIds.length ? inArray(col, turnIds) : sql`false`;
+  const allPip = (cond: SQL | undefined) => (i.roleId ? undefined : cond);
   const actions = await tx
     .select()
     .from(audit)
@@ -65,7 +75,7 @@ export async function readTimeline(
         gte(audit.at, since),
         or(
           ofTurns(audit.correlationId),
-          and(eq(audit.principal, PRINCIPAL.jarvis), upTo(audit.at)),
+          allPip(and(eq(audit.principal, PRINCIPAL.jarvis), upTo(audit.at))),
         ),
       ),
     )
@@ -81,7 +91,7 @@ export async function readTimeline(
         or(
           ofTurns(approval.correlationId),
           ofTurns(approval.turnId),
-          and(eq(approval.requestedBy, PRINCIPAL.jarvis), upTo(approval.createdAt)),
+          allPip(and(eq(approval.requestedBy, PRINCIPAL.jarvis), upTo(approval.createdAt))),
         ),
       ),
     );
@@ -220,14 +230,15 @@ export async function readTimeline(
     : [];
   const takenBy = new Map(items);
   for (const item of taken) groups.get(takenBy.get(item.id)!)?.setAside.push(item);
-  const waiting = i.before
-    ? []
-    : await tx
-        .select(ITEM)
-        .from(heartbeatItem)
-        .where(isNull(heartbeatItem.takenAt))
-        .orderBy(asc(heartbeatItem.createdAt))
-        .limit(50);
+  const waiting =
+    i.before || i.roleId
+      ? []
+      : await tx
+          .select(ITEM)
+          .from(heartbeatItem)
+          .where(isNull(heartbeatItem.takenAt))
+          .orderBy(asc(heartbeatItem.createdAt))
+          .limit(50);
 
   const out: TimelineGroup[] = [...groups.values()].map(({ touchedBy, ...g }) => ({
     ...g,

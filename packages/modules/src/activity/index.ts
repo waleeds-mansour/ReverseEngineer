@@ -3,7 +3,7 @@
 // took up, grouped so each thing that set Pip off reads as one card (timeline.ts).
 import { defineAction, defineModule } from "@hearth/kernel";
 import { z } from "zod";
-import { isoDateTime } from "../shared.ts";
+import { id, isoDateTime } from "../shared.ts";
 import { readTimeline } from "./timeline.ts";
 
 export type {
@@ -33,6 +33,8 @@ export const activityModule = defineModule({
         limit: z.number().int().min(1).max(100).default(30),
         /** The previous page's `next`: turns queued before this. */
         before: isoDateTime.optional(),
+        /** Only what one of Pip's jobs did (role.list, Spec 3). */
+        roleId: id.optional(),
       }),
       risk: "read",
       // The audit log holds every input Pip sent: yours alone to read.
