@@ -1,7 +1,7 @@
 // The shapes every module is built from: actions (hands), events (senses), knowledge and
 // reflexes. Together they are the Jarvis contract (PLAN.md section 6.1).
 import type { Origin, PrincipalKind, Risk, SiteRules, Via } from "@hearth/core";
-import type { Db, TurnLane, TurnTrigger, Tx } from "@hearth/db";
+import type { Db, TurnLane, TurnMode, TurnTrigger, Tx } from "@hearth/db";
 import type { z } from "zod";
 
 /** Who is calling, and where the request ultimately came from. */
@@ -15,6 +15,11 @@ export interface Caller {
   causationId?: string;
   turnId?: string;
   conversationId?: string;
+  /**
+   * Set by Jarvis's runtime from its turn: "proactive" when you didn't start it. While background
+   * work is read-only (jarvis.backgroundReadOnly), such a call may only read and keep notes.
+   */
+  mode?: TurnMode;
   /**
    * Set by Jarvis's runtime when this particular call needs your yes whatever its risk, e.g.
    * opening an address an untrusted turn never saw (D25). The text is the approval's reason.

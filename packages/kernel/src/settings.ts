@@ -15,6 +15,11 @@ export interface Settings {
   "jarvis.paused": boolean;
   /** Proactive model turns per local day. Reactive turns are counted but never blocked. */
   "jarvis.proactiveTurnsPerDay": number;
+  /**
+   * Pip's work that you didn't start (a proactive turn) may only read and keep its own notes.
+   * Anything else it tries is refused, never asked, and noted for your brief (Spec 5).
+   */
+  "jarvis.backgroundReadOnly": boolean;
   "owner.dayRules": DayRules;
   "owner.maxInterruptsPerDay": number;
   /** Warn about a task this many hours before it's due. */
@@ -59,6 +64,7 @@ export interface Settings {
 export const SETTING_DEFAULTS: Settings = {
   "jarvis.paused": false,
   "jarvis.proactiveTurnsPerDay": 60,
+  "jarvis.backgroundReadOnly": false,
   "owner.dayRules": DEFAULT_DAY_RULES,
   "owner.maxInterruptsPerDay": 8,
   "tasks.dueSoonHours": 24,

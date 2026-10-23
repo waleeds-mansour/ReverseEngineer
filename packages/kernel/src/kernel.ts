@@ -18,7 +18,13 @@ import {
   stackFrames,
 } from "./errors.ts";
 import { appendEvents } from "./events.ts";
-import { guardAgentCall, guardsCaller, isGuarded, withoutGiven } from "./guard.ts";
+import {
+  backgroundReadOnly,
+  guardAgentCall,
+  guardsCaller,
+  isGuarded,
+  withoutGiven,
+} from "./guard.ts";
 import { newId } from "./ids.ts";
 import { type RunHooks, runIo } from "./io.ts";
 import { decide } from "./policy.ts";
@@ -89,7 +95,9 @@ export class Kernel {
     // instead of a refusal (D62). The guard below only adds an askFirst, so the decision after it
     // can turn an allow into an ask but can't let through what this refuses. A standing rule
     // never turns a refusal around, so it's looked up after, for what the call reaches (D70).
-    const refused = decide(def, caller, false);
+    // Background work held to reads is refused here too, before anything of its input runs.
+    const readOnly = await backgroundReadOnly(this.db, caller);
+    const refused = decide(def, caller, false, readOnly);
     if (refused.kind === "deny")
       return this.refuse(def, caller, raw, refused.reason, correlationId);
     const parsed = def.input.safeParse(raw);
@@ -111,7 +119,7 @@ export class Kernel {
       if (g.askFirst) caller = { ...caller, askFirst: caller.askFirst ?? g.askFirst };
     }
     const standing = await this.hasStandingRule(def.name, caller, this.db, ruleTarget(def, input));
-    const decision = decide(def, caller, standing);
+    const decision = decide(def, caller, standing, readOnly);
     if (decision.kind === "deny")
       return this.refuse(def, caller, input, decision.reason, correlationId);
     if (decision.kind === "ask") {
@@ -268,7 +276,8 @@ export class Kernel {
         const parsed = def.input.safeParse(rawInput ?? {});
         if (!parsed.success) throw new ActionError("invalid_input", z.prettifyError(parsed.error));
         const target = ruleTarget(def, parsed.data);
-        const d = decide(def, caller, await this.hasStandingRule(def.name, caller, tx, target));
+        const standing = await this.hasStandingRule(def.name, caller, tx, target);
+        const d = decide(def, caller, standing, await backgroundReadOnly(tx, caller));
         if (d.kind !== "allow") throw new ActionError("forbidden", `${name}: ${d.reason}`);
         const started = performance.now();
         const result = (await def.handler(parsed.data, ctx)) as T;

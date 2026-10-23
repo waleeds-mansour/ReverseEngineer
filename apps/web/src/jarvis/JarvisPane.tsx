@@ -159,6 +159,11 @@ export function JarvisPane() {
         <Show when={status.data?.jarvisPaused}>
           <Badge tone="warning">Paused</Badge>
         </Show>
+        <Show when={status.data?.backgroundReadOnly}>
+          <Badge title="What Pip does on its own only reads and keeps notes. Settings has the switch.">
+            Background: read-only
+          </Badge>
+        </Show>
         <Show
           when={renaming() !== null && renaming() === current()?.id}
           fallback={

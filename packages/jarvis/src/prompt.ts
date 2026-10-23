@@ -33,6 +33,8 @@ export interface PromptInput {
   trigger: TurnTrigger;
   origin: string;
   paused: boolean;
+  /** Work the owner didn't start, while background work is read-only (Spec 5). */
+  readOnly?: boolean;
   /** The record the turn is about, as markdown, if any. */
   subject: string | null;
   /** What Jarvis remembers that bears on this turn, already wrapped as data. */
@@ -63,6 +65,10 @@ export function buildSystemPrompt(p: PromptInput): string {
   if (p.paused)
     lines.push(
       "- The owner has paused your proactive work. Answer what's asked; start nothing new on your own.",
+    );
+  if (p.readOnly)
+    lines.push(
+      "- Background work is read-only: read, and keep notes, tasks and drafts in Nook. Anything else is refused and noted for the owner's brief, so don't try it.",
     );
   if (p.subject) lines.push("", "## The record this is about", "", p.subject);
   // Memory goes last, as data: it informs the turn but can't instruct it.
