@@ -1,21 +1,52 @@
 // A tool Pip needs mid-task and you haven't connected (Spec 4): the turn leaves you a card that
 // opens Settings and waits; once you connect it, Pip picks the task back up by itself. It
 // reminds you once after about 4 hours and gives up after a day, saying so in the brief. A
-// background turn's card counts against the day's interrupts, and outside content can't word it.
+// background turn's card counts against the day's interrupts, picking its work up again keeps it
+// read-only when background work is (Spec 5), and outside content can't word the card.
 import { randomBytes } from "node:crypto";
-import { jarvisTurn, notification, observation, schedule } from "@hearth/db";
-import { jarvisCaller, newId, ownerCaller, setSetting } from "@hearth/kernel";
+import { approval, jarvisTurn, notification, observation, schedule } from "@hearth/db";
+import {
+  defineAction,
+  defineModule,
+  jarvisCaller,
+  newId,
+  ownerCaller,
+  setSetting,
+} from "@hearth/kernel";
 import { FakeNotion, NOTION_SERVICE, VAULT_SERVICE, Vault } from "@hearth/modules";
 import { asc, eq, like } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { z } from "zod";
 import { createJarvisHarness, type JarvisHarness } from "./testing.ts";
+
+/** Something outward for a picked-up turn to try. */
+const probe = defineModule({
+  name: "probe",
+  description: "Test module",
+  entityTypes: [],
+  events: [],
+  kernelEvents: ["notification.created"],
+  knowledge: {},
+  reflexes: [],
+  noReflexesBecause: "A test module",
+  actions: [
+    defineAction({
+      name: "probe.send",
+      description: "Sends something to someone",
+      input: z.object({ to: z.string() }),
+      risk: "outward",
+      summarize: (i) => `Send to ${i.to}`,
+      handler: async () => ({ sent: true }),
+    }),
+  ],
+});
 
 let h: JarvisHarness;
 let n: FakeNotion;
 const HOUR = 60 * 60_000;
 
 beforeEach(async () => {
-  h = await createJarvisHarness("2026-10-01T14:00:00Z"); // Thursday 10 a.m. Eastern
+  h = await createJarvisHarness("2026-10-01T14:00:00Z", { modules: [probe] }); // Thu 10 a.m. ET
   n = new FakeNotion();
   n.board("board-1", "Otopair");
   h.kernel.services[NOTION_SERVICE] = n.api();
@@ -195,6 +226,24 @@ describe("Pip asks you to connect a tool it needs", () => {
     const picked = (await turns()).filter((t) => t.trigger === "approval");
     // Background work it picks up again is still background work, not yours.
     expect(picked.map((t) => t.mode)).toEqual(["proactive", "proactive"]);
+  });
+
+  it("keeps read-only background work read-only when it picks it up again (Spec 5)", async () => {
+    await setSetting(h.kernel.db, "jarvis.backgroundReadOnly", true);
+    await backgroundTurn();
+    // Reading Notion and leaving a card don't reach outside Nook, so read-only allows them.
+    expect(await cards()).toHaveLength(1);
+    h.brain.next([{ call: "probe_send", input: { to: "Ana" } }]);
+    await ok("notion.connect", { token: n.token });
+    await h.settle();
+    const [, picked] = await turns();
+    expect(picked).toMatchObject({ trigger: "approval", mode: "proactive", status: "done" });
+    // Its outward step is held for the brief, not asked: connecting didn't make the work yours.
+    expect(await h.tdb.db.select().from(approval)).toEqual([]);
+    const notes = await h.tdb.db.select().from(observation);
+    expect(notes.map((o) => o.text)).toContain(
+      "Held while background work was read-only: Send to Ana",
+    );
   });
 
   it("words the card in Pip's own words, never in words from outside content", async () => {
