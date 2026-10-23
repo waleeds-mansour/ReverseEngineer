@@ -1,7 +1,7 @@
 // Jarvis's tools are Hearth's actions: the same registry the UI uses, so there are no side
 // doors. Every call runs through the kernel as Jarvis, with the turn's trust level.
 import { asUntrusted, formatDateTime, type Origin, type Risk, type SiteRules } from "@hearth/core";
-import { entity } from "@hearth/db";
+import { entity, type TurnMode } from "@hearth/db";
 import {
   type ActionDef,
   type Caller,
@@ -17,6 +17,7 @@ import {
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import type { BrainTool } from "./brain.ts";
+import { heldWords, noteHeld, wasHeld } from "./held.ts";
 import { readFrom } from "./taint.ts";
 import { vouchFor } from "./trust.ts";
 
@@ -34,6 +35,8 @@ export interface TurnState {
   conversationId: string;
   subjectId: string | null;
   origin: Origin;
+  /** Proactive when you didn't start it: held to reads and notes while background is read-only. */
+  mode?: TurnMode;
   causationId: string | null;
   calls: ToolCallRecord[];
   postedToSubject: boolean;
@@ -89,6 +92,7 @@ export function buildTools(kernel: Kernel, state: TurnState, log: LogFn): BrainT
       turnId: state.turnId,
       conversationId: state.conversationId,
       correlationId: state.turnId,
+      ...(state.mode ? { mode: state.mode } : {}),
       ...(state.causationId ? { causationId: state.causationId } : {}),
       ...(state.asked ? { asked: true, ...(state.heard ? { heard: true } : {}) } : {}),
     }),
@@ -98,6 +102,15 @@ export function buildTools(kernel: Kernel, state: TurnState, log: LogFn): BrainT
       sites: state.sites,
     },
   });
+
+  // What background work was refused while read-only, noted once each for your brief (Spec 5).
+  const held = new Set<string>();
+  const holdForBrief = async (def: ActionDef, input: unknown) => {
+    const what = heldWords(def, input);
+    if (held.has(what)) return;
+    held.add(what);
+    await noteHeld(kernel, what, caller());
+  };
 
   const tools: BrainTool[] = [];
   for (const def of kernel.registry.allActions()) {
@@ -124,6 +137,7 @@ export function buildTools(kernel: Kernel, state: TurnState, log: LogFn): BrainT
           risk: def.risk,
           status: res.status === "ok" ? "ok" : res.status,
         });
+        if (wasHeld(res)) await holdForBrief(def, input);
         // A site opened while the turn was still trusted can be acted on after it reads (D30).
         if (res.status === "ok" && url) vouchFor(state, url);
         if (

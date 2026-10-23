@@ -16,6 +16,7 @@ import {
 } from "@hearth/kernel";
 import { eq } from "drizzle-orm";
 import { proactiveGate } from "./budget.ts";
+import { heldWords, noteHeld, wasHeld } from "./held.ts";
 
 export interface OutcomeSource {
   event: HearthEvent;
@@ -35,7 +36,10 @@ async function setLastOutcome(kernel: Kernel, scheduleId: string, outcome: strin
 
 function callerFor(src: OutcomeSource): Caller {
   const extra = { causationId: src.event.id, correlationId: src.event.correlationId ?? newId() };
-  return src.mode === "always" ? systemCaller(extra) : jarvisCaller(src.event.origin, extra);
+  // A proactive reflex's act is background work like a proactive turn's call (Spec 5).
+  return src.mode === "always"
+    ? systemCaller(extra)
+    : jarvisCaller(src.event.origin, { ...extra, mode: src.mode });
 }
 
 export async function applyOutcomes(
@@ -178,7 +182,9 @@ export async function applyOutcomes(
           o.input,
           o.ask ? { ...caller, askFirst: o.ask } : caller,
         );
-        if (res.status !== "ok" && !(o.ask && res.status === "pending_approval"))
+        const def = kernel.registry.action(o.action);
+        if (def && wasHeld(res)) await noteHeld(kernel, heldWords(def, o.input), caller);
+        else if (res.status !== "ok" && !(o.ask && res.status === "pending_approval"))
           log(`${src.name}: ${o.action} -> ${JSON.stringify(res)}`);
         break;
       }

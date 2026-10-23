@@ -2,7 +2,7 @@
 // logs everything to the conversation, posts the reply where it was asked, and records how the
 // turn ended. A failure is told in plain words and tried again only when that's safe (D54).
 import { conversation, jarvisTurn } from "@hearth/db";
-import { getSetting, jarvisCaller, type Kernel } from "@hearth/kernel";
+import { backgroundReadOnly, getSetting, jarvisCaller, type Kernel } from "@hearth/kernel";
 import { type LogEntry, recallMemory, renderMemory } from "@hearth/modules";
 import { eq } from "drizzle-orm";
 import type pg from "pg";
@@ -193,6 +193,7 @@ export class TurnRunner {
       conversationId: cid,
       subjectId: turn.subjectId,
       origin: turn.origin,
+      mode: turn.mode,
       causationId: null,
       calls: end.calls as ToolCallRecord[],
       postedToSubject: false,
@@ -252,6 +253,7 @@ export class TurnRunner {
       trigger: turn.trigger,
       origin: state.origin,
       paused: await getSetting(this.kernel.db, "jarvis.paused"),
+      readOnly: await backgroundReadOnly(this.kernel.db, { kind: "agent", mode: turn.mode }),
       subject,
       memory,
       // Untrusted only because of what an earlier turn here read: this one's ask is still yours.

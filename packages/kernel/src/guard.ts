@@ -4,6 +4,7 @@
 // turn's tools means a reflex's "act", a self-test step and a turn's tool call all get the same
 // checks, and an approval you give later runs exactly what was checked and shown.
 import { normalizeUrl, type SiteRules } from "@hearth/core";
+import type { DbOrTx } from "@hearth/db";
 import { ActionError } from "./errors.ts";
 import type { Kernel } from "./kernel.ts";
 import { getSetting } from "./settings.ts";
@@ -26,6 +27,19 @@ export function isGuarded(def: ActionDef): boolean {
  */
 export function guardsCaller(caller: Pick<Caller, "kind">): boolean {
   return caller.kind === "agent" || caller.kind === "member";
+}
+
+/**
+ * Whether background work is read-only for this caller: a proactive turn of Pip's, while you've
+ * set jarvis.backgroundReadOnly. No other caller reads the setting. `decide` holds it to reads
+ * and notes (Spec 5).
+ */
+export async function backgroundReadOnly(
+  db: DbOrTx,
+  caller: Pick<Caller, "kind" | "mode">,
+): Promise<boolean> {
+  if (caller.kind !== "agent" || caller.mode !== "proactive") return false;
+  return getSetting(db, "jarvis.backgroundReadOnly");
 }
 
 /** The input without a snapshot: Hearth fills that in, so what a caller put there is never shown. */

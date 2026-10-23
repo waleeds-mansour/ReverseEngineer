@@ -2,6 +2,7 @@
 // asking, and pick this device's theme.
 
 import { For, Show } from "solid-js";
+import { Checkbox } from "../components/kit/Checkbox.tsx";
 import { Badge, Button, PaneHeader } from "../components/ui.tsx";
 import { ruleWords } from "../lib/approvals.ts";
 import { ago } from "../lib/format.ts";
@@ -79,6 +80,22 @@ export function Settings() {
                   >
                     {s().jarvisPaused ? "Resume" : "Pause"}
                   </Button>
+                </div>
+              )}
+            </Show>
+            <Show when={status.data}>
+              {(s) => (
+                <div class="space-y-1 rounded-md bg-sunk px-3 py-2">
+                  <Checkbox
+                    checked={s().backgroundReadOnly ?? false}
+                    onChange={(readOnly) => void act("jarvis.background", { readOnly })}
+                  >
+                    <span class="font-medium">Background work is read-only</span>
+                  </Checkbox>
+                  <p class="text-sm text-muted">
+                    What Pip does on its own can only read and keep notes. Anything else is held for
+                    your brief, and Pip won't ask you about it.
+                  </p>
                 </div>
               )}
             </Show>

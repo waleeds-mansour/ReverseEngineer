@@ -95,6 +95,10 @@ export const systemModule = defineModule({
       kind: "jarvis.paused_changed",
       description: "You paused or resumed Pip's proactive work. Payload: paused.",
     },
+    {
+      kind: "jarvis.background_changed",
+      description: "You made Pip's background work read-only, or not. Payload: readOnly.",
+    },
   ],
   knowledge: {},
   actions: [
@@ -121,6 +125,8 @@ export const systemModule = defineModule({
         return {
           setup: await setupState(ctx.tx),
           jarvisPaused: await getSetting(ctx.tx, "jarvis.paused"),
+          /** Pip's own work only reads and keeps notes; the rest is held for the brief (Spec 5). */
+          backgroundReadOnly: await getSetting(ctx.tx, "jarvis.backgroundReadOnly"),
           /** When the Jarvis process last checked in (every 30 s) and since when it's up (D54). */
           jarvisAlive: await getSetting(ctx.tx, "jarvis.alive"),
           // A component that stopped reporting shows as failing, not as its last word.
@@ -212,6 +218,19 @@ export const systemModule = defineModule({
         await setSetting(ctx.tx, "jarvis.paused", false);
         ctx.emit({ kind: "jarvis.paused_changed", payload: { paused: false } });
         return { paused: false };
+      },
+    }),
+    defineAction({
+      name: "jarvis.background",
+      description:
+        "Make Pip's background work read-only, or not. Read-only, work you didn't start only reads and keeps notes; anything else is refused and noted for your brief.",
+      input: z.object({ readOnly: z.boolean() }),
+      risk: "internal",
+      callers: ["owner"],
+      async handler(i, ctx) {
+        await setSetting(ctx.tx, "jarvis.backgroundReadOnly", i.readOnly);
+        ctx.emit({ kind: "jarvis.background_changed", payload: { readOnly: i.readOnly } });
+        return { readOnly: i.readOnly };
       },
     }),
   ],

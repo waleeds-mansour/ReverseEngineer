@@ -174,6 +174,8 @@ export interface SystemStatus {
   /** What's connected so far, for the "Set up Hearth" checklist (absent from older servers). */
   setup?: { google: boolean; chrome: boolean; phone: boolean; desktop: boolean };
   jarvisPaused: boolean;
+  /** Pip's own work only reads and keeps notes (absent from older servers). */
+  backgroundReadOnly?: boolean;
   /** When the Jarvis process last checked in; null before it ever has. */
   jarvisAlive: { at: string; since: string; pid: number } | null;
   components: Record<string, { status: "ok" | "degraded" | "failing"; detail: string; at: string }>;

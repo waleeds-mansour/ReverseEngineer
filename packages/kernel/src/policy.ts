@@ -25,14 +25,21 @@ function mayCall(action: Pick<ActionDef, "callers">, kind: Caller["kind"]): bool
  * or touch credentials (D62). */
 const BEYOND_MEMBERS: Risk[] = ["self_external", "destructive", "secret"];
 
+/** Why background work's call was refused while read-only. The turn notes it for the brief. */
+export const HELD_FOR_BRIEF =
+  "Pip's background work is read-only, so this was held for your brief.";
+
 /**
  * Decides whether a call runs now, waits for your approval, or is refused.
  * `standingRule` is true when you've written "this principal may do this action without asking".
+ * `backgroundReadOnly` is the jarvis.backgroundReadOnly setting, which only a proactive turn's
+ * calls read.
  */
 export function decide(
   action: Pick<ActionDef, "risk" | "callers">,
   caller: Caller,
   standingRule: boolean,
+  backgroundReadOnly = false,
 ): Decision {
   if (!mayCall(action, caller.kind)) {
     return deny(
@@ -51,6 +58,15 @@ export function decide(
       return allow;
     case "agent": {
       if (risk === "secret") return deny("Pip never touches credentials.");
+      // Work you didn't start, while background work is read-only: it reads and keeps its own
+      // notes, and the rest is refused rather than asked, so nothing wakes you for it. A read
+      // that would ask (an address only outside content showed it) is held too.
+      if (
+        backgroundReadOnly &&
+        caller.mode === "proactive" &&
+        (caller.askFirst || (risk !== "read" && risk !== "internal"))
+      )
+        return deny(HELD_FOR_BRIEF);
       if (caller.askFirst) return ask(caller.askFirst);
       const untrusted = caller.origin === "untrusted";
       if (risk === "read" || risk === "internal") return allow;
