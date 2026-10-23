@@ -1,9 +1,9 @@
 # Integrating "agent-teammate" tech into Hearth / Nook / Pip
 
-*Draft plan — 2026-10-22. Based on REA of OpenAI **dots** and xAI **Grok Bot**, mapped onto the real Hearth codebase.*
+*Draft plan — 2026-10-22. Based on OpenAI **dots**' and xAI **Grok Bot**'s launch pages, mapped onto the real Hearth codebase.*
 
 ## TL;DR
-The reverse-engineering of dots and Grok Bot is, mostly, **validation**: the industry converged on exactly the architecture Pip already has — an always-on agent, a proactive background loop, memory, an approval/auto-review gate, and browser control. You built the hard parts. The *new* ideas worth stealing are a short list, and two of them (an "Activity View" and **learn-by-demonstration routines**) map cleanly onto your "less manual / ship visible / reliability-first" priorities. One of them (an agent "computer") must be **re-shaped** to respect your no-container rule (D8).
+Studying dots and Grok Bot is, mostly, **validation**: the industry converged on exactly the architecture Pip already has — an always-on agent, a proactive background loop, memory, an approval/auto-review gate, and browser control. You built the hard parts. The *new* ideas worth stealing are a short list, and two of them (an "Activity View" and **learn-by-demonstration routines**) map cleanly onto your "less manual / ship visible / reliability-first" priorities. One of them (an agent "computer") must be **re-shaped** to respect your no-container rule (D8).
 
 ## What dots and Grok Bot both do (the convergent pattern)
 Both are: an **always-on agent** with its **own computer + browser**, that **signs into your tools and acts in them**, does **proactive background work**, turns **demonstrated workflows into reusable routines**, runs **auto-review/approval** on risky actions, lets you **watch/inspect its work**, and runs **multiple agents in parallel that hand work to each other**.
@@ -24,7 +24,7 @@ Both are: an **always-on agent** with its **own computer + browser**, that **sig
 | Multi-channel presence | ChatGPT/Slack/Teams/SMS | ✅ web + Slack (owner + member) | add channels later |
 | Named identity + onboarding | the "Dot" mascot cast | ✅ Pip persona (`prompts/jarvis.md`) | polish only |
 
-> **Provenance:** every row except the last is a *marketing-page* claim from both products (`openai.com/index/introducing-dots/`, `x.ai/bot`) — not reverse-engineered. Only two things came from actual REA of their binaries: ChatGPT's **Dot mascot/onboarding** client layer (last row) and Grok Bot's **native capture toolkit** (window-capture/OCR/process-list/CDP), the latter deliberately *not* adopted. Track 2 (demonstration routines) is **Grok-only**; the rest are from both.
+> **Provenance:** every row is a *launch-page* claim from the two products (`openai.com/index/introducing-dots/`, `x.ai/bot`). Track 2 (demonstration routines) is **Grok-only**; the rest are from both.
 
 ## Prioritized tracks (ordered: value × low-risk × fits your rules)
 
