@@ -86,6 +86,8 @@ export async function applyOutcomes(
             source: src.name,
             askedAt: src.event.at.toISOString(),
             ...(scheduleId ? { scheduleId } : {}),
+            // Started by GitHub: about code, so Opus (D82).
+            ...(src.event.kind.startsWith("github.") ? { code: true } : {}),
           },
           conversationId: o.conversationId ?? null,
           subjectId: o.subjectId ?? null,

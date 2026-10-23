@@ -37,6 +37,23 @@ describe("the job a turn does", () => {
     expect(jobOf(turn("routine", "deep", { routine: "Check the garden" }))).toBe("routine");
   });
 
+  it("runs anything marked as code on Opus, from the turns that can be about code", () => {
+    const code = { code: true };
+    for (const [trigger, lane] of [
+      ["chat", "fast"],
+      ["mention", "deep"],
+      ["assignment", "deep"],
+      ["assignment", "fast"],
+      ["reflex", "deep"],
+      ["watch", "fast"],
+    ] as const)
+      expect(modelFor(turn(trigger, lane, code), {})).toMatchObject({ job: "code", tier: "opus" });
+    // A Slack member, a card you answered or a voice command stays as it was.
+    expect(jobOf(turn("slack_member", "fast", code))).toBe("slack_member");
+    expect(jobOf(turn("approval", "fast", code))).toBe("approval");
+    expect(jobOf(turn("voice_command", "fast", code))).toBe("voice");
+  });
+
   it("drafts replies on Sonnet and sorts the rest of the heartbeat on Haiku", () => {
     const beat = (drafts?: boolean) =>
       modelFor(
@@ -64,9 +81,9 @@ describe("the tier map", () => {
     });
   });
 
-  it("keeps Opus for the work Pip does alone", () => {
+  it("keeps Opus for the work Pip does alone and for code", () => {
     const onOpus = Object.entries(JOBS).filter(([, j]) => j.tier === "opus");
-    expect(onOpus.map(([name]) => name)).toEqual(["task.work"]);
+    expect(onOpus.map(([name]) => name)).toEqual(["task.work", "code"]);
   });
 
   it("lets the owner point a tier at another model, or move a job, from .env", () => {

@@ -8,6 +8,7 @@ import { GOOGLE_SERVICE } from "@hearth/modules";
 import { FakeGoogle } from "@hearth/modules/google-testing";
 import { eq } from "drizzle-orm";
 import type { JarvisHarness } from "../testing.ts";
+import { CODE_SCENARIOS } from "./scenarios-code.ts";
 import { TIER_SCENARIOS } from "./scenarios-tiers.ts";
 
 export interface Scenario {
@@ -227,6 +228,7 @@ export const SCENARIOS: Scenario[] = [
     },
   },
   ...TIER_SCENARIOS,
+  ...CODE_SCENARIOS,
 ];
 
 /** A fresh Google for a scenario, plugged into its harness. */

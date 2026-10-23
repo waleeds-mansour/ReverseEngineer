@@ -1,6 +1,6 @@
 // Which Claude model does which of Pip's jobs (D82). Three tiers: Haiku for quick decisions and
-// short rewrites, Sonnet for conversations and most work, Opus for work Pip does on its own and
-// for taking over a turn Sonnet couldn't finish. Every job and its tier is in JOBS below. The
+// short rewrites, Sonnet for conversations and most work, Opus for work Pip does on its own,
+// anything about code, and taking over a turn Sonnet couldn't finish. Every job and its tier is in JOBS below. The
 // owner can point a tier at another model, or move a job to another tier, from .env.
 import type { TurnLane, TurnTrigger } from "@hearth/db";
 
@@ -28,6 +28,12 @@ export const JOBS = {
   "chat.deep": { tier: "sonnet", effort: "high" },
   /** A task you assigned to Pip: it works it alone, start to finish. */
   "task.work": { tier: "opus" },
+  /**
+   * Anything about code, always Opus (the owner, 2026-10-23): an ask in chat or an @mention that
+   * looks like code (looksLikeCode, no model call), a task about code (its work and its thread),
+   * and turns GitHub started. Spec 2's code runs in a worktree will use it too, when they're built.
+   */
+  code: { tier: "opus" },
   /** You commented on a task Pip is working. */
   "task.thread": { tier: "sonnet", effort: "medium" },
   /** You answered one of Pip's cards: it carries on. */
@@ -96,8 +102,12 @@ const ROUTINE_JOBS = new Set<Job>([
   "prep",
 ]);
 
+/** Turns that run as the code job when what started them marked them as about code. */
+const CODE_TRIGGERS = new Set<TurnTrigger>(["chat", "mention", "assignment", "reflex", "watch"]);
+
 /** The job a turn does, from what started it. */
 export function jobOf(turn: TurnLike): Job {
+  if (turn.context.code === true && CODE_TRIGGERS.has(turn.trigger)) return "code";
   switch (turn.trigger) {
     case "chat":
     case "mention":

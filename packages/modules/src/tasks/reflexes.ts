@@ -9,6 +9,7 @@ import {
 } from "@hearth/core";
 import { getSetting, type ReflexDef } from "@hearth/kernel";
 import { liveEntity } from "../shared.ts";
+import { taskIsCode } from "./code.ts";
 import { loadTask } from "./view.ts";
 
 export const workAssigned: ReflexDef = {
@@ -17,15 +18,19 @@ export const workAssigned: ReflexDef = {
     "When you assign a task to Pip, it starts working on it and reports in the task's thread.",
   mode: "reactive",
   on: ["task.assigned"],
-  run(event) {
+  async run(event, ctx) {
     if (event.payload.to !== "jarvis") return [];
     const key = `T-${event.payload.number}`;
+    const t = await loadTask(ctx.db, { id: event.entityId! });
+    const title = String(event.payload.title ?? "");
+    const code = await taskIsCode(ctx.db, t ?? { id: event.entityId!, title, body: null });
     return [
       {
         kind: "turn",
         trigger: "assignment",
         lane: "deep",
         subjectId: event.entityId,
+        ...(code ? { context: { code } } : {}),
         dedupeKey: `assigned:${event.entityId}:${event.id}`,
         prompt: [
           `You've been assigned task ${key}, "${event.payload.title}". Work it now.`,
@@ -58,6 +63,9 @@ export const answerTaskThread: ReflexDef = {
         trigger: "assignment",
         lane: "fast",
         subjectId: parent.id,
+        ...((await taskIsCode(ctx.db, parent, comment.body ?? ""))
+          ? { context: { code: true } }
+          : {}),
         dedupeKey: `thread:${comment.id}`,
         prompt: `New comment on ${parent.key}, which you're working on:\n\n${mentionContext(comment.body ?? "", 0)}`,
       },

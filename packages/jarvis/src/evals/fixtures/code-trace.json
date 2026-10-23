@@ -1,0 +1,25 @@
+{
+  "scenario": "code-trace",
+  "recordedWith": "tiers",
+  "recordedAt": "2026-10-23T08:36:05.838Z",
+  "turns": [
+    {
+      "promptStart": "Pip crashed overnight with this, what's going on?\n\nTypeError",
+      "steps": [
+        {
+          "call": "system_status",
+          "input": {}
+        },
+        {
+          "call": "jarvis_activity",
+          "input": {
+            "limit": 30
+          }
+        },
+        {
+          "say": "I can't tell you exactly what happened, because I can't open the code from here. I don't have access to `packages/jarvis/src/claim.ts`, and Nook's records show no trace of the crash. Here's what the stack trace most likely means and where to look.\n\n**What Nook shows**\n- My activity log has only this conversation. There are no failed or stuck turns from overnight, which fits the runner crashing before it wrote anything.\n- No scheduled routine has run yet: the heartbeat, brief, journal and others all have no last run. So nothing overnight completed, or the crash happened before the scheduler recorded it.\n- I'm not paused and my status shows no errors. The \"alive\" check is blank, so the logs can't confirm the runner is up right now.\n\n**Likely cause**\n`nextTurn` at `claim.ts:41` reads `.id` on something that's `undefined`. In a function that claims the next queued turn, that's almost always the claim coming back empty, then being used without a check. The usual pattern looks like `const [row] = await claim(...); return row.id;` or `result.rows[0].id`. Two common ways it comes back empty:\n\n1. **The queue is empty.** Overnight there's often nothing to run. If `tick()` calls `nextTurn` on a timer and `nextTurn` assumes it found a row, the first quiet tick throws.\n2. **Two runners raced for the same turn.** A runner sees a turn, another one claims it first, and the update comes back with nothing. This happens after a restart or with a second process running, and it crashes the same way.\n\n**Fix**\n- In `claim.ts`, return `null` when the claim finds nothing instead of reading `.id`.\n- In `runner.ts:120`, treat `null` as \"nothing to do\" and wait for the next tick.\n- Wrap the body of `tick()` in a try/catch so one bad tick gets logged instead of stopping the whole runner. That's why a single error took me down all night.\n\nIf you paste lines 30–50 of `claim.ts` and the code around line 120 of `runner.ts`, I can point at the exact line and suggest the patch."
+        }
+      ]
+    }
+  ]
+}

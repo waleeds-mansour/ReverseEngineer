@@ -2326,6 +2326,7 @@ and the job picks a tier and, for Sonnet, how hard it thinks. All of it is one m
 
 | Job | Tier | Was |
 |---|---|---|
+| Anything about code: an ask, a task, a turn GitHub started | Opus | Sonnet or Opus |
 | Working on a task assigned to Pip (deep) | Opus | Opus |
 | Chat, quick (fast lane) | Sonnet, low effort | Sonnet |
 | Chat, a long ask (deep lane) | Sonnet, high effort | Opus |
@@ -2341,6 +2342,18 @@ and the job picks a tier and, for Sonnet, how hard it thinks. All of it is one m
 | A watch firing | Haiku | Sonnet |
 | Tidying what you said by voice | Haiku, low | Sonnet |
 | The health check's "are you there" | Haiku, low | Sonnet |
+
+**Code is always Opus.** A chat message or an @mention is about code when it has a code block,
+inline code, an error or stack trace, a file name with a code extension, a GitHub link, or code
+words (code, script, function, bug, error, commit, branch, repo, a PR and so on), checked without
+a model call (`looksLikeCode` in `packages/modules/src/chat/code.ts`), with everyday phrases like
+"zip code" taken out first. When it's unclear it leans to yes: a wrong yes costs a little, a wrong
+no gets a worse answer. A task is about code when it's linked to a GitHub pull request or its
+words pass the same check; its work and its thread both count. Any turn a `github.*` event
+started is about code. The reflex that queues the turn marks it (`context.code`), so `jobOf`
+stays a function of the turn alone. Spec 2's code runs in a worktree
+(`docs/research/agent-teammate/spec-2-code-worktree.md`) will use the same job when they're
+built.
 
 The journal stays on Sonnet: the nightly memory is built from it, and it runs once a day. (Its
 eval fails on all three models: the day's facts don't list what got done, and none looked it up.)
@@ -2371,8 +2384,12 @@ turn carries a schedule.
 - **Usage:** each turn's log line says its job and its tokens by model (input, cache writes, cache
   reads, output). `hearth eval` prints the same for each scenario with the list price, and
   `hearth eval --model <id>` runs every tier on one model to compare.
-- **Checked:** the 11 eval scenarios, run live, passed and failed alike on the new tiers and the
-  old lanes. They cost $0.44 at list price against $1.12; the Haiku jobs about a twentieth.
+- **Checked:** the eval scenarios, run live, passed and failed alike on the new tiers and the old
+  lanes. With every cache warm, the 11 everyday ones cost $0.47 at list price against $0.71, and
+  the Haiku jobs about a twentieth. Four code asks ran on Opus and two everyday asks with "build"
+  and "run" stayed on Sonnet; on Opus a code ask costs about 40% more than it did on Sonnet,
+  because cache reads cost the same on both. Each model has its own hour-long cache, so the first
+  Opus turn in an hour also writes it again (about 52k tokens, $0.42).
 
 **Alternatives:** Keeping the two lanes and adding only caching: the deep routines, most of Pip's
 turns, would stay on Opus. Haiku for everything, escalating when it struggles: the tool-heavy
@@ -2382,4 +2399,5 @@ with a key for the cheap jobs: paid per token outside the owner's plan.
 
 **Why:** The owner, 2026-10-19: "with the introduction of haiku 5.5, sonnet 5.5, and opus 5.5, we
 can properly tier each task to these 3 models... it will significantly use my weekly usage unless
-we optimize this", so they can connect all their connectors and start Pip again every day.
+we optimize this", so they can connect all their connectors and start Pip again every day. On
+approving the table, 2026-10-23: "anything coding related would have to be opus though."

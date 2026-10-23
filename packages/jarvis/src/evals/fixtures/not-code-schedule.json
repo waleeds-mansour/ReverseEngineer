@@ -1,0 +1,37 @@
+{
+  "scenario": "not-code-schedule",
+  "recordedWith": "tiers",
+  "recordedAt": "2026-10-23T08:38:33.550Z",
+  "turns": [
+    {
+      "promptStart": "build a schedule for my week around my two dentist appointme",
+      "steps": [
+        {
+          "call": "calendar_events",
+          "input": {
+            "from": "2026-10-01T00:00:00-04:00",
+            "to": "2026-10-09T00:00:00-04:00",
+            "includeCancelled": false
+          }
+        },
+        {
+          "call": "task_list",
+          "input": {
+            "includeClosed": false,
+            "limit": 100
+          }
+        },
+        {
+          "call": "mail_search",
+          "input": {
+            "query": "dentist",
+            "limit": 10
+          }
+        },
+        {
+          "say": "I can't build the schedule yet because I can't find either dentist appointment.\n\nI checked your calendar for 2026-10-01 through 2026-10-08, your open tasks, and your email for \"dentist\". All three came back empty. Your calendar has no events that week, and you have no open tasks.\n\nTell me the date and time of each appointment, and roughly how long each takes, including travel. Once I have those, I will:\n- put the appointments on your calendar,\n- add a buffer for travel and recovery, such as numbness after a filling,\n- schedule your work blocks around them, inside 9 a.m. to 6 p.m. on weekdays.\n\nIf you have other commitments or tasks this week, send those too. I'll fit them in."
+        }
+      ]
+    }
+  ]
+}

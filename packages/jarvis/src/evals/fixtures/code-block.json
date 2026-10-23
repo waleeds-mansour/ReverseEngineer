@@ -1,0 +1,15 @@
+{
+  "scenario": "code-block",
+  "recordedWith": "tiers",
+  "recordedAt": "2026-10-23T08:35:31.426Z",
+  "turns": [
+    {
+      "promptStart": "why does this give a type error?\n```ts\nconst total: number =",
+      "steps": [
+        {
+          "say": "The two branches of the conditional have different types, and the variable is declared as `number`.\n\nTypeScript gives a `a ? b : c` expression the union of both branch types:\n\n- `items[0]` is `number` (assuming `items: number[]`)\n- `\"none\"` is `string`\n\nSo the whole expression is `number | string`. You can't assign that to `total: number`, because the value might be the string `\"none\"`:\n\n```\nType 'string | number' is not assignable to type 'number'.\n  Type 'string' is not assignable to type 'number'.\n```\n\nYou can fix it in a few ways, depending on what you mean:\n\n1. **Use a number as the fallback:**\n   ```ts\n   const total: number = items.length > 0 ? items[0] : 0;\n   ```\n\n2. **Allow \"no value\" explicitly:**\n   ```ts\n   const total: number | undefined = items[0];\n   // or\n   const total: number | null = items.length > 0 ? items[0] : null;\n   ```\n\n3. **Keep the string, and type it honestly:**\n   ```ts\n   const total: number | \"none\" = items.length > 0 ? items[0] : \"none\";\n   ```\n\nA side note: if `noUncheckedIndexedAccess` is on, `items[0]` is already `number | undefined`. The length check doesn't narrow that. Use `items[0] ?? 0` instead.\n\nAlso, the name `total` suggests a sum, and this code takes only the first item. If you want the sum, use `items.reduce((a, b) => a + b, 0)`, which returns `0` for an empty array."
+        }
+      ]
+    }
+  ]
+}
