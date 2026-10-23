@@ -1,11 +1,18 @@
 // An inbox row and what you can do to it besides opening it. An approval's card waiting for you
 // can't be put away, as done or snoozed: it leaves the inbox only by a yes or a no (D58).
 
+import { createSignal } from "solid-js";
 import { isWaiting } from "./approvals.ts";
 import { due } from "./format.ts";
 import type { InboxRow, Notification } from "./types.ts";
 
 export type InboxView = "live" | "snoozed" | "done";
+
+/**
+ * An approval for Updates to bring into view: What Pip did links to one this way, since Updates
+ * has no address for a single card. Updates shows it once it's listed, then lets it go.
+ */
+export const [wantedApproval, showApproval] = createSignal<string | null>(null);
 
 /** The "due" beside an item, if any: a reminder's time is when it rang, never overdue. */
 export const itemDue = (n: Pick<Notification, "kind" | "deadline">) =>

@@ -13,10 +13,12 @@ const MAIL: Rule = ["mail.", "person.view", "company.view"];
 const BY_MODULE: Record<string, Rule> = {
   // A channel Jarvis stopped answering in tells you with a card (D62).
   notification: ["inbox.list", "slack.channels"],
+  // What Pip did lists each approval, and how it went.
   approval: [
     "inbox.list",
     "approval.list",
     "conversation.",
+    "activity.",
     "standing_rule.list",
     // A held reply to someone in Slack shows on their conversation's bar (D62).
     "slack.conversation",
@@ -26,11 +28,25 @@ const BY_MODULE: Record<string, Rule> = {
   mail: MAIL,
   task: ["task.", "inbox.list"],
   calendar: ["calendar.", "person.view", "company.view"],
-  // A Slack member's conversation growing shows on the Slack screens too (D62).
-  conversation: ["conversation.", "jarvis.activity", "slack.conversation", "slack.conversations"],
-  chat: ["conversation.", "jarvis.activity"],
+  // A Slack member's conversation growing shows on the Slack screens too (D62). A turn's
+  // conversation grows as it works, so What Pip did fills in its card as it goes.
+  conversation: [
+    "conversation.",
+    "jarvis.activity",
+    "activity.",
+    "slack.conversation",
+    "slack.conversations",
+  ],
+  chat: ["conversation.", "jarvis.activity", "activity."],
   // A turn that ended may have set or cancelled a reminder, which says nothing of its own.
-  jarvis: ["jarvis.", "observation.list", "system.status", "conversation.", "reminder.list"],
+  jarvis: [
+    "jarvis.",
+    "activity.",
+    "observation.list",
+    "system.status",
+    "conversation.",
+    "reminder.list",
+  ],
   system: ["system.status"],
   memory: ["memory."],
   page_watch: ["page_watch."],
@@ -91,7 +107,7 @@ const BY_TYPE: Record<string, Rule> = {
 /** Reads a change made through an action can affect, beyond its own module's. */
 const AFTER_CHANGE: Record<string, Rule> = {
   google: ["mail.", "calendar."],
-  jarvis: ["system.status", "observation.list"],
+  jarvis: ["system.status", "observation.list", "activity."],
   note: ["task.", "doc."],
   person: ["company.", "task."],
   company: ["person."],
@@ -99,7 +115,7 @@ const AFTER_CHANGE: Record<string, Rule> = {
   routine: ["system.status"],
   // Settings → Coming up lists them.
   reminder: ["system.status"],
-  approval: ["inbox.list", "conversation."],
+  approval: ["inbox.list", "conversation.", "activity."],
   standing_rule: ["approval.list"],
   // Jarvis's Slack bot holds the standing rule that lets its replies to members go out (D62).
   slack: ["standing_rule.list"],

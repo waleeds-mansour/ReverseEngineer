@@ -1,6 +1,7 @@
 // Every Hearth module. Each one meets the Jarvis contract: events, actions, knowledge and
 // reflexes (PLAN.md section 6.1).
 import type { HearthModule } from "@hearth/kernel";
+import { activityModule } from "./activity/index.ts";
 import { approvalsModule } from "./approvals/index.ts";
 import { assistantModule } from "./assistant/index.ts";
 import { browserModule } from "./browser/index.ts";
@@ -48,8 +49,10 @@ export const ALL_MODULES: HearthModule[] = [
   notionModule,
   sheetsModule,
   dataModule,
+  activityModule,
 ];
 
+export type { Timeline, TimelineGroup } from "./activity/index.ts";
 export { renderBrief, renderDigest } from "./assistant/brief.ts";
 export { CANCEL_CHANNEL } from "./assistant/turns.ts";
 export {
