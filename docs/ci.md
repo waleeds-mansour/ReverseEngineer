@@ -1,4 +1,4 @@
-# CI
+# CI (demo of a docs-only change; this PR will be closed)
 
 Every push to the deploy branch, every pull request and every manual run goes through
 `.github/workflows/ci.yml`: lint, types, the file size limit, the tests, the web build and its
