@@ -59,6 +59,18 @@ function callerFor(src: OutcomeSource): Caller {
       });
 }
 
+/**
+ * An act's caller. An "always" reflex acts as Nook, but on outside news it keeps that origin, so
+ * what it writes is marked outside and a watch on it wraps its words (D58). A tell says for itself
+ * whether its words are outside content's.
+ */
+function actCallerFor(src: OutcomeSource): Caller {
+  const caller = callerFor(src);
+  return src.mode === "always" && src.event.origin === "untrusted"
+    ? { ...caller, origin: "untrusted" }
+    : caller;
+}
+
 /** Puts it in your inbox as `caller`; `outside` when its words are outside content's (D58). */
 function notify(kernel: Kernel, n: NewNotification, caller: Caller, outside: boolean) {
   return kernel.execute(
@@ -225,7 +237,7 @@ export async function applyOutcomes(
         break;
       }
       case "act": {
-        const caller = callerFor(src);
+        const caller = actCallerFor(src);
         const res = await kernel.execute(
           o.action,
           o.input,

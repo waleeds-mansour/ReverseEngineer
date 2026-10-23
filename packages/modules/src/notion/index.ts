@@ -21,7 +21,7 @@ import { syncFailedReflex } from "../connector-health.ts";
 import { describeRow, liveEntity } from "../shared.ts";
 import { connectActions } from "./connect.ts";
 import { type ImportFile, MAX_PAGES, planImport } from "./parse.ts";
-import { notionToTasks } from "./to-tasks.ts";
+import { makeTaskAction, notionToTasks } from "./to-tasks.ts";
 
 export { httpNotion, NOTION_SERVICE, type NotionApi } from "./api.ts";
 export { FakeNotion } from "./fake.ts";
@@ -63,7 +63,7 @@ async function digest(ctx: ReadContext & { since: Date }): Promise<DigestItem[]>
 }
 
 const TASK_PAYLOAD =
-  'Payload: title, status, dueAt ("2026-10-10" for a day, or an ISO time), dueIsDate, url, database, backfill (the first read of the board)';
+  'Payload: title, status, dueAt ("2026-10-10" for a day, or an ISO time), dueIsDate, url, database, backfill (the first read of the board), caughtUp (told again because its task never came, or is still open)';
 
 /** Uploads waiting for notion.import, by id (the server's import route puts them here). */
 export const UPLOADS_SERVICE = "uploads";
@@ -123,6 +123,7 @@ export const notionModule = defineModule({
   },
   actions: [
     ...connectActions,
+    makeTaskAction,
     defineAction({
       name: "notion.import",
       description: "Import an uploaded Notion export as notes.",
