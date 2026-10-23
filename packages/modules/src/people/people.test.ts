@@ -9,7 +9,7 @@ import { GOOGLE_SERVICE, SCOPES } from "../google/client.ts";
 import { FakeGoogle } from "../google/fake.ts";
 import { ALL_MODULES } from "../index.ts";
 import { BLOB_SERVICE, BlobStore } from "../mail/blobs.ts";
-import { companyDomain, companyName } from "./domains.ts";
+import { companyDomain, companyName, isMachineAddress } from "./domains.ts";
 import { peopleModule } from "./index.ts";
 import type { PersonSummary, PersonView } from "./views.ts";
 
@@ -67,6 +67,23 @@ describe("people and companies", () => {
     expect(companyDomain("info@acme.example")).toBeNull();
     expect(companyDomain("no-reply+x@acme.example")).toBeNull();
     expect(companyName("acme-labs.co.uk")).toBe("Acme Labs");
+  });
+
+  it("knows a desk's or a machine's address from a person's", () => {
+    for (const a of [
+      "support@acme.example",
+      "no-reply+x@acme.example",
+      "Mailer-Daemon@acme.example",
+    ])
+      expect(isMachineAddress(a)).toBe(true);
+    // A freelancer's hello@, a shop's info@, a consultant's team@: people, just no company.
+    for (const a of [
+      "hello@janedoe.design",
+      "info@shop.example",
+      "team@cons.example",
+      "support.sam@acme.example",
+    ])
+      expect(isMachineAddress(a)).toBe(false);
   });
 
   it("makes people and companies from mail you send, and knows when you last wrote", async () => {
@@ -220,6 +237,54 @@ describe("people and companies", () => {
       fields: { Birthday: "May 2" },
       emails: ["eve@gamma.example"],
     });
+  });
+});
+
+describe("who isn't a person", () => {
+  it("makes none of a desk's address, one of a hello@, and leaves the trash alone", async () => {
+    write([
+      { address: "support@acme.example", name: "Acme Support" },
+      { address: "ana@acme.example", name: "Ana Silva" },
+      { address: "hello@janedoe.design", name: "Jane Doe" },
+    ]);
+    await sync();
+    expect((await people()).map((p) => p.name).sort()).toEqual(["Ana Silva", "Jane Doe"]);
+    await ok("entity.trash", { id: (await byName("Jane Doe")).id });
+    await ok("entity.trash", { id: (await byName("Ana Silva")).id });
+    write([{ address: "ana@acme.example", name: "Ana Silva" }], "Again");
+    g.gmail.deliver({ from: { address: "ana@acme.example" }, subject: "Re: Again", text: "Hi" });
+    await sync();
+    expect(await people()).toEqual([]);
+    // Nor is she counted at Acme any more.
+    expect(await ok("company.list")).toMatchObject([{ name: "Acme", people: 0 }]);
+  });
+
+  it("makes none of your own address on a meeting's guest list", async () => {
+    g.put(ME, {
+      summary: "Planning",
+      start: { dateTime: "2026-09-29T15:00:00Z" },
+      end: { dateTime: "2026-09-29T16:00:00Z" },
+      attendees: [
+        { email: ME, self: true, responseStatus: "accepted" },
+        { email: "Owner+cal@example.com", displayName: "Me again" },
+        { email: "carol@beta.example", displayName: "Carol" },
+      ],
+    });
+    await sync();
+    expect((await people()).map((p) => p.name)).toEqual(["Carol"]);
+  });
+
+  it("names someone known by their address with what they first call themselves", async () => {
+    write([{ address: "cy@acme.example" }]);
+    await sync();
+    expect((await people()).map((p) => p.name)).toEqual(["cy@acme.example"]);
+    const from = (name: string) =>
+      g.gmail.deliver({ from: { address: "cy@acme.example", name }, subject: "Re", text: "Hi" });
+    from("Cy Young");
+    await sync();
+    from("C. Y.");
+    await sync();
+    expect((await people()).map((p) => p.name)).toEqual(["Cy Young"]);
   });
 });
 

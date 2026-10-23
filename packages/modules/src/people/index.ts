@@ -14,12 +14,15 @@ import {
   updateEntity,
 } from "@hearth/kernel";
 import { and, asc, count, eq, isNotNull, isNull } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { body, describeRow, id, isOutside, liveEntity } from "../shared.ts";
 import { companyDomain } from "./domains.ts";
-import { ensureCompany, ensureProfile, lastContacts, personFor } from "./store.ts";
+import { ensureCompany, ensureProfile, lastContacts, personFor, trashedFor } from "./store.ts";
 import { listPeople, overdue, personFacts, personView } from "./views.ts";
 
+/** A company's people as records, to leave out the ones in the trash. */
+const member = alias(entity, "member");
 const name = z.string().trim().min(1).max(200);
 const email = z.string().trim().toLowerCase().email().max(320);
 const fields = z
@@ -40,6 +43,12 @@ async function addEmail(
   const owner = await personFor(ctx.tx, address);
   if (owner && owner !== personId)
     throw new ActionError("conflict", `${address} already belongs to another person (${owner})`);
+  const trashed = await trashedFor(ctx.tx, address);
+  if (trashed)
+    throw new ActionError(
+      "conflict",
+      `${address} belongs to a person in the trash (${trashed}). Restore them first, then you can move the address.`,
+    );
   await ctx.tx.insert(personEmail).values({ address, personId }).onConflictDoNothing();
 }
 
@@ -151,11 +160,13 @@ const companyActions = [
           id: entity.id,
           name: entity.title,
           domain: company.domain,
-          people: count(person.entityId),
+          people: count(member.id),
         })
         .from(company)
         .innerJoin(entity, eq(entity.id, company.entityId))
         .leftJoin(person, eq(person.companyId, company.entityId))
+        // Someone in the trash isn't someone you know there.
+        .leftJoin(member, and(eq(member.id, person.entityId), isNull(member.deletedAt)))
         .where(isNull(entity.deletedAt))
         .groupBy(entity.id, entity.title, company.domain)
         .orderBy(asc(entity.title))
