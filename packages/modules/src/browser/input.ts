@@ -34,7 +34,7 @@ export interface RefPage {
 
 /** A browser_read reference used on another page than the one it was read from. */
 export const movedOn = (tab: number) =>
-  `Tab ${tab} is on another page than the one Jarvis read, so nothing was done. Read it again (browser_read) for fresh references.`;
+  `Tab ${tab} is on another page than the one Pip read, so nothing was done. Read it again (browser_read) for fresh references.`;
 
 /**
  * A left click at a point, as a person's mouse would make it. Just before pressing, the point is

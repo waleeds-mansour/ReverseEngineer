@@ -181,7 +181,7 @@ export const readDoc = (tabId: number): number | undefined => readDocs.get(tabId
 export const readDocField = z
   .number()
   .optional()
-  .describe("Filled in by Hearth: the page browser_read read. Leave it out.");
+  .describe("Filled in by Nook: the page browser_read read. Leave it out.");
 
 export const withReadDoc = async (i: { tabId: number; ref?: string }) => ({
   doc: i.ref && /^E\d+$/.test(i.ref) ? readDoc(i.tabId) : undefined,

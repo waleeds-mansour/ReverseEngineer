@@ -28,7 +28,7 @@ export async function assertAllowed(
   if (isHearthApi(url))
     throw new ActionError(
       "forbidden",
-      "That's one of Hearth's own requests, not a page. Jarvis does Hearth's things with its own actions, never by opening them in Chrome, where they'd go with the owner's sign-in.",
+      "That's one of Nook's own requests, not a page. Pip does Nook's things with its own actions, never by opening them in Chrome, where they'd go with the owner's sign-in.",
     );
   const sites = await getSetting(ctx.tx, "browser.sites");
   const host = new URL(url).hostname;
