@@ -44,4 +44,6 @@ export const notionTask = pgTable("notion_task", {
   assigned: boolean("assigned").notNull().default(true),
   backfill: boolean("backfill").notNull().default(false),
   editedAt: ts("edited_at").notNull(),
+  /** When Hearth saw it close or leave you, by Hearth's clock; cleared when it's yours again. */
+  closedAt: ts("closed_at"),
 });

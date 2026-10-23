@@ -17,7 +17,7 @@ import {
 } from "@hearth/kernel";
 import { and, asc, eq, inArray, isNull, lte, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import { body, id, isoDateTime, title } from "../shared.ts";
+import { body, id, isOutside, isoDateTime, title } from "../shared.ts";
 import { loadTask, type TaskView, toTaskView } from "./view.ts";
 
 const fields = {
@@ -32,9 +32,23 @@ const fields = {
 
 type Fields = { [K in keyof typeof fields]?: z.output<(typeof fields)[K]> };
 
-function emitFieldEvents(ctx: ActionContext, before: TaskView | null, after: TaskView): string[] {
+/** Whether a task's words are outside content's (D58), so its events say so for a watch. */
+async function outsideTask(ctx: ActionContext, id: string): Promise<boolean> {
+  const [row] = await ctx.tx
+    .select({ createdBy: entity.createdBy, outside: entity.outside })
+    .from(entity)
+    .where(eq(entity.id, id));
+  return row ? isOutside(row) : false;
+}
+
+function emitFieldEvents(
+  ctx: ActionContext,
+  before: TaskView | null,
+  after: TaskView,
+  outside: boolean,
+): string[] {
   const changed: string[] = [];
-  const base = { number: after.number, title: after.title };
+  const base = { number: after.number, title: after.title, ...(outside ? { outside: true } : {}) };
   if ((before?.status ?? null) !== after.status && before) {
     changed.push("status");
     ctx.emit({
@@ -116,7 +130,7 @@ export const createTask = defineAction({
       })
       .returning();
     const view = toTaskView(e, t!);
-    emitFieldEvents(ctx, null, view);
+    emitFieldEvents(ctx, null, view, isOutside(e));
     return view;
   },
 });
@@ -163,7 +177,7 @@ export const updateTask = defineAction({
     if (Object.keys(patch).length > 0)
       await ctx.tx.update(task).set(patch).where(eq(task.entityId, i.id));
     const after = (await loadTask(ctx.tx, { id: i.id }))!;
-    const changed = emitFieldEvents(ctx, before, after);
+    const changed = emitFieldEvents(ctx, before, after, await outsideTask(ctx, i.id));
     if (changed.length > 0 && i.title === undefined && i.body === undefined)
       await touchEntity(ctx, i.id, changed);
     return (await loadTask(ctx.tx, { id: i.id }))!;

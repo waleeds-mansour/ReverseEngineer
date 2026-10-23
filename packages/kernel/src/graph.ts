@@ -56,7 +56,13 @@ export async function createEntity(ctx: ActionContext, input: NewEntity): Promis
   ctx.emit({
     kind: "entity.created",
     entityId: created.id,
-    payload: { type: created.type, title: created.title, parentId: created.parentId },
+    payload: {
+      type: created.type,
+      title: created.title,
+      parentId: created.parentId,
+      // Its title is outside content's words, which a watch on it must wrap (D58).
+      ...(created.outside ? { outside: true } : {}),
+    },
   });
   if (created.body) await syncMentions(ctx, created);
   return created;
