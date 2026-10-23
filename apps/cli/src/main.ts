@@ -49,9 +49,10 @@ const HELP = `hearth: your personal workspace, with Jarvis.
                             Restore a backup (the newest by default) into a new database and
                             say how to switch to it; --switch also updates .env and restarts
   hearth doctor [--json]    Check that everything is set up and running; exits 1 on any fail
-  hearth eval [--record] [name...]
-                            Run Jarvis's eval scenarios with the real model (needs
-                            HEARTH_TEST_DATABASE_URL); --record saves passing runs as fixtures
+  hearth eval [--record] [--model id] [name...]
+                            Run Jarvis's eval scenarios with the real models (needs
+                            HEARTH_TEST_DATABASE_URL), each job on its tier; --model puts them
+                            all on one model; --record saves passing runs as fixtures
   hearth status             Show health, routines and whether Jarvis is paused
   hearth pause | resume     Pause or resume Jarvis's own initiative (it still answers you)
   hearth token create <name>   Make a token for an outside agent (Claude Code, Claude Desktop)
@@ -233,27 +234,38 @@ async function main(argv: string[]): Promise<number> {
     case "eval": {
       const { values, positionals } = parseArgs({
         args: rest,
-        options: { record: { type: "boolean", default: false } },
+        options: { record: { type: "boolean", default: false }, model: { type: "string" } },
         allowPositionals: true,
       });
-      const { ClaudeBrain } = await import("@hearth/jarvis");
-      const { SCENARIOS, runLive } = await import("@hearth/jarvis/evals");
-      const model = process.env.HEARTH_JARVIS_MODEL;
-      const brain = new ClaudeBrain({
-        ...(model ? { models: { fast: model, deep: model } } : {}),
-        web: false,
-      });
+      // Each job on its own tier, as Pip runs it (D82); --model puts every job on that one.
+      const model = values.model;
+      if (model)
+        for (const t of ["HAIKU", "SONNET", "OPUS"]) process.env[`HEARTH_MODEL_${t}`] = model;
+      const { ClaudeBrain, describeTiers, sumUsage } = await import("@hearth/jarvis");
+      const { SCENARIOS, runLive, describeUsage } = await import("@hearth/jarvis/evals");
+      const brain = new ClaudeBrain({ web: false });
+      console.log(`Models: ${describeTiers()}`);
       const chosen = positionals.length
         ? SCENARIOS.filter((s) => positionals.includes(s.name))
         : SCENARIOS;
       let failed = 0;
-      for (const s of chosen) {
-        const r = await runLive(s, brain, values.record ? { record: model ?? "default" } : {});
-        console.log(`${r.passed ? "pass" : "FAIL"}  ${s.name}  (${r.turns} turns)`);
-        for (const f of r.failures) console.log(`      ${f}`);
-        if (!r.passed) failed++;
+      let used: Parameters<typeof sumUsage>[0];
+      // Each scenario's database is cloned from a migrated template, as in vitest.
+      const { prepareTemplate } = await import("@hearth/db/testing");
+      const dropTemplate = await prepareTemplate();
+      try {
+        for (const s of chosen) {
+          const r = await runLive(s, brain, values.record ? { record: model ?? "tiers" } : {});
+          console.log(`${r.passed ? "pass" : "FAIL"}  ${s.name}  (${r.turns} turns)`);
+          console.log(`      ${describeUsage(r.usage)}`);
+          for (const f of r.failures) console.log(`      ${f}`);
+          if (!r.passed) failed++;
+          used = sumUsage(used, r.usage);
+        }
+      } finally {
+        await dropTemplate();
       }
-      console.log(`${chosen.length - failed}/${chosen.length} passed`);
+      console.log(`${chosen.length - failed}/${chosen.length} passed; ${describeUsage(used)}`);
       return failed ? 1 : 0;
     }
 

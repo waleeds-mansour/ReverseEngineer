@@ -7,6 +7,7 @@ import { conversation } from "@hearth/db";
 import type { Kernel } from "@hearth/kernel";
 import { eq } from "drizzle-orm";
 import type { BrainRequest, BrainResult, BrainTool } from "./brain.ts";
+import { escalate } from "./models.ts";
 
 /**
  * How long a turn may run before it's stopped: by lane, for a voice command (the owner is
@@ -30,6 +31,29 @@ export const BROWSER_STEPS = 150;
 /** What the model is told when a browsing turn gets more steps. */
 export const CARRY_ON =
   "You ran out of steps for one go and have been given more. Carry on with the task from where you left off.";
+
+/** What the next model up is told when it takes over a turn the one below couldn't finish (D82). */
+export const TAKE_OVER =
+  "You ran out of steps, or a tool call above went wrong and wasn't put right. Check what's done, fix what went wrong, and finish the task.";
+
+/** What a turn's Hearth tool calls say about how they went. */
+type Call = { action: string; status?: string; code?: string };
+
+/** Errors from getting a call wrong, which a stronger model may get right (D82). */
+const MISTAKES = new Set(["unknown_action", "invalid_input", "not_found"]);
+
+/**
+ * A call the model got wrong and didn't put right later on. Not an outage or a refusal: a
+ * stronger model wouldn't fix Gmail being down, and mustn't try harder past a guard.
+ */
+export function leftWrong(calls: Call[]): boolean {
+  return calls.some(
+    (c, i) =>
+      c.status === "error" &&
+      MISTAKES.has(c.code ?? "") &&
+      !calls.slice(i + 1).some((d) => d.action === c.action && d.status === "ok"),
+  );
+}
 
 /** What a tool says once its turn has been stopped or run out of time. */
 export const ENDED = "Not run: this turn has been stopped. Don't call any more tools.";
@@ -129,24 +153,40 @@ export async function keepSession(kernel: Kernel, cid: string, sessionId: string
  * Thinks, and while a turn that has used the browser (its `calls` so far) runs out of steps short
  * of BROWSER_STEPS, gives it more by resuming its session. Each go's session is kept as it ends,
  * so a "continue" from the owner picks up from the last one even if a later go fails.
+ *
+ * A turn that couldn't finish is taken over once by the next model up, in the same session, so
+ * it sees what was done and nothing is done twice (D82): Haiku by Sonnet when it ran out of steps
+ * without browsing or left a call wrong, Sonnet by Opus only when it left a call wrong. A long
+ * Sonnet turn still stops and offers to carry on, rather than start the dearest model unasked.
  */
 export async function thinkOn(
   request: BrainRequest,
   think: (req: BrainRequest) => Promise<BrainResult>,
-  calls: { action: string }[],
+  calls: Call[],
   keep: (sessionId: string) => Promise<void>,
 ): Promise<BrainResult> {
-  let result = await think(request);
+  let req = request;
+  let from = calls.length;
+  let result = await think(req);
   let steps = 0;
   for (;;) {
     if (result.sessionId) await keep(result.sessionId);
+    const ranOut = result.outOfSteps && !browsed(calls) && req.model?.tier === "haiku";
+    const stuck = ranOut || leftWrong(calls.slice(from));
+    const up = stuck && req.model && !request.signal.aborted ? escalate(req.model) : null;
+    if (up) {
+      from = calls.length;
+      req = { ...req, model: up, prompt: TAKE_OVER, sessionId: result.sessionId ?? req.sessionId };
+      result = await think(req);
+      continue;
+    }
     if (!result.outOfSteps) return result;
     steps += result.outOfSteps.steps;
     if (!browsed(calls) || steps >= BROWSER_STEPS || request.signal.aborted) return result;
     result = await think({
-      ...request,
+      ...req,
       prompt: CARRY_ON,
-      sessionId: result.sessionId ?? request.sessionId,
+      sessionId: result.sessionId ?? req.sessionId,
       maxTurns: BROWSER_STEPS - steps,
     });
   }

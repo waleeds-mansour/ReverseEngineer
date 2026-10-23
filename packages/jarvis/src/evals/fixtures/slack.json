@@ -1,0 +1,43 @@
+{
+  "scenario": "slack",
+  "recordedWith": "tiers",
+  "recordedAt": "2026-10-19T09:48:57.544Z",
+  "turns": [
+    {
+      "promptStart": "Heartbeat. These came up since your last check. For each, pi",
+      "steps": [
+        {
+          "call": "record_read",
+          "input": {
+            "id": "@{slack_message:Eve in a direct message}"
+          }
+        },
+        {
+          "call": "record_read",
+          "input": {
+            "id": "@{slack_message:Sam in a direct message}"
+          }
+        },
+        {
+          "call": "task_list",
+          "input": {
+            "includeClosed": false,
+            "limit": 100
+          }
+        },
+        {
+          "call": "task_create",
+          "input": {
+            "title": "Send Eve the Q3 deck (she asked for it by Friday)",
+            "body": "Eve asked on Slack for the Q3 deck by Friday. Message: <m-ref type=\"slack_message\" id=\"01a15390-4b07-7da0-9d42-681b00543dda\">Slack message</m-ref>",
+            "outside": true,
+            "priority": "high"
+          }
+        },
+        {
+          "say": "- Made task T-1: \"Send Eve the Q3 deck (she asked for it by Friday)\", linked to her Slack message. No due date, since \"Friday\" is ambiguous from here.\n- Sam's message is a thank-you, so no action needed."
+        }
+      ]
+    }
+  ]
+}

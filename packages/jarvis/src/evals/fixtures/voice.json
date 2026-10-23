@@ -1,0 +1,15 @@
+{
+  "scenario": "voice",
+  "recordedWith": "tiers",
+  "recordedAt": "2026-10-19T09:48:39.229Z",
+  "turns": [
+    {
+      "promptStart": "I selected the text in the record above in Slack.exe and sai",
+      "steps": [
+        {
+          "say": "Could we move our call to Friday? Something has come up."
+        }
+      ]
+    }
+  ]
+}

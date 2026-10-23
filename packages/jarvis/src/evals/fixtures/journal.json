@@ -1,0 +1,70 @@
+{
+  "scenario": "journal",
+  "recordedWith": "tiers",
+  "recordedAt": "2026-10-19T09:39:19.306Z",
+  "turns": [
+    {
+      "promptStart": "Write today's journal entry (2026-10-01): what happened, wha",
+      "steps": [
+        {
+          "call": "jarvis_did",
+          "input": {
+            "since": "2026-10-01T00:00:00-04:00",
+            "limit": 50
+          }
+        },
+        {
+          "call": "calendar_events",
+          "input": {
+            "from": "2026-10-01T00:00:00-04:00",
+            "to": "2026-10-02T23:59:00-04:00",
+            "includeCancelled": false
+          }
+        },
+        {
+          "call": "task_list",
+          "input": {
+            "includeClosed": false,
+            "limit": 30
+          }
+        },
+        {
+          "call": "observation_list",
+          "input": {
+            "limit": 50
+          }
+        },
+        {
+          "call": "entity_recent",
+          "input": {
+            "limit": 20
+          }
+        },
+        {
+          "call": "task_get",
+          "input": {
+            "id": "@{task:Renew the car insurance}"
+          }
+        },
+        {
+          "call": "mail_counts",
+          "input": {}
+        },
+        {
+          "call": "reminder_list",
+          "input": {}
+        },
+        {
+          "call": "journal_write",
+          "input": {
+            "markdown": "# 2026-10-01\n\nA quiet day. Nothing needed me.\n\n## What happened\n- 10 a.m.: two tasks were created, <m-ref type=\"task\" id=\"01a15387-3602-7600-ac39-99462654b449\">T-1 Renew the car insurance</m-ref> and <m-ref type=\"task\" id=\"01a15387-3615-7949-ac8f-242d5192c7d4\">T-2 Book flights to Denver</m-ref>.\n- T-1 was marked completed in the same minute it was created.\n- I took no actions today.\n\n## Still open\n- T-2, Book flights to Denver. It has no due date, priority or assignee. I haven't scheduled it.\n\n## Checked\n- Calendar: no events.\n- Mail: 0 unread, 0 waiting on a reply.\n- Reminders: none. Approvals: none pending. Observations: none.\n\n## Worth remembering\n- Nothing new to save.\n",
+            "date": "2026-10-01"
+          }
+        },
+        {
+          "say": "I wrote the journal entry for 2026-10-01. It was a quiet day and nothing needed action.\n\n- **Tasks:** Two were created at 10 a.m. \"Renew the car insurance\" (T-1) was marked completed in the same minute. \"Book flights to Denver\" (T-2) is still open, with no due date, priority or assignee.\n- **Calendar, mail and reminders:** No calendar events, no unread or unanswered mail, no reminders, no pending approvals, and no observations waiting.\n- **My actions:** I took none today.\n- **Memory:** I saved nothing new."
+        }
+      ]
+    }
+  ]
+}

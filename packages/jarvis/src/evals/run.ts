@@ -2,7 +2,7 @@
 // recorded fixtures.
 import { readFileSync, writeFileSync } from "node:fs";
 import { jarvisTurn } from "@hearth/db";
-import type { Brain } from "../brain.ts";
+import type { Brain, Usage } from "../brain.ts";
 import { createJarvisHarness } from "../testing.ts";
 import { type Fixture, RecordingBrain, ReplayBrain } from "./recorded.ts";
 import { connectGoogle, type Scenario, withGoogle } from "./scenarios.ts";
@@ -12,6 +12,8 @@ export interface EvalResult {
   passed: boolean;
   failures: string[];
   turns: number;
+  /** Tokens a live run used, by model (D82). */
+  usage?: Usage;
 }
 
 export const fixturePath = (name: string) => new URL(`./fixtures/${name}.json`, import.meta.url);
@@ -68,7 +70,7 @@ export async function runLive(
     };
     writeFileSync(fixturePath(scenario.name), `${JSON.stringify(fixture, null, 2)}\n`);
   }
-  return result;
+  return recorder.usage ? { ...result, usage: recorder.usage } : result;
 }
 
 /** Replays a scenario's recorded fixture. */

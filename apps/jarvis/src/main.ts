@@ -4,7 +4,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { PRINCIPAL } from "@hearth/core";
 import { connect, databaseUrl } from "@hearth/db";
-import { ClaudeBrain, fileTurnLog, startJarvis } from "@hearth/jarvis";
+import { ClaudeBrain, describeTiers, fileTurnLog, startJarvis } from "@hearth/jarvis";
 import { Kernel, Registry } from "@hearth/kernel";
 import {
   ALL_MODULES,
@@ -73,15 +73,11 @@ export async function runJarvis(opts: RunJarvisOptions = {}): Promise<() => Prom
     // update or a move (D54).
     const cwd = join(dataDir, "jarvis");
     mkdirSync(cwd, { recursive: true });
-    const brain = new ClaudeBrain({
-      // Sonnet answers quickly; Opus does the deep work (D54).
-      models: {
-        fast: process.env.HEARTH_JARVIS_FAST_MODEL ?? "sonnet",
-        deep: process.env.HEARTH_JARVIS_MODEL ?? "opus",
-      },
-      web: process.env.HEARTH_JARVIS_WEB !== "0",
-      cwd,
-    });
+    // Each job picks its own model from the tier map, with .env's overrides (D82).
+    const brain = new ClaudeBrain({ web: process.env.HEARTH_JARVIS_WEB !== "0", cwd });
+    log(`Models: ${describeTiers()}.`);
+    if (process.env.HEARTH_JARVIS_MODEL || process.env.HEARTH_JARVIS_FAST_MODEL)
+      log("HEARTH_JARVIS_MODEL and HEARTH_JARVIS_FAST_MODEL aren't read any more (D82).");
     const turnLog = fileTurnLog(join(dataDir, "logs", "jarvis-turns.jsonl"), {
       onError: (err) => log("couldn't write the turn log", err),
     });

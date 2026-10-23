@@ -7,6 +7,7 @@ import { type Kernel, newId } from "@hearth/kernel";
 import type { Brain, BrainTool } from "./brain.ts";
 import { ClaudeBrain } from "./brains/claude.ts";
 import { classifyFailure, type Failure } from "./failures.ts";
+import { modelForJob } from "./models.ts";
 import { buildTools } from "./tools.ts";
 
 export type ProbeResult =
@@ -37,14 +38,14 @@ export async function probeToolSchemas(
     ...(opts.extraTools ?? []),
   ];
   // The cheapest model, and one turn: the answer doesn't matter, only that the request is taken.
-  const brain =
-    opts.brain ?? new ClaudeBrain({ models: { fast: "haiku", deep: "haiku" }, maxTurns: 1 });
+  const brain = opts.brain ?? new ClaudeBrain({ maxTurns: 1 });
   try {
     await brain.run(
       {
         system: "This is a quick check that your tools load. Don't use any of them.",
         prompt: "Reply with just: OK",
         lane: "fast",
+        model: modelForJob("probe"),
         tools,
         sessionId: null,
         signal: AbortSignal.timeout(opts.timeoutMs ?? 120_000),

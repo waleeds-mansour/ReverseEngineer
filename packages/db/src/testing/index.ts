@@ -4,6 +4,8 @@ import pg from "pg";
 import { connect, type Database } from "../client.ts";
 import { adminUrl, TEMPLATE_DB, withDatabase } from "./urls.ts";
 
+/** Builds the migrated template outside vitest (`hearth eval`); returns what drops it again. */
+export { default as prepareTemplate } from "./global-setup.ts";
 export { budget, fastest } from "./timing.ts";
 export { adminUrl, TEMPLATE_DB, withDatabase } from "./urls.ts";
 

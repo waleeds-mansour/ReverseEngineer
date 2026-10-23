@@ -11,6 +11,7 @@ import { claimNextTurn, type TurnRow } from "./claim.ts";
 import { classifyFailure, type Failure, failure } from "./failures.ts";
 import { reportJarvisHealth } from "./health.ts";
 import { type MemberTurnEnv, runMemberTurn } from "./member-turn.ts";
+import { modelFor } from "./models.ts";
 import { buildSystemPrompt } from "./prompt.ts";
 import { keepTaint, readFrom, restoreTaint } from "./taint.ts";
 import { ensureConversation, recapConversation, streamer, withRecap, writeLog } from "./threads.ts";
@@ -33,6 +34,7 @@ import {
   type Ending,
   expireQueued,
   failTurn,
+  keepUsage,
   newEnding,
   recordEnd,
   recoverInterrupted,
@@ -288,6 +290,7 @@ export class TurnRunner {
       system,
       prompt: turn.prompt,
       lane: turn.lane,
+      model: modelFor(turn),
       tools,
       ...(bare ? { web: false } : {}),
       sessionId: conv?.agentSessionId ?? null,
@@ -358,7 +361,7 @@ export class TurnRunner {
     let recapped = false;
     for (;;) {
       try {
-        return await untilEnded(signal, () => this.brain.run(req, events));
+        return keepUsage(end, await untilEnded(signal, () => this.brain.run(req, events)));
       } catch (err) {
         if (signal.aborted || usedTools(end)) throw err;
         const f = classifyFailure(err);

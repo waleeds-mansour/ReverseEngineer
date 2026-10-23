@@ -115,8 +115,14 @@ export async function runHeartbeat(kernel: Kernel, event: HearthEvent): Promise<
       lane: "fast",
       ...(untrusted ? { untrusted: true } : {}),
       dedupeKey: `heartbeat:${String(event.payload.scheduledFor)}`,
-      // A turn that fails for good puts these back for the next heartbeat (D54).
-      context: { routine: "heartbeat", items: items.length, itemIds: items.map((i) => i.id) },
+      // A turn that fails for good puts these back for the next heartbeat (D54). Replies to draft
+      // in the owner's voice need Sonnet; sorting the rest is Haiku's (D82).
+      context: {
+        routine: "heartbeat",
+        items: items.length,
+        itemIds: items.map((i) => i.id),
+        ...(about(NEEDS_REPLY) ? { drafts: true } : {}),
+      },
       prompt: [
         "Heartbeat. These came up since your last check. For each, pick the lightest outcome:",
         "act, ask, tell (inbox_notify, only if it can't wait), note (jarvis_observe), or nothing.",

@@ -8,8 +8,8 @@
 import type { DbOrTx } from "@hearth/db";
 import { entity } from "@hearth/db";
 import { and, desc, eq } from "drizzle-orm";
-import type { Brain, BrainEvents, BrainRequest, BrainResult } from "../brain.ts";
-import { replyText } from "../brain.ts";
+import type { Brain, BrainEvents, BrainRequest, BrainResult, Usage } from "../brain.ts";
+import { replyText, sumUsage } from "../brain.ts";
 import type { ScriptStep } from "../brains/scripted.ts";
 
 export interface RecordedTurn {
@@ -71,6 +71,8 @@ export class RecordingBrain implements Brain {
   readonly name: string;
   readonly turns: RecordedTurn[] = [];
   readonly requests: BrainRequest[] = [];
+  /** Tokens the turns used, by model (D82). */
+  usage: Usage | undefined;
   db: DbOrTx | null = null;
   private readonly inner: Brain;
 
@@ -103,6 +105,7 @@ export class RecordingBrain implements Brain {
     );
     if (result.text) steps.push({ say: result.text });
     this.turns.push({ promptStart: req.prompt.slice(0, 60), steps });
+    this.usage = sumUsage(this.usage, result.usage);
     return result;
   }
 }

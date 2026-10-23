@@ -1,11 +1,14 @@
 // ClaudeBrain against a stand-in for the Agent SDK: how a failed API call is read (D54).
+import { DEFAULT_DAY_RULES } from "@hearth/core";
 import { Registry } from "@hearth/kernel";
 import { ALL_MODULES } from "@hearth/modules";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { BrainEvents, BrainRequest, BrainTool } from "../brain.ts";
 import { BrainError } from "../failures.ts";
-import { ClaudeBrain, requestToolOrder, toolAt } from "./claude.ts";
+import { modelForJob } from "../models.ts";
+import { buildSystemPrompt } from "../prompt.ts";
+import { ClaudeBrain, requestToolOrder, systemPrompt, toolAt } from "./claude.ts";
 import { forModel } from "./schema.ts";
 
 const sdk = vi.hoisted(() => ({
@@ -15,6 +18,7 @@ const sdk = vi.hoisted(() => ({
 }));
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
+  SYSTEM_PROMPT_DYNAMIC_BOUNDARY: "__BOUNDARY__",
   createSdkMcpServer: (o: object) => ({ type: "sdk", ...o }),
   tool: (name: string, description: string, shape: unknown) => ({ name, description, shape }),
   query: ({ options }: { options: Record<string, unknown> }) => {
@@ -148,7 +152,7 @@ describe("ClaudeBrain", () => {
     expect(sdk.options?.maxTurns).toBe(40);
   });
 
-  it("answers with Sonnet on the fast lane and Opus on the deep one by default", async () => {
+  it("runs the job's model and effort, and by lane only when the request names none", async () => {
     sdk.messages = [
       init,
       { type: "result", subtype: "success", is_error: false, result: "Hi.", session_id: "s1" },
@@ -158,9 +162,91 @@ describe("ClaudeBrain", () => {
       text: "Hi.",
       sessionId: "s1",
     });
-    expect(sdk.options?.model).toBe("sonnet");
+    expect(sdk.options?.model).toBe("claude-sonnet-5-5");
+    expect(sdk.options).not.toHaveProperty("effort");
     await new ClaudeBrain().run(request({ lane: "deep" }), e);
-    expect(sdk.options?.model).toBe("opus");
+    expect(sdk.options?.model).toBe("claude-opus-5-5");
+    await new ClaudeBrain().run(request({ model: modelForJob("voice", {}) }), e);
+    expect(sdk.options).toMatchObject({ model: "claude-haiku-5-5", effort: "low" });
+  });
+
+  it("caches the part of the system prompt that's the same every turn, and records none", async () => {
+    sdk.messages = [init, { type: "result", subtype: "success", result: "", session_id: "s1" }];
+    const system = buildSystemPrompt({
+      now: new Date("2026-10-01T14:00:00Z"),
+      rules: DEFAULT_DAY_RULES,
+      trigger: "chat",
+      origin: "owner",
+      paused: false,
+      subject: null,
+    });
+    await new ClaudeBrain().run(request({ system }), events().e);
+    const sent = sdk.options?.systemPrompt as { prompt: string[]; snapshot: boolean };
+    expect(sent.snapshot).toBe(false);
+    expect(sent.prompt).toHaveLength(3);
+    expect(sent.prompt[1]).toBe("__BOUNDARY__");
+    expect(`${sent.prompt[0]}${sent.prompt[2]}`).toBe(system);
+    expect(sent.prompt[2]).toMatch(/^\n\n## This turn\n- It is Thursday, 2026-10-01 10 a\.m\./);
+    // Another turn, at another time, for another reason, caches the very same first part.
+    const later = buildSystemPrompt({
+      now: new Date("2026-10-02T23:30:00Z"),
+      rules: DEFAULT_DAY_RULES,
+      trigger: "routine",
+      origin: "untrusted",
+      paused: true,
+      subject: "A task.",
+      memory: "The owner likes tea.",
+    });
+    expect(systemPrompt(later).prompt[0]).toBe(sent.prompt[0]);
+    // Nothing of yours rides along: no settings, connectors or memory to read every turn.
+    expect(sdk.options).toMatchObject({
+      settingSources: [],
+      strictMcpConfig: true,
+      settings: { autoMemoryEnabled: false },
+    });
+    // A prompt without the turn's part (a Slack member's) goes as one piece.
+    expect(systemPrompt("You answer Sam.").prompt).toEqual(["You answer Sam."]);
+  });
+
+  it("counts each model message's tokens once, by model", async () => {
+    const piece = (id: string, model: string, usage: object) => ({
+      type: "assistant",
+      parent_tool_use_id: null,
+      message: { id, model, content: [], usage },
+    });
+    const u = { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 900 };
+    sdk.messages = [
+      init,
+      piece("m1", "claude-haiku-5-5", u),
+      piece("m1", "claude-haiku-5-5", u),
+      piece("m2", "claude-haiku-5-5", { ...u, cache_creation_input_tokens: 40 }),
+      { type: "result", subtype: "success", result: "Done.", session_id: "s1" },
+    ];
+    const r = await new ClaudeBrain().run(request(), events().e);
+    expect(r.usage).toEqual({
+      "claude-haiku-5-5": { input: 20, output: 10, cacheRead: 1800, cacheWrite: 40 },
+    });
+  });
+
+  it("takes the whole output count from the stream's last word on a message", async () => {
+    const stream = (event: object) => ({ type: "stream_event", parent_tool_use_id: null, event });
+    const usage = { input_tokens: 10, output_tokens: 1, cache_read_input_tokens: 900 };
+    sdk.messages = [
+      init,
+      stream({ type: "message_start", message: { id: "m1", model: "claude-sonnet-5-5", usage } }),
+      // The piece Claude Code hands on carries the count as it stood when the message began.
+      {
+        type: "assistant",
+        parent_tool_use_id: null,
+        message: { id: "m1", model: "claude-sonnet-5-5", content: [], usage },
+      },
+      stream({ type: "message_delta", usage: { output_tokens: 420 } }),
+      { type: "result", subtype: "success", result: "Done.", session_id: "s1" },
+    ];
+    const r = await new ClaudeBrain().run(request(), events().e);
+    expect(r.usage).toEqual({
+      "claude-sonnet-5-5": { input: 10, output: 420, cacheRead: 900, cacheWrite: 0 },
+    });
   });
 });
 

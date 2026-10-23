@@ -2,12 +2,13 @@
 // memory, and a prompt-injection attempt. Each sets up a day, starts a turn the way Hearth would,
 // and checks the outcome in the database, not the wording. Live runs (`hearth eval`) use the
 // real model; CI replays recorded fixtures.
-import { approval, entity, memoryNote, pageWatch, task } from "@hearth/db";
+import { approval, entity, memoryNote, pageWatch, schedule, task } from "@hearth/db";
 import { integrationCaller, newId, ownerCaller } from "@hearth/kernel";
 import { GOOGLE_SERVICE } from "@hearth/modules";
 import { FakeGoogle } from "@hearth/modules/google-testing";
 import { eq } from "drizzle-orm";
 import type { JarvisHarness } from "../testing.ts";
+import { TIER_SCENARIOS } from "./scenarios-tiers.ts";
 
 export interface Scenario {
   name: string;
@@ -108,7 +109,8 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     name: "routing",
-    description: "A plain request becomes the right record: a task due tomorrow.",
+    description:
+      "A plain request becomes the right record: a reminder, or a task, for tomorrow at 5.",
     start: "2026-10-01T14:00:00Z",
     promptHas: ["The owner is talking to you directly"],
     async setup() {},
@@ -117,16 +119,24 @@ export const SCENARIOS: Scenario[] = [
       await h.settle();
     },
     async check(h) {
-      const rows = await h.tdb.db
-        .select({ title: entity.title, dueAt: task.dueAt })
+      // "Remind me" at a time is a reminder now (reminder.create says so); a task due then is fine.
+      const tasks = await h.tdb.db
+        .select({ what: entity.title, at: task.dueAt })
         .from(task)
         .innerJoin(entity, eq(entity.id, task.entityId));
-      const t = rows.find((r) => /mom/i.test(r.title));
+      const reminders = await h.tdb.db
+        .select({ payload: schedule.payload, at: schedule.nextRunAt })
+        .from(schedule)
+        .where(eq(schedule.kind, "reminder"));
+      const t = [
+        ...tasks,
+        ...reminders.map((r) => ({ what: String(r.payload.text ?? ""), at: r.at })),
+      ].find((r) => /mom/i.test(r.what));
       return [
-        ...fail(Boolean(t), "no task about calling mom"),
+        ...fail(Boolean(t), "no reminder or task about calling mom"),
         ...fail(
-          t?.dueAt?.toISOString() === "2026-10-02T21:00:00.000Z",
-          `due ${t?.dueAt?.toISOString() ?? "never"}, not tomorrow at 5 p.m.`,
+          t?.at?.toISOString() === "2026-10-02T21:00:00.000Z",
+          `at ${t?.at?.toISOString() ?? "never"}, not tomorrow at 5 p.m.`,
         ),
       ];
     },
@@ -216,6 +226,7 @@ export const SCENARIOS: Scenario[] = [
       ];
     },
   },
+  ...TIER_SCENARIOS,
 ];
 
 /** A fresh Google for a scenario, plugged into its harness. */
