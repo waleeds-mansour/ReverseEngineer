@@ -22,6 +22,8 @@ export interface TimelineTurn {
   source: string | null;
   /** The job (role) it ran for (Spec 3): its name is in role.list. */
   roleId: string | null;
+  /** The name of your trigger that set it off (Spec 6). */
+  triggerName: string | null;
   readOutside: boolean;
   conversationId: string | null;
   subjectId: string | null;
@@ -97,6 +99,7 @@ const TRIGGER: Record<string, string> = {
   routine: "Routine",
   reflex: "Noticed something",
   slack_member: "Someone in Slack",
+  trigger: "Your trigger",
 };
 
 /** The routines Hearth comes with, by the name their turns carry. */
@@ -111,12 +114,16 @@ const ROUTINE: Record<string, string> = {
   "jarvis.heartbeat": "Heartbeat",
 };
 
-/** What set a card off, in words: "You asked", "Heartbeat", "Noticed something". */
+/**
+ * What set a card off, in words: "You asked", "Heartbeat", "Noticed something", or your trigger
+ * by name: "Your trigger: Acme emails".
+ */
 export function startedBy(g: Pick<TimelineGroup, "turn">): string {
   const t = g.turn;
   if (!t) return "Noticed something";
   if (t.trigger === "chat" && t.via === "slack") return "You asked in Slack";
   if (t.trigger === "routine") return (t.source && ROUTINE[t.source]) ?? "Routine";
+  if (t.trigger === "trigger" && t.triggerName) return `Your trigger: ${t.triggerName}`;
   return TRIGGER[t.trigger] ?? t.trigger;
 }
 

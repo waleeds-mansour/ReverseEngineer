@@ -27,6 +27,8 @@ const TRIGGER_NOTES: Record<TurnTrigger, string> = {
   // this is what it says should one ever reach this one.
   slack_member:
     "Someone in the owner's Slack workspace wrote to you. You're answering them, not the owner: share nothing the owner hasn't written down to share. Your final reply goes to them in Slack.",
+  trigger:
+    "One of the owner's triggers went off: something they picked happened, and they wrote what to do about it. Nobody is waiting on a reply; use your tools to do it and publish results.",
 };
 
 export interface PromptInput {

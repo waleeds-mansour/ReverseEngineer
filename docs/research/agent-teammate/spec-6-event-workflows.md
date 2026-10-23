@@ -1,4 +1,36 @@
-# Spec 6 — Event-triggered autonomous workflows · DESIGN ONLY (do not build yet)
+# Spec 6 — Event-triggered autonomous workflows · BUILT (2026-10-23)
+
+> **As built.** The owner asked for it on 2026-10-23, with the four decisions below settled as
+> recommended: turn-only targets (plus an optional job, since Spec 3 had landed), exact-equality
+> filters, a curated list of event kinds, and proactive turns. Table `owner_trigger` (migration
+> 0051; TRIGGER is SQL's own word), actions `trigger.create/update/list/remove` and the reflex
+> `trigger.fire` (`packages/modules/src/triggers/`), "Triggers" in Settings, and "Your trigger:
+> <name>" on its cards in What Pip did. Where the build differs from the design below:
+> - **The event kinds are a fixed list** (`triggers/kinds.ts`): an email arrives, a task is
+>   assigned or moves, a calendar event changes, a Notion ticket becomes yours or is done, a pull
+>   request opens or merges. So `trigger.fire` listens to that list statically; nothing re-registers
+>   its `on` at runtime. Each kind names the fields a filter may test (an email's `from`, a pull
+>   request's `repo`, `author`, `mine`), and Settings offers them. Notion's first read of the board
+>   (`backfill`) fires nothing.
+> - **A filter is equality only**, every field, case and spaces aside. No patterns, no "or".
+> - **The target is always one turn**, `jarvis_turn.trigger = 'trigger'`, with your words as the
+>   prompt and the event's fields shown as data. A trigger can name one of Pip's jobs (`role_id`):
+>   its turns are tagged and run within the job's ceiling and turns a day, and a job that's off
+>   pauses it, as for a routine. Routine targets weren't needed: a routine can be in a job already.
+> - **The reflex is reactive and its turns proactive** (as `connect.wait` does it), so no job can
+>   take on every trigger at once: each trigger names its own. Its turns count against Pip's daily
+>   turns, are capped by Spec 5's read-only setting, and stop while Pip is paused (checked in the
+>   reflex, so a pause leaves no skipped rows).
+> - **Loop guard**: nothing Pip's own work led to, whether Pip did it (`actor = 'jarvis'`) or it
+>   came of a call in one of Pip's turns (its correlation id is the turn's). **Rate**: once per event
+>   (`dedupeKey` per trigger and event) and `per_day` turns a trigger (10 unless set, 50 at most).
+> - **Outside content stays outside**: mail, calendar, Notion and GitHub kinds start their turn
+>   untrusted (D25), whoever ran the sync.
+> - **A plain table, not an entity**, like a job. Pip can make, tighten, pause and remove a trigger
+>   from a trusted turn; only you can loosen one (back on, more turns, a looser filter, out of its
+>   job). Outside content can do none of it (`refuseUntrusted`).
+> - Chains (below) work through the event log as designed, but each link is its own card; grouping
+>   a chain into one card is not built.
 
 > **Source / provenance:** from **both** pages — Grok **Bot** ("Bots act on triggers / work in the background") and ChatGPT **dots** ("set a dot loose on a goal; it works proactively"). *Marketing claims*, not reverse-engineered. The owner-declared trigger model below is Hearth-native and is the *dynamic sibling* of the compiled reflex system that already ships.
 

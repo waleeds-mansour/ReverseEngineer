@@ -15,6 +15,8 @@ export interface RoleView {
   turnsToday: number;
   routines: { id: string; title: string }[];
   reflexes: { name: string; description: string }[];
+  /** Your triggers whose turns run for it (Spec 6). */
+  triggers: { id: string; name: string }[];
 }
 
 export interface AttachableReflex {

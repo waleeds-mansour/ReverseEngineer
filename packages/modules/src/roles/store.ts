@@ -6,6 +6,7 @@ import {
   type DbOrTx,
   entity,
   jarvisTurn,
+  ownerTrigger,
   ROLE_CEILINGS,
   type RoleCeiling,
   role,
@@ -31,6 +32,8 @@ export interface RoleView {
   turnsToday: number;
   routines: { id: string; title: string }[];
   reflexes: { name: string; description: string }[];
+  /** Your triggers whose turns run for it (Spec 6). */
+  triggers: { id: string; name: string }[];
 }
 
 /** A proactive reflex, and the job it's in, if any. */
@@ -85,6 +88,13 @@ export async function listRoles(
         .where(and(inArray(roleRoutine.roleId, ids), isNull(entity.deletedAt)))
         .orderBy(asc(entity.title))
     : [];
+  const triggers = ids.length
+    ? await db
+        .select({ roleId: ownerTrigger.roleId, id: ownerTrigger.id, name: ownerTrigger.name })
+        .from(ownerTrigger)
+        .where(inArray(ownerTrigger.roleId, ids))
+        .orderBy(asc(ownerTrigger.name))
+    : [];
   const attached = await db.select().from(roleReflex);
   const reflexes = proactiveReflexes(ctx);
   const rules = await getSetting(db, "owner.dayRules");
@@ -120,6 +130,7 @@ export async function listRoles(
           name: a.reflexName,
           description: reflexes.find((x) => x.name === a.reflexName)?.description ?? a.reflexName,
         })),
+      triggers: triggers.filter((x) => x.roleId === r.id).map(({ id, name }) => ({ id, name })),
     })),
     reflexes: reflexes.map((x) => ({
       name: x.name,

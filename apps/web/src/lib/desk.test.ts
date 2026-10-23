@@ -18,6 +18,7 @@ const turn = (t: Partial<DeskTurn>): DeskTurn => ({
   via: null,
   source: null,
   roleId: null,
+  triggerName: null,
   readOutside: false,
   conversationId: null,
   subjectId: null,

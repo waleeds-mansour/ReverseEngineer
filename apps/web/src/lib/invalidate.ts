@@ -39,10 +39,11 @@ const BY_MODULE: Record<string, Rule> = {
   ],
   chat: ["conversation.", "jarvis.activity", "activity."],
   // A turn that ended may have set or cancelled a reminder, which says nothing of its own. A
-  // job's turns today count in Settings.
+  // job's turns today, and a trigger's, count in Settings.
   jarvis: [
     "jarvis.",
     "role.list",
+    "trigger.list",
     "activity.",
     "observation.list",
     "system.status",
@@ -58,8 +59,10 @@ const BY_MODULE: Record<string, Rule> = {
   github: ["github."],
   notion: ["notion."],
   data: ["data."],
-  // Pip's jobs (Spec 3): What Pip did filters by them.
-  role: ["role.", "activity."],
+  // Pip's jobs (Spec 3): What Pip did filters by them, and a trigger names its job.
+  role: ["role.", "activity.", "trigger.list"],
+  // Your triggers (Spec 6), which a job lists.
+  trigger: ["trigger.", "role.list"],
   voice: ["dictation.", "dictionary.", "voice.", "snippet."],
   meeting: ["meeting."],
   // A schedule firing moves a routine's "last ran", and a reminder that rang leaves the list.
@@ -117,7 +120,8 @@ const AFTER_CHANGE: Record<string, Rule> = {
   company: ["person."],
   doc: ["note.list", "entity."],
   routine: ["system.status", "role.list"],
-  role: ["activity."],
+  role: ["activity.", "trigger.list"],
+  trigger: ["role.list"],
   // Settings → Coming up lists them.
   reminder: ["system.status"],
   approval: ["inbox.list", "conversation.", "activity."],
