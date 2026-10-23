@@ -24,6 +24,7 @@ import {
 import { and, desc, eq, gt, gte, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 import { describeRow, id, liveEntity, writtenOutside } from "../shared.ts";
+import { deskAction } from "./desk.ts";
 import { didAction } from "./did.ts";
 import { briefRoutine, journalRoutine } from "./routines.ts";
 import { turnActions } from "./turns.ts";
@@ -55,6 +56,10 @@ export const assistantModule = defineModule({
       description: "Pip noted something for the brief. Payload: observationId, kind, aboutId.",
     },
     {
+      kind: "jarvis.turn_started",
+      description: "Pip started a turn. Payload: turnId, trigger, conversationId.",
+    },
+    {
       kind: "jarvis.watch_changed",
       description: "A watch started or ended. Payload: watchId, description, active.",
     },
@@ -73,6 +78,7 @@ export const assistantModule = defineModule({
   actions: [
     ...turnActions,
     didAction,
+    deskAction,
     defineAction({
       name: "jarvis.observe",
       description:

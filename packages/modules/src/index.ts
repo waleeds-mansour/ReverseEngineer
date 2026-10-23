@@ -54,6 +54,7 @@ export const ALL_MODULES: HearthModule[] = [
 
 export type { Timeline, TimelineGroup } from "./activity/index.ts";
 export { renderBrief, renderDigest } from "./assistant/brief.ts";
+export type { Desk, DeskTurn } from "./assistant/desk.ts";
 export { CANCEL_CHANNEL } from "./assistant/turns.ts";
 export {
   BROWSER_SERVICE,

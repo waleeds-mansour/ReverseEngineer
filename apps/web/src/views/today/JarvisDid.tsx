@@ -1,4 +1,4 @@
-// Today's "What Jarvis did": what it made since yesterday, one line each (a drafted reply, a task,
+// Today's "Made by Pip": what it made since yesterday, one line each (a drafted reply, a task,
 // a meeting's prep, the brief), read from the records themselves (jarvis.did), so a line is never
 // Jarvis's own claim about what it did. Each opens what it made, and one written after reading
 // outside content says so (D58). Runs that stopped before they finished are counted under them, so
@@ -46,13 +46,13 @@ export function JarvisDid(props: {
     <TodayCard
       product="jarvis"
       icon="mark"
-      title="What Pip did"
+      title="Made by Pip"
       count={props.items.length}
       more={{ run: () => props.go({ view: "activity" }) }}
     >
       <Show
         when={props.query.data !== undefined}
-        fallback={<CardWaiting query={props.query} what="what Pip did" />}
+        fallback={<CardWaiting query={props.query} what="what Pip made" />}
       >
         <Show
           when={props.items.length > 0 || props.failed > 0}

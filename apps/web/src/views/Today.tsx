@@ -1,7 +1,7 @@
 // Today: your morning on one screen. A greeting with a box to ask Jarvis or add a task, the brief
 // (one line once you've read it), what needs your yes, the drafts Jarvis has ready to send, your
-// day, what's due, who's waiting on a reply and what Jarvis did since yesterday, each thing that
-// needs you one tap away. It's made only of reads the other screens make already, so it refreshes
+// day, what's due, who's waiting on a reply, what Pip is working on and what it made since
+// yesterday, each thing that needs you one tap away. It's made only of reads the other screens make already, so it refreshes
 // with them. On a wide pane what needs you runs down the left, the day down the right; on a phone,
 // one after the other, with the meeting on now or next under the greeting. What a row opens goes
 // beside Today, as from any list, so Today stays where it was.
@@ -13,6 +13,7 @@ import { SectionHeader } from "../components/kit/SectionHeader.tsx";
 import { SetupChecklist } from "../components/SetupChecklist.tsx";
 import { Button, Failed, PaneHeader } from "../components/ui.tsx";
 import { createToday, timeNow } from "../lib/clock.ts";
+import type { Desk } from "../lib/desk.ts";
 import { askedToSend } from "../lib/needsYou.ts";
 import { layout, type PaneRoute, routeFor } from "../lib/panes.ts";
 import { usePush } from "../lib/push.ts";
@@ -40,6 +41,7 @@ import {
   NeedsYouWaiting,
   useApproveAll,
 } from "./today/NeedsYou.tsx";
+import { PipWorking } from "./today/PipWorking.tsx";
 import { ReadyToSend } from "./today/ReadyToSend.tsx";
 import { Replies } from "./today/Replies.tsx";
 import { UpNext, YourDay } from "./today/YourDay.tsx";
@@ -75,6 +77,15 @@ export function Today(props: { pane: number }) {
   const since = createMemo(() => startOfYesterday(new Date(dayStart())).toISOString());
   const made = useAction<Did[]>("jarvis.did", () => ({ since: since(), limit: 50 }));
   const turns = useAction<Turn[]>("jarvis.activity", () => ({ limit: 100 }));
+  // What Pip is on now, and what's waiting. Read again every half minute while there's something,
+  // since a turn that ends outside a conversation says nothing live.
+  const desk = useAction<Desk>(
+    "jarvis.desk",
+    () => ({}),
+    () => true,
+    (d) => (d && (d.running.length > 0 || d.waitingCount > 0) ? 30_000 : false),
+  );
+  const busy = () => (desk.data?.running.length ?? 0) + (desk.data?.waitingCount ?? 0) > 0;
   const push = usePush();
   // On an iPhone in Safari, Turn on notifications shows the step that makes them possible.
   const [homeScreenSteps, showHomeScreenSteps] = createSignal(false);
@@ -259,6 +270,9 @@ export function Today(props: { pane: number }) {
               </Show>
             </div>
             <div class="min-w-0 space-y-4">
+              <Show when={busy()}>
+                <PipWorking desk={desk.data!} now={now()} go={go} />
+              </Show>
               <YourDay
                 query={events}
                 today={plan().today}

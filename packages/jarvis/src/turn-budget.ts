@@ -8,18 +8,8 @@ import type { Kernel } from "@hearth/kernel";
 import { eq } from "drizzle-orm";
 import type { BrainRequest, BrainResult, BrainTool } from "./brain.ts";
 
-/**
- * How long a turn may run before it's stopped: by lane, for a voice command (the owner is
- * waiting on it), for a turn that uses the browser (D54, B1), and for a Slack member's (D62).
- */
-export const TURN_LIMIT_MS = {
-  fast: 10 * 60_000,
-  deep: 30 * 60_000,
-  voice: 2 * 60_000,
-  browser: 30 * 60_000,
-  /** A Slack member's turn: two minutes, and MEMBER_STEPS model steps (D62). */
-  member: 2 * 60_000,
-};
+/** How long a turn may run before it's stopped. In core, so Today's desk can say when (D54). */
+export { TURN_LIMIT_MS } from "@hearth/core";
 
 /** Model steps a Slack member's turn may take (D62). */
 export const MEMBER_STEPS = 8;
