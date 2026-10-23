@@ -65,6 +65,19 @@ describe("what a change you make refreshes", () => {
     expect(hits(affectedBy({ kind: "jarvis.turn_finished" }), "reminder.list")).toBe(true);
   });
 
+  it("refreshes What Pip did as a turn works and ends, and as you answer what it asked", () => {
+    for (const kind of [
+      "conversation.appended",
+      "jarvis.turn_finished",
+      "approval.requested",
+      "approval.resolved",
+    ])
+      expect(hits(affectedBy({ kind }), "activity.timeline")).toBe(true);
+    expect(hits(affectedByChange("jarvis.cancel_turn"), "activity.timeline")).toBe(true);
+    // A sync's mail doesn't: the timeline reads itself again now and then for those.
+    expect(hits(affectedBy({ kind: "mail.received" }), "activity.timeline")).toBe(false);
+  });
+
   it("refreshes everything after trashing a record, whose type it can't see", () => {
     expect(affectedByChange("entity.trash")).toBeNull();
   });

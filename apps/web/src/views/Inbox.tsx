@@ -4,14 +4,20 @@
 // you can't be put away with e, s or its menu: it needs a yes or a no. Each row is an InboxItem
 // (inbox/InboxItem.tsx); an approval's is the shared ApprovalCard, its text in full.
 
-import { createMemo, createSignal, For, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import { NoRows } from "../components/QueryView.tsx";
 import { SetupChecklist } from "../components/SetupChecklist.tsx";
 import { Empty, PaneHeader } from "../components/ui.tsx";
 import { decide } from "../lib/approvals.ts";
 import { snoozeOptions } from "../lib/format.ts";
 import { listKeys, useHotkeys } from "../lib/hotkeys.ts";
-import { type InboxView, NEEDS_DECISION, waitingOnYou } from "../lib/inbox.ts";
+import {
+  type InboxView,
+  NEEDS_DECISION,
+  showApproval,
+  waitingOnYou,
+  wantedApproval,
+} from "../lib/inbox.ts";
 import { toast } from "../lib/live.ts";
 import { layout, routeFor } from "../lib/panes.ts";
 import { act, inboxInput, useAction } from "../lib/query.ts";
@@ -96,6 +102,29 @@ export function Inbox(props: { pane: number }) {
     { keys: "escape", run: () => setSnoozing(null), when: () => snoozing() !== null },
   ]);
 
+  // What Pip did's "Answer in Updates": the card, in Live and Signal, where approvals wait.
+  let listEl: HTMLUListElement | undefined;
+  createEffect(() => {
+    const id = wantedApproval();
+    if (!id) return;
+    if (view() !== "live" || lane() !== "signal") {
+      setView("live");
+      setLane("signal");
+      return;
+    }
+    if (rows.data === undefined) return;
+    showApproval(null);
+    const i = list().findIndex((r) => r.notification.approvalId === id);
+    if (i < 0) {
+      toast.show("That one isn't waiting any more.");
+      return;
+    }
+    sel.select(i);
+    requestAnimationFrame(() =>
+      listEl?.querySelector(`[data-approval="${id}"]`)?.scrollIntoView({ block: "center" }),
+    );
+  });
+
   const pickLane = (l: "signal" | "noise") => {
     setLane(l);
     sel.reset();
@@ -153,7 +182,7 @@ export function Inbox(props: { pane: number }) {
               </>
             }
           >
-            <ul>
+            <ul ref={listEl}>
               <For each={ids()}>
                 {(id) => {
                   let last = byId().get(id)!;

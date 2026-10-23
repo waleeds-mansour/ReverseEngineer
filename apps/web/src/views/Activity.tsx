@@ -1,56 +1,51 @@
-// What Jarvis has been doing: every turn (what triggered it, what it did, how it ended), what
-// it's watching for you, and what it noted for the next brief. The Slack filter shows only what
-// Slack started, and Jarvis's conversations there (D62).
+// What Pip has been doing: one card for each thing that set it off (your ask, a routine, something
+// it noticed), with every action it ran, the approvals it asked for and how they went, what it
+// touched and its reply (activity.timeline, activity/TimelineCard.tsx). Above them, what it's
+// watching for you, what's waiting for its next check, and what it noted for your next brief. The
+// Slack filter shows only what Slack started, and Pip's conversations there (D62).
 
-import { createSignal, For, Show } from "solid-js";
+import { createMemo, createSignal, For, Show } from "solid-js";
 import { NoRows } from "../components/QueryView.tsx";
 import { Badge, Button, PaneHeader } from "../components/ui.tsx";
-import { ago } from "../lib/format.ts";
-import { layout, routeFor } from "../lib/panes.ts";
+import { fromSlack, type Timeline } from "../lib/activity.ts";
+import { showApproval } from "../lib/inbox.ts";
+import { layout, type PaneRoute } from "../lib/panes.ts";
 import { act, useAction } from "../lib/query.ts";
-import { isSlackTurn } from "../lib/slack.ts";
-import type { Tone } from "../lib/status.ts";
-import { toolsSaid } from "../lib/today.ts";
-import { plainReply, turnResult } from "../lib/turns.ts";
-import type { Observation, Turn, Watch } from "../lib/types.ts";
+import type { Observation, Watch } from "../lib/types.ts";
+import { TimelineCard } from "./activity/TimelineCard.tsx";
 import { SlackConversations } from "./SlackConversations.tsx";
 
-const TRIGGER_LABEL: Record<string, string> = {
-  chat: "You asked",
-  mention: "@mentioned",
-  assignment: "Assigned a task",
-  thread: "Thread reply",
-  approval: "After your approval",
-  watch: "A watch matched",
-  routine: "Routine",
-  reflex: "Noticed something",
-  heartbeat: "Heartbeat",
-  slack_member: "Someone in Slack",
-};
+/** Turns per page, and the most the timeline reads at once. */
+const PAGE = 30;
+const MOST = 100;
+/**
+ * A reflex's own action says nothing live that this listens to (lib/invalidate.ts), so the
+ * timeline is read again now and then while it's open.
+ */
+const POLL_MS = 60_000;
 
-/** What started a turn, in words: a chat from your Slack DM says so (D62). */
-const triggerOf = (t: Turn) =>
-  t.trigger === "chat" && t.context?.via === "slack"
-    ? "You asked in Slack"
-    : (TRIGGER_LABEL[t.trigger] ?? t.trigger);
-
-function outcomeTone(t: Turn): Tone {
-  if (t.status === "failed") return "danger";
-  // Still going, or skipped: neither is how it ended well or badly, so neither is a status.
-  if (t.status === "queued" || t.status === "running" || t.status === "skipped") return "neutral";
-  return "positive";
-}
+const HEADING = "mb-2 text-xs font-medium uppercase tracking-wide text-faint";
 
 export function Activity() {
-  const turns = useAction<Turn[]>("jarvis.activity", () => ({ limit: 100 }));
+  const [limit, setLimit] = createSignal(PAGE);
+  const timeline = useAction<Timeline>(
+    "activity.timeline",
+    () => ({ limit: limit() }),
+    () => true,
+    () => POLL_MS,
+  );
+  // Show older reads a longer page: the shorter one stays up until it's in.
+  const data = createMemo<Timeline | undefined>((prev) => timeline.data ?? prev);
   const watches = useAction<Watch[]>("jarvis.watches");
   const notes = useAction<Observation[]>("observation.list", () => ({ limit: 50 }));
   const [slackOnly, setSlackOnly] = createSignal(false);
-  const shown = () => (turns.data ?? []).filter((t) => !slackOnly() || isSlackTurn(t));
+  const shown = () => (data()?.groups ?? []).filter((g) => !slackOnly() || fromSlack(g));
+  const waiting = () => (slackOnly() ? [] : (data()?.waiting ?? []));
 
-  const openTurn = (t: Turn, beside: boolean) => {
-    if (t.conversationId) layout.open({ view: "chat", id: t.conversationId }, { beside });
-    else if (t.subjectId) layout.open(routeFor("record", t.subjectId), { beside });
+  const go = (route: PaneRoute, beside: boolean) => layout.open(route, { beside });
+  const answer = (approvalId: string, beside: boolean) => {
+    showApproval(approvalId);
+    layout.open({ view: "inbox" }, { beside });
   };
 
   return (
@@ -78,9 +73,7 @@ export function Activity() {
         </Show>
         <Show when={(watches.data ?? []).length > 0}>
           <section>
-            <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-faint">
-              Watching for you
-            </h3>
+            <h3 class={HEADING}>Watching for you</h3>
             <ul class="space-y-1">
               <For each={watches.data}>
                 {(w) => (
@@ -100,11 +93,17 @@ export function Activity() {
             </ul>
           </section>
         </Show>
-        <Show when={(notes.data ?? []).length > 0}>
+        <Show when={waiting().length > 0}>
           <section>
-            <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-faint">
-              Noted for your next brief
-            </h3>
+            <h3 class={HEADING}>Waiting for Pip's next check</h3>
+            <ul class="space-y-1 text-sm">
+              <For each={waiting()}>{(i) => <li class="line-clamp-2">{i.text}</li>}</For>
+            </ul>
+          </section>
+        </Show>
+        <Show when={(notes.data ?? []).length > 0 && !slackOnly()}>
+          <section>
+            <h3 class={HEADING}>Noted for your next brief</h3>
             <ul class="space-y-1 text-sm">
               <For each={notes.data}>
                 {(o) => (
@@ -118,49 +117,31 @@ export function Activity() {
           </section>
         </Show>
         <section>
-          <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-faint">Turns</h3>
+          <h3 class={HEADING}>Latest</h3>
           <Show
             when={shown().length > 0}
             fallback={
-              <NoRows query={turns} what="Pip's activity">
+              <NoRows query={timeline} what="what Pip did">
                 {slackOnly()
-                  ? "Nothing from Slack in Pip's recent turns."
+                  ? "Nothing from Slack in what Pip did lately."
                   : "Pip hasn't done anything yet."}
               </NoRows>
             }
           >
-            <ul class="divide-y divide-line">
-              <For each={shown()}>
-                {(t) => (
-                  <li>
-                    {/* A button, so Tab reaches it and Enter opens it: spans inside, not blocks. */}
-                    <button
-                      type="button"
-                      class="block w-full py-2.5 text-left hover:bg-sunk"
-                      onClick={(e) => openTurn(t, e.shiftKey)}
-                    >
-                      <span class="flex items-center gap-2 text-sm">
-                        <span class="font-medium">{triggerOf(t)}</span>
-                        <Show when={t.mode === "proactive"}>
-                          <Badge>On its own</Badge>
-                        </Show>
-                        <Badge tone={outcomeTone(t)}>{turnResult(t)}</Badge>
-                        <span class="flex-1" />
-                        <span class="text-xs text-faint">{ago(t.queuedAt)}</span>
-                      </span>
-                      <span class="mt-0.5 line-clamp-2 text-sm text-muted">
-                        {plainReply(t.reply ?? t.skipReason ?? t.error ?? t.prompt)}
-                      </span>
-                      <Show when={t.toolsUsed.length > 0}>
-                        <span class="mt-0.5 block text-xs text-faint">
-                          {toolsSaid(t.toolsUsed).join(" · ")}
-                        </span>
-                      </Show>
-                    </button>
-                  </li>
-                )}
-              </For>
+            <ul class="border-t border-line">
+              <For each={shown()}>{(g) => <TimelineCard group={g} go={go} answer={answer} />}</For>
             </ul>
+            <Show when={data()?.next && limit() < MOST}>
+              <div class="pt-3">
+                <Button
+                  size="sm"
+                  disabled={timeline.isFetching}
+                  onClick={() => setLimit((n) => Math.min(MOST, n + PAGE))}
+                >
+                  Show older
+                </Button>
+              </div>
+            </Show>
           </Show>
         </section>
       </div>

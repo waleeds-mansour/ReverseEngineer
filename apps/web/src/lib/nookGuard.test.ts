@@ -88,7 +88,7 @@ function hit(rule: Rule, text: string): string | undefined {
  * name moves to the kit; the rest (rows, tiles, tabs, editor controls) move in Phase 4's view
  * passes. The count only goes down: when a change takes one away, it lowers this to match.
  */
-const RAW_BUTTONS = 62;
+const RAW_BUTTONS = 61;
 
 const RULES: Record<string, Rule> = {
   "Tailwind's own shadows": {

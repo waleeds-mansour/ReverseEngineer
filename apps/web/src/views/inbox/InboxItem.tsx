@@ -61,6 +61,7 @@ export function InboxItem(props: {
     <li
       class={`group cursor-pointer border-b border-line ${n().approvalId ? "px-3 py-2 md:px-4 md:py-3" : "py-3 pr-2 pl-4"}`}
       data-active={props.active}
+      data-approval={n().approvalId ?? undefined}
       // Focus inside a row (its text box, a button, its menu) puts the keyboard on it, so a and
       // d decide the card you're in, not one you moved away from.
       onFocusIn={() => props.onSelect()}
