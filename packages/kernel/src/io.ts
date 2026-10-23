@@ -13,7 +13,7 @@
 import type { Tx } from "@hearth/db";
 import type { Deferred } from "./approvals.ts";
 import { isAudited, writeAudit } from "./audit.ts";
-import { ActionError, describeError, isDatabaseDown, logLine, stackFrames } from "./errors.ts";
+import { describeError, isDatabaseDown, isExpected, logLine, stackFrames } from "./errors.ts";
 import { appendEvents } from "./events.ts";
 import type { ExecuteResult, Kernel } from "./kernel.ts";
 import type { ActionDef, Caller, EmitEvent } from "./types.ts";
@@ -68,7 +68,7 @@ export async function runIo<R>(
     return { status: "ok", result };
   } catch (err) {
     const failure = describeError(err);
-    if (!(err instanceof ActionError)) {
+    if (!isExpected(err)) {
       const where = isDatabaseDown(err) ? "" : stackFrames(err);
       log(`Action ${def.name} failed: ${logLine(err)}${where}`);
     }

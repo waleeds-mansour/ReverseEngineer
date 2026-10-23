@@ -1,19 +1,28 @@
 // Applies what reflexes decide, cheapest first. Only "turn" spends a model turn, and proactive
 // turns pass the pause switch and the daily budget first; when they can't run, their fallback
-// (if any) runs instead.
-import { weakerOrigin } from "@hearth/core";
+// (if any) runs instead. A turn whose call needs a connector you haven't connected leaves a card
+// and a check of its own (waitForConnection, Spec 4).
+import { CONNECT_PROVIDERS, type ConnectionNeed, weakerOrigin } from "@hearth/core";
 import { heartbeatItem, jarvisTurn, schedule } from "@hearth/db";
 import {
   type Caller,
   type HearthEvent,
   jarvisCaller,
   type Kernel,
+  type NewNotification,
   newId,
   type ReflexMode,
   type ReflexOutcome,
   systemCaller,
   upsertSchedule,
 } from "@hearth/kernel";
+import {
+  CONNECT_WAIT,
+  type ConnectWait,
+  connectCard,
+  REMIND_AFTER_MS,
+  waitKey,
+} from "@hearth/modules";
 import { eq } from "drizzle-orm";
 import { proactiveGate } from "./budget.ts";
 import { heldWords, noteHeld, wasHeld } from "./held.ts";
@@ -42,6 +51,43 @@ function callerFor(src: OutcomeSource): Caller {
     : jarvisCaller(src.event.origin, { ...extra, mode: src.mode });
 }
 
+/** Puts it in your inbox as `caller`; `outside` when its words are outside content's (D58). */
+function notify(kernel: Kernel, n: NewNotification, caller: Caller, outside: boolean) {
+  return kernel.execute(
+    "inbox.notify",
+    {
+      kind: n.kind,
+      title: n.title,
+      ...(n.body ? { body: n.body } : {}),
+      ...(n.entityId ? { entityId: n.entityId } : {}),
+      urgency: n.urgency ?? "normal",
+      ...(n.deadline ? { deadline: n.deadline.toISOString() } : {}),
+      ...(n.dedupeKey ? { dedupeKey: n.dedupeKey } : {}),
+      ...(outside ? { outside: true } : {}),
+    },
+    caller,
+  );
+}
+
+/** Asks `reflex` to look again at `o.at` (its onCheck). The same key moves the check. */
+function checkLater(
+  kernel: Kernel,
+  reflex: string,
+  o: Extract<ReflexOutcome, { kind: "check_later" }>,
+  now: Date,
+) {
+  return upsertSchedule(
+    kernel.db,
+    {
+      id: `check:${reflex}:${o.key}`,
+      kind: "check",
+      runAt: o.at,
+      payload: { ...o.payload, reflex },
+    },
+    now,
+  );
+}
+
 export async function applyOutcomes(
   kernel: Kernel,
   outcomes: ReflexOutcome[],
@@ -57,7 +103,8 @@ export async function applyOutcomes(
           log(`${src.name}: "always" reflexes can't spend model turns; dropped`);
           break;
         }
-        const mode = src.mode === "reactive" ? "reactive" : "proactive";
+        // Background work picked up again stays background work (connect.wait).
+        const mode = src.mode === "reactive" && !o.proactive ? "reactive" : "proactive";
         const gate =
           mode === "proactive" ? await proactiveGate(kernel.db, now) : ({ open: true } as const);
         // A routine's firing: the turn reports back how it went (D54), to the schedule the
@@ -146,22 +193,10 @@ export async function applyOutcomes(
       }
       case "tell": {
         const n = o.notification;
-        const res = await kernel.execute(
-          "inbox.notify",
-          {
-            kind: n.kind,
-            title: n.title,
-            ...(n.body ? { body: n.body } : {}),
-            ...(n.entityId ? { entityId: n.entityId } : {}),
-            urgency: n.urgency ?? "normal",
-            ...(n.deadline ? { deadline: n.deadline.toISOString() } : {}),
-            ...(n.dedupeKey ? { dedupeKey: n.dedupeKey } : {}),
-            // Told because of outside content (or saying its words): reading it back is too,
-            // unless it's only Hearth's own words. A turn's untrusted caller marks it anyway.
-            ...((n.outside ?? src.event.origin === "untrusted") ? { outside: true } : {}),
-          },
-          callerFor(src),
-        );
+        // Told because of outside content (or saying its words): reading it back is too, unless
+        // it's only Hearth's own words. A turn's untrusted caller marks it anyway.
+        const outside = n.outside ?? src.event.origin === "untrusted";
+        const res = await notify(kernel, n, callerFor(src), outside);
         if (res.status !== "ok") log(`${src.name}: tell failed: ${JSON.stringify(res)}`);
         break;
       }
@@ -200,18 +235,76 @@ export async function applyOutcomes(
         });
         break;
       case "check_later":
-        await upsertSchedule(
-          kernel.db,
-          {
-            id: `check:${src.name}:${o.key}`,
-            kind: "check",
-            runAt: o.at,
-            payload: { ...o.payload, reflex: src.name },
-          },
-          now,
-        );
+        await checkLater(kernel, src.name, o, now);
         break;
     }
   }
   return result;
+}
+
+/**
+ * What a turn leaves when a call needs a connector you haven't connected (Spec 4). Like a call
+ * waiting for your yes, the work isn't dropped: a card asks you to connect it, and a check keyed
+ * by the turn waits for you to, so connect.wait picks the work up again, or reminds you once and
+ * gives up after a day.
+ */
+export function connectionOutcomes(
+  need: ConnectionNeed,
+  turn: Omit<ConnectWait, "provider" | "why" | "step">,
+  now: Date,
+): ReflexOutcome[] {
+  const w: ConnectWait = { ...turn, provider: need.provider, why: need.why, step: "remind" };
+  return [
+    { kind: "tell", notification: connectCard(w) },
+    {
+      kind: "check_later",
+      key: waitKey(w.provider, w.turnId),
+      at: new Date(now.getTime() + REMIND_AFTER_MS),
+      payload: { ...w },
+    },
+  ];
+}
+
+/**
+ * Leaves a turn's card and check, as the turn (`caller`, from its tools). A background turn's
+ * card is an interrupt, so it counts against the day's. Returns what the model is told.
+ */
+export async function waitForConnection(
+  kernel: Kernel,
+  caller: Caller,
+  need: ConnectionNeed,
+  log: (msg: string) => void = () => {},
+): Promise<string> {
+  const { label } = CONNECT_PROVIDERS[need.provider];
+  const [turn] = caller.turnId
+    ? await kernel.db
+        .select({
+          mode: jarvisTurn.mode,
+          lane: jarvisTurn.lane,
+          conversationId: jarvisTurn.conversationId,
+          subjectId: jarvisTurn.subjectId,
+        })
+        .from(jarvisTurn)
+        .where(eq(jarvisTurn.id, caller.turnId))
+    : [];
+  if (!caller.turnId || !turn)
+    return `${label} isn't connected. The owner can connect it in Settings.`;
+  const now = kernel.clock.now();
+  const wait = {
+    turnId: caller.turnId,
+    conversationId: turn.conversationId ?? caller.conversationId ?? null,
+    subjectId: turn.subjectId,
+    lane: turn.lane,
+    mode: turn.mode,
+    // As trusted as the turn is now: it may have read outside content since it began.
+    origin: caller.origin,
+    since: now.toISOString(),
+  };
+  for (const o of connectionOutcomes(need, wait, now)) {
+    if (o.kind === "tell") {
+      const res = await notify(kernel, o.notification, caller, o.notification.outside === true);
+      if (res.status !== "ok") log(`${CONNECT_WAIT}: card failed: ${JSON.stringify(res)}`);
+    } else if (o.kind === "check_later") await checkLater(kernel, CONNECT_WAIT, o, now);
+  }
+  return `${label} isn't connected. The owner now has a card to connect it in Settings, and once they do you're started again in this conversation to finish. Say so in a sentence and carry on with anything else. Never ask them for a secret or token.`;
 }

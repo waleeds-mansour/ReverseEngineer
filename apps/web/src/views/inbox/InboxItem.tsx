@@ -1,6 +1,7 @@
 // One inbox row: Jarvis's result, a due date or an alert, or an approval, which is a card that
 // shows its text in full and waits for your yes or no (D58). The inbox's keys work on the row
-// the keyboard is on; the "more" menu does what e and s do, for a finger.
+// the keyboard is on; the "more" menu does what e and s do, for a finger. A card asking you to
+// connect a tool Pip needs opens that tool's part of Settings (Spec 4).
 
 import { For, Show } from "solid-js";
 import { ApprovalCard } from "../../components/ApprovalCard.tsx";
@@ -8,7 +9,15 @@ import { Body } from "../../components/Body.tsx";
 import { Overflow, ROW_MENU } from "../../components/Menu.tsx";
 import { Badge, Button, Kbd } from "../../components/ui.tsx";
 import { ago, snoozeOptions, who } from "../../lib/format.ts";
-import { approvalParts, type InboxView, itemDue, rowMenu, wholeBody } from "../../lib/inbox.ts";
+import {
+  approvalParts,
+  connectTarget,
+  type InboxView,
+  itemDue,
+  rowMenu,
+  wholeBody,
+} from "../../lib/inbox.ts";
+import { openSettings } from "../../lib/settingsNav.ts";
 import type { InboxRow } from "../../lib/types.ts";
 
 export function InboxItem(props: {
@@ -79,7 +88,8 @@ export function InboxItem(props: {
                 <span class={`truncate ${n().state === "unseen" ? "font-semibold" : ""}`}>
                   {n().title}
                 </span>
-                <Show when={n().urgency === "interrupt"}>
+                {/* A background turn's card is an interrupt only to count against the day's. */}
+                <Show when={n().urgency === "interrupt" && !connectTarget(n())}>
                   <Badge tone="danger">Urgent</Badge>
                 </Show>
                 <Show when={n().kind === "brief"}>
@@ -90,6 +100,21 @@ export function InboxItem(props: {
                 <div class={`mt-0.5 text-sm text-muted ${wholeBody(n()) ? "" : "line-clamp-3"}`}>
                   <Body text={n().body} />
                 </div>
+              </Show>
+              <Show when={connectTarget(n())}>
+                {(c) => (
+                  <div class="mt-2">
+                    <Button
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openSettings(c().section);
+                      }}
+                    >
+                      Connect {c().label}
+                    </Button>
+                  </div>
+                )}
               </Show>
               {snoozes()}
             </div>

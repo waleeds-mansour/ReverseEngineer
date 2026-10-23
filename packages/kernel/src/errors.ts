@@ -1,3 +1,5 @@
+import { ConnectionError, type ConnectionNeed } from "@hearth/core";
+
 export type ActionErrorCode =
   | "unknown_action"
   | "invalid_input"
@@ -5,7 +7,9 @@ export type ActionErrorCode =
   | "conflict"
   | "forbidden"
   | "unavailable"
-  | "failed";
+  | "failed"
+  /** A connector the action needs isn't connected (ConnectionError, Spec 4). */
+  | "needs_connection";
 
 /** An expected failure an action reports to its caller (not a bug). */
 export class ActionError extends Error {
@@ -16,6 +20,10 @@ export class ActionError extends Error {
     this.name = "ActionError";
   }
 }
+
+/** A failure the action meant to report, so it needs no stack in the log. */
+export const isExpected = (err: unknown): boolean =>
+  err instanceof ActionError || err instanceof ConnectionError;
 
 export function notFound(what: string): ActionError {
   return new ActionError("not_found", `${what} not found`);
@@ -94,8 +102,15 @@ function postgresReason(err: unknown): { message: string; code: string } | null 
  * What a failure means, in words safe to show a person or a model and to keep in the audit log:
  * the database's reason without the query's parameters, which may hold anything the call carried.
  */
-export function describeError(err: unknown): { code: ActionErrorCode; message: string } {
+export function describeError(err: unknown): {
+  code: ActionErrorCode;
+  message: string;
+  /** What to connect, and why, when that's what it needs. */
+  need?: ConnectionNeed;
+} {
   if (err instanceof ActionError) return { code: err.code, message: err.message };
+  if (err instanceof ConnectionError)
+    return { code: err.code, message: err.message, need: err.need };
   if (isDatabaseDown(err)) return { code: "unavailable", message: DATABASE_DOWN };
   const pg = postgresReason(err);
   if (pg) return { code: "failed", message: pg.code ? `${pg.message} (${pg.code})` : pg.message };

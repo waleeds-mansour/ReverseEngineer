@@ -18,6 +18,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import type { BrainTool } from "./brain.ts";
 import { heldWords, noteHeld, wasHeld } from "./held.ts";
+import { waitForConnection } from "./outcomes.ts";
 import { readFrom } from "./taint.ts";
 import { vouchFor } from "./trust.ts";
 
@@ -154,6 +155,15 @@ export function buildTools(kernel: Kernel, state: TurnState, log: LogFn): BrainT
             output: res.summary,
           });
           return `Waiting for the owner's approval (approval ${res.approvalId}): ${res.summary}. Carry on with anything else; you'll be told when they decide.`;
+        }
+        // A tool the owner hasn't connected: a card for them and a wait, not a dead end (Spec 4).
+        // Its words are Nook's own, so they don't lower the turn's trust.
+        if (res.status === "error" && res.need) {
+          const told = await waitForConnection(kernel, caller(), res.need, (m) =>
+            console.error(`[jarvis] ${m}`),
+          );
+          await log("tool_result", { callId, output: told, isError: true });
+          return told;
         }
         const { result, images } =
           res.status === "ok" ? splitImages(res.result) : { result: null, images: [] };
