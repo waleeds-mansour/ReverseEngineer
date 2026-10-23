@@ -10,6 +10,7 @@ import { canvasModule } from "./canvas/index.ts";
 import { chatModule } from "./chat/index.ts";
 import { connectModule } from "./connect/index.ts";
 import { dataModule } from "./data/index.ts";
+import { filesModule } from "./files/index.ts";
 import { githubModule } from "./github/index.ts";
 import { graphModule } from "./graph/index.ts";
 import { inboxModule } from "./inbox/index.ts";
@@ -56,6 +57,7 @@ export const ALL_MODULES: HearthModule[] = [
   sheetsModule,
   dataModule,
   activityModule,
+  filesModule,
 ];
 
 export type { Timeline, TimelineGroup } from "./activity/index.ts";
@@ -102,6 +104,7 @@ export {
   waitKey,
 } from "./connect/index.ts";
 export { CONVEX_SERVICE, type ConvexApi, FakeConvex, httpConvex } from "./data/index.ts";
+export { type FileView, fileMime, MAX_FILE_BYTES, SHOWN_IMAGES } from "./files/index.ts";
 export { FakeGithub, GITHUB_SERVICE, type GithubApi, httpGithub } from "./github/index.ts";
 export { GOOGLE_SERVICE, GoogleClient, googleFromEnv, SCOPES } from "./google/client.ts";
 export { OUTSIDE_REMINDERS } from "./inbox/reminders.ts";
@@ -232,6 +235,7 @@ export {
   calendarModule,
   chatModule,
   dataModule,
+  filesModule,
   githubModule,
   graphModule,
   inboxModule,

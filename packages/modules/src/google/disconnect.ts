@@ -19,6 +19,7 @@ import { dropCalendars, handOver } from "../calendar/calendars.ts";
 import { closeCalendarAlerts } from "../calendar/health.ts";
 import { BLOB_SERVICE, type BlobStore } from "../mail/blobs.ts";
 import { recomputeThread } from "../mail/flags.ts";
+import { blobsInUse } from "../mail/repair.ts";
 import { accountId, holdSyncs } from "../mail/sync.ts";
 import { closeMailAlerts } from "../mail/sync-state.ts";
 import { GOOGLE_SERVICE, type GoogleClient } from "./client.ts";
@@ -219,9 +220,10 @@ async function disconnect(i: { email: string; keepDrafts: boolean }, ctx: Action
 }
 
 /**
- * Deletes the raw copies of the account's mail, but not ones another account's mail has too. In
- * the background: an account can have a hundred thousand of them. Should one go that's needed
- * after all (the same message arriving in another account just now), it's fetched again (6.6).
+ * Deletes the raw copies of the account's mail, but not ones another account's mail has too, or
+ * a file you added (the same bytes, saved from an email). In the background: an account can have
+ * a hundred thousand of them. Should one go that's needed after all (the same message arriving in
+ * another account just now), it's fetched again (6.6).
  */
 async function forgetFiles(ctx: ActionContext, hashes: string[]) {
   if (hashes.length === 0) return;
@@ -231,13 +233,6 @@ async function forgetFiles(ctx: ActionContext, hashes: string[]) {
   } catch {
     return;
   }
-  const still = new Set<string>();
-  for (let i = 0; i < hashes.length; i += 5000) {
-    const rows = await ctx.tx
-      .selectDistinct({ hash: mailMessage.rawHash })
-      .from(mailMessage)
-      .where(inArray(mailMessage.rawHash, hashes.slice(i, i + 5000)));
-    for (const r of rows) still.add(r.hash);
-  }
+  const still = await blobsInUse(ctx, hashes);
   void blobs.remove(hashes.filter((h) => !still.has(h))).catch(() => 0);
 }
