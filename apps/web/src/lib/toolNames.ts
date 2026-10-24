@@ -44,6 +44,7 @@ const SAID: Record<string, Said> = {
   "person.update": ["Updating a person", "Updated a person"],
   "person.view": ["Looking someone up", "Looked someone up"],
   "person.list": ["Looking through your people", "Looked through your people"],
+  "person.write_persona": ["Writing about someone", "Wrote about someone"],
   "memory.remember": ["Remembering something", "Remembered something"],
   "memory.recall": ["Checking what it remembers", "Checked what it remembers"],
   "memory.update": ["Updating what it remembers", "Updated what it remembers"],

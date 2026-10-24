@@ -225,6 +225,13 @@ export interface Linked {
   at: string;
 }
 
+export interface SlackSelf {
+  name: string;
+  displayName: string | null;
+  title: string | null;
+  timeZone: string | null;
+}
+
 export interface PersonDetail {
   id: string;
   name: string;
@@ -235,6 +242,10 @@ export interface PersonDetail {
   overdueDays: number | null;
   fields: Record<string, string>;
   lastContact: LastContact | null;
+  /** Who they are in Slack, from their profile: their own words. */
+  slack: SlackSelf | null;
+  /** Pip's few lines about them, written from your Slack talk: outside content. */
+  persona: { text: string; writtenAt: string } | null;
   threads: (Linked & { messages: number })[];
   upcoming: Linked[];
   met: Linked[];

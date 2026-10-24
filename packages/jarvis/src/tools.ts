@@ -260,7 +260,8 @@ export async function readRecord(
   if (!row) return null;
   const ctx = { db: kernel.db, now: kernel.clock.now() };
   const describe = kernel.registry.describer(row.type);
-  let text = describe ? await describe(id, ctx) : null;
+  const described = describe ? await describe(id, ctx) : null;
+  let text = typeof described === "string" ? described : described?.text;
   if (!text) return null;
   const links = await kernel.execute<{
     outgoing: { otherId: string; otherType: string; otherTitle: string }[];
@@ -278,8 +279,10 @@ export async function readRecord(
   // A record written by Hearth can still quote others (a person's email subjects, the titles
   // of what links to it), so the records it names count too.
   const named = [...text.matchAll(UUID_IN_TEXT)].map((m) => m[0]).filter((x) => x !== id);
+  // Its module can say some of it is other people's words, like a person's persona.
   const fromOutside =
     isOutsideRecord(row, (t) => kernel.registry.isOutsideType(t)) ||
+    (typeof described === "object" && described?.outside === true) ||
     (await mentionsOutside(kernel, named));
   const source = outsideType ? row.type : row.createdBy;
   return { text: fromOutside ? asUntrusted(text, source) : text, fromOutside, source };

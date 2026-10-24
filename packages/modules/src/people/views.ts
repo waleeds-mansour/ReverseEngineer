@@ -1,5 +1,6 @@
 // What the person and company pages show, and what Jarvis reads about someone: their addresses,
-// company, when you last talked, and everything linked to them.
+// company, when you last talked, who they are in Slack and Pip's persona of them, and everything
+// linked to them.
 import {
   calendarEvent,
   company,
@@ -27,6 +28,7 @@ import {
   or,
 } from "drizzle-orm";
 import { firstOfEach } from "../calendar/copies.ts";
+import { type Persona, personaOf, type SlackSelf, slackSelf } from "./persona.ts";
 import { type LastContact, lastContacts } from "./store.ts";
 
 const DAY_MS = 24 * 3600_000;
@@ -50,6 +52,9 @@ export interface PersonView {
   overdueDays: number | null;
   fields: Record<string, string>;
   lastContact: LastContact | null;
+  /** Who they are in Slack, as their profile says, and Pip's few lines from your talk (D58). */
+  slack: SlackSelf | null;
+  persona: Persona | null;
   threads: (Linked & { messages: number })[];
   upcoming: Linked[];
   met: Linked[];
@@ -172,6 +177,8 @@ export async function personView(db: DbOrTx, e: EntityRow, now: Date): Promise<P
     overdueDays: overdue(profile?.p.followUpDays ?? null, last ?? undefined, e.createdAt, now),
     fields: profile?.p.fields ?? {},
     lastContact: last,
+    slack: await slackSelf(db, id),
+    persona: personaOf(profile?.p),
     threads: threads.flatMap((t) => {
       const title = titles.find((x) => x.id === t.id)?.title;
       return title === undefined || !t.at
@@ -237,10 +244,22 @@ export async function listPeople(
   });
 }
 
+/** Who someone is in Slack, in a line: "@ana, Designer, time zone America/New_York". */
+export function slackLine(s: SlackSelf): string {
+  const name = s.displayName ?? s.name;
+  return [`@${name}`, s.title, s.timeZone && `time zone ${s.timeZone}`].filter(Boolean).join(", ");
+}
+
 /** What Jarvis reads under a person's notes. */
 export function personFacts(v: PersonView, fmt: (d: Date) => string): string {
   const lines: string[] = [];
   if (v.emails.length) lines.push(`Email: ${v.emails.join(", ")}`);
+  // Both are their own words, or Pip's from them: the record reads as outside content (D58).
+  if (v.slack) lines.push(`Slack: ${slackLine(v.slack)}`);
+  if (v.persona)
+    lines.push(
+      `Persona (Pip's, from your Slack talk, ${fmt(v.persona.writtenAt)}): ${v.persona.text}`,
+    );
   if (v.company)
     lines.push(`Company: ${v.company.name} (${v.company.domain}, company ${v.company.id})`);
   for (const [k, val] of Object.entries(v.fields)) lines.push(`${k}: ${val}`);

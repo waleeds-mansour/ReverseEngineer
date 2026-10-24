@@ -1,5 +1,5 @@
 // Slack (M7). Mirrors migrations/0018_slack.up.sql, 0032_integrations.up.sql and the columns
-// 0033_slack_bot.up.sql adds; its tables are in slack-bot.ts.
+// 0033_slack_bot.up.sql and 0056_slack_people.up.sql add; the bot's tables are in slack-bot.ts.
 import { boolean, integer, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
@@ -74,6 +74,10 @@ export const slackUser = pgTable("slack_user", {
   deleted: boolean("deleted").notNull().default(false),
   /** When users.info was last read for them (daily). */
   checkedAt: ts("checked_at"),
+  /** What their profile says: the name they go by, their title, their time zone (IANA). */
+  displayName: text("display_name"),
+  title: text("title"),
+  timeZone: text("time_zone"),
 });
 
 export const slackMessage = pgTable(
@@ -90,6 +94,10 @@ export const slackMessage = pgTable(
     latestReply: text("latest_reply"),
     repliesRead: text("replies_read"),
     repliesAt: ts("replies_at"),
+    /** Who it @mentions, by Slack id (none on messages read in before 0056). */
+    mentions: text("mentions").array(),
+    /** Whether it's been looked at for people you've talked with (slack/people.ts). */
+    peopleLinked: boolean("people_linked").notNull().default(false),
   },
   (t) => [unique().on(t.channelId, t.ts)],
 );

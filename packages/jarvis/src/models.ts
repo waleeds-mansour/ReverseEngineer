@@ -59,6 +59,8 @@ export const JOBS = {
   memory: { tier: "sonnet", effort: "medium" },
   /** 6 a.m.: prep packets for the next meetings. */
   prep: { tier: "sonnet", effort: "medium" },
+  /** 5:40 a.m.: a few lines about people you talk with on Slack, each at most weekly. */
+  personas: { tier: "haiku", effort: "low" },
   /** An event that needs a look: today, a meeting that ended (its summary and tasks). */
   reflex: { tier: "sonnet", effort: "medium" },
   /** One of your own routines. */
@@ -102,6 +104,7 @@ const ROUTINE_JOBS = new Set<Job>([
   "journal",
   "memory",
   "prep",
+  "personas",
 ]);
 
 /** Turns that run as the code job when what started them marked them as about code. */
