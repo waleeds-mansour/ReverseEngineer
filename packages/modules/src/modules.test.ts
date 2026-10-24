@@ -83,10 +83,26 @@ describe("tasks", () => {
     const [tell] = await dueSoon.onCheck!(payload, { ...read(), event: created });
     expect(tell).toMatchObject({
       kind: "tell",
-      notification: { urgency: "interrupt", kind: "task.due_soon" },
+      notification: { urgency: "interrupt", kind: "task.due_soon", deadline: task.dueAt },
     });
     await ok("task.update", { id: task.id, dueAt: "2026-10-05T14:00:00Z" });
     expect(await dueSoon.onCheck!(payload, { ...read(), event: created })).toEqual([]);
+  });
+
+  it("marks a due-soon warning in someone else's words, whose date can't wake you", async () => {
+    // Made from an email's subject or a Notion ticket (D54, D58).
+    const task = await ok<TaskView>("task.create", {
+      title: "Sign the lease",
+      dueAt: "2026-10-03T14:00:00Z",
+      outside: true,
+    });
+    const created = (await t.events("entity.created")).find((e) => e.entityId === task.id)!;
+    const dueSoon = reflex(tasksModule, "tasks.due_soon");
+    const [check] = await dueSoon.run(created, read());
+    const payload = (check as { payload: Record<string, unknown> }).payload;
+    const [tell] = await dueSoon.onCheck!(payload, { ...read(), event: created });
+    expect(tell).toMatchObject({ kind: "tell", notification: { outside: true } });
+    expect(tell).not.toMatchObject({ notification: { deadline: expect.anything() } });
   });
 
   it("tells Jarvis due dates in the owner's time zone", async () => {

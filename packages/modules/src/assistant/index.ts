@@ -283,6 +283,8 @@ export const assistantModule = defineModule({
       async run(event, ctx) {
         if (event.kind === "jarvis.watch_changed" || event.kind.startsWith("conversation."))
           return [];
+        // News told again (a Notion ticket whose task never came): a watch heard it the first time.
+        if (event.payload.caughtUp === true) return [];
         const active = await ctx.db
           .select()
           .from(watch)

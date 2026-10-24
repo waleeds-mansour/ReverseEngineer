@@ -8,7 +8,7 @@ import {
   parseMentions,
 } from "@hearth/core";
 import { getSetting, type ReflexDef } from "@hearth/kernel";
-import { liveEntity } from "../shared.ts";
+import { isOutside, liveEntity } from "../shared.ts";
 import { taskIsCode } from "./code.ts";
 import { loadTask } from "./view.ts";
 
@@ -98,6 +98,10 @@ export const dueSoon: ReflexDef = {
   async onCheck(payload, ctx) {
     const t = await loadTask(ctx.db, { id: String(payload.taskId) });
     if (!t?.dueAt || isClosedStatus(t.status) || t.dueAt.toISOString() !== payload.dueAt) return [];
+    // In someone else's words (an email's subject, a Notion ticket): marked, and its date is
+    // theirs too, so it can't wake you (D54). It waits for quiet hours to end.
+    const row = await liveEntity(ctx.db, t.id, "task");
+    const outside = row ? isOutside(row) : false;
     return [
       {
         kind: "tell",
@@ -106,7 +110,7 @@ export const dueSoon: ReflexDef = {
           title: `${t.key} "${t.title}" is due ${formatDateTime(t.dueAt)}`,
           entityId: t.id,
           urgency: "interrupt",
-          deadline: t.dueAt,
+          ...(outside ? { outside: true } : { deadline: t.dueAt }),
           dedupeKey: `due_soon:${t.id}:${t.dueAt.toISOString()}`,
         },
       },
