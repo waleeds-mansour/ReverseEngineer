@@ -1,62 +1,17 @@
-// How the note editor looks: markdown shown as what it means while the marks stay editable
-// (lib/mdmarks.ts finds them), and the @ popup drawn in Hearth's colors for light and dark.
+// How the note editor looks: markdown drawn as what it means (notes/preview.ts says where), the
+// selection toolbar and the @ and / menus, in Nook's colours for light and dark.
 
-import { type Extension, RangeSetBuilder } from "@codemirror/state";
-import {
-  Decoration,
-  type DecorationSet,
-  EditorView,
-  ViewPlugin,
-  type ViewUpdate,
-} from "@codemirror/view";
-import { lineMarks } from "../lib/mdmarks.ts";
-
-const lines = new Map<string, Decoration>();
-const marks = new Map<string, Decoration>();
-const lineDeco = (cls: string) =>
-  lines.get(cls) ?? lines.set(cls, Decoration.line({ class: cls })).get(cls)!;
-const markDeco = (cls: string) =>
-  marks.get(cls) ?? marks.set(cls, Decoration.mark({ class: cls })).get(cls)!;
-
-/** Decorations for the lines on screen, so a long note costs only what's showing. */
-function decorate(view: EditorView): DecorationSet {
-  const builder = new RangeSetBuilder<Decoration>();
-  let next = 0;
-  for (const { from, to } of view.visibleRanges) {
-    // Two visible ranges can share a line; each line is decorated once.
-    let pos = Math.max(from, next);
-    while (pos <= to) {
-      const l = view.state.doc.lineAt(pos);
-      const found = lineMarks(l.text);
-      if (found.line) builder.add(l.from, l.from, lineDeco(found.line));
-      for (const [a, b, cls] of found.marks) builder.add(l.from + a, l.from + b, markDeco(cls));
-      pos = next = l.to + 1;
-    }
-  }
-  return builder.finish();
-}
-
-const highlight = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet;
-    constructor(view: EditorView) {
-      this.decorations = decorate(view);
-    }
-    update(u: ViewUpdate) {
-      if (u.docChanged || u.viewportChanged) this.decorations = decorate(u.view);
-    }
-  },
-  { decorations: (v) => v.decorations },
-);
+import type { Extension } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
 
 const look = EditorView.theme({
-  ".cm-md-h1": { fontSize: "1.5em", fontWeight: "700" },
-  ".cm-md-h2": { fontSize: "1.25em", fontWeight: "650" },
+  ".cm-md-h1": { fontSize: "1.6em", fontWeight: "700", lineHeight: "1.35" },
+  ".cm-md-h2": { fontSize: "1.3em", fontWeight: "650", lineHeight: "1.4" },
   ".cm-md-h3": { fontSize: "1.1em", fontWeight: "600" },
   ".cm-md-quote": {
     color: "var(--color-muted)",
     borderLeft: "2px solid var(--color-line)",
-    paddingLeft: "8px",
+    paddingLeft: "12px",
   },
   ".cm-md-strong": { fontWeight: "650" },
   ".cm-md-em": { fontStyle: "italic" },
@@ -65,30 +20,142 @@ const look = EditorView.theme({
     fontFamily: "var(--font-mono)",
     fontSize: "0.9em",
     backgroundColor: "var(--color-sunk)",
-    borderRadius: "3px",
+    borderRadius: "4px",
+    padding: "1px 3px",
   },
-  ".cm-md-marker": { color: "var(--color-faint)" },
-  // The @ popup, in Hearth's colors rather than CodeMirror's light grey.
+  ".cm-md-codeblock": {
+    fontFamily: "var(--font-mono)",
+    fontSize: "0.9em",
+    backgroundColor: "var(--color-raised)",
+  },
+  ".cm-md-link": {
+    color: "var(--color-accent-ink)",
+    textDecoration: "underline",
+    textDecorationColor: "color-mix(in srgb, var(--color-accent-ink) 45%, transparent)",
+    textUnderlineOffset: "3px",
+  },
+  ".cm-md-marker": { color: "var(--color-faint)", fontWeight: "400" },
+  ".cm-md-ordinal": { color: "var(--color-muted)", fontVariantNumeric: "tabular-nums" },
+  ".cm-md-bullet": {
+    display: "inline-block",
+    width: "0.9em",
+    textAlign: "center",
+    color: "var(--color-muted)",
+  },
+  ".cm-md-hr": {
+    display: "inline-block",
+    width: "100%",
+    verticalAlign: "middle",
+    borderTop: "1px solid var(--color-line)",
+  },
+  // The @ popup, in Nook's colors rather than CodeMirror's light grey.
   ".cm-tooltip": {
     backgroundColor: "var(--color-panel)",
     color: "var(--color-ink)",
     border: "1px solid var(--color-line)",
     borderRadius: "8px",
-    boxShadow: "0 8px 24px rgb(0 0 0 / 0.18)",
+    boxShadow: "var(--elevation-3)",
     overflow: "hidden",
   },
   ".cm-tooltip.cm-tooltip-autocomplete > ul": {
     fontFamily: "var(--font-sans)",
     fontSize: "14px",
-    maxHeight: "16rem",
+    maxHeight: "18rem",
   },
-  ".cm-tooltip.cm-tooltip-autocomplete > ul > li": { padding: "4px 10px" },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul > li": {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    padding: "4px 10px",
+  },
   ".cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]": {
     backgroundColor: "var(--color-accent-soft)",
     color: "var(--color-ink)",
   },
-  ".cm-completionDetail": { color: "var(--color-muted)", fontStyle: "normal", marginLeft: "8px" },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul > completion-section": {
+    display: "block",
+    padding: "8px 10px 2px",
+    border: "none",
+    color: "var(--color-muted)",
+    fontSize: "11px",
+    fontWeight: "650",
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+  },
+  ".cm-completionDetail": { color: "var(--color-muted)", fontStyle: "normal", marginLeft: "auto" },
+  ".cm-note-slash-icon": {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "26px",
+    height: "26px",
+    borderRadius: "6px",
+    backgroundColor: "var(--color-sunk)",
+    color: "var(--color-muted)",
+  },
+  // The selection toolbar, and Turn into's list under it.
+  ".cm-tooltip.cm-note-bar": {
+    display: "flex",
+    alignItems: "center",
+    gap: "2px",
+    padding: "4px",
+    overflow: "visible",
+  },
+  ".cm-note-tool": {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "4px",
+    height: "30px",
+    minWidth: "30px",
+    padding: "0 7px",
+    justifyContent: "center",
+    borderRadius: "6px",
+    color: "var(--color-ink)",
+    font: "600 13px var(--font-sans)",
+    whiteSpace: "nowrap",
+  },
+  ".cm-note-tool:hover, .cm-note-tool[aria-expanded=true]": {
+    backgroundColor: "var(--color-sunk)",
+  },
+  ".cm-note-gap": {
+    width: "1px",
+    height: "18px",
+    margin: "0 3px",
+    backgroundColor: "var(--color-line)",
+  },
+  ".cm-note-menu": {
+    position: "absolute",
+    top: "calc(100% + 4px)",
+    left: "0",
+    display: "flex",
+    flexDirection: "column",
+    minWidth: "190px",
+    padding: "4px",
+    backgroundColor: "var(--color-panel)",
+    border: "1px solid var(--color-line)",
+    borderRadius: "8px",
+    boxShadow: "var(--elevation-3)",
+  },
+  ".cm-note-menu[hidden]": { display: "none" },
+  ".cm-note-menu .cm-note-tool": { justifyContent: "flex-start", fontWeight: "500", gap: "10px" },
+  // Pip's mark: its circle with a bright core.
+  ".cm-note-pip": {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "14px",
+    height: "14px",
+    borderRadius: "50%",
+    backgroundColor: "var(--color-jarvis)",
+  },
+  ".cm-note-pip::after": {
+    content: '""',
+    width: "38%",
+    height: "38%",
+    borderRadius: "50%",
+    backgroundColor: "var(--color-on-accent)",
+  },
 });
 
 /** Everything above, as one extension for the editor. */
-export const editorLook: Extension = [highlight, look];
+export const editorLook: Extension = look;

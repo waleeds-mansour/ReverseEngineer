@@ -10,7 +10,9 @@ import { NoRows } from "../components/QueryView.tsx";
 import { Button, PaneContext, PaneHeader, Placeholder } from "../components/ui.tsx";
 import { ago, who } from "../lib/format.ts";
 import { listKeys, useHotkeys } from "../lib/hotkeys.ts";
+import { keyLabel } from "../lib/keys.ts";
 import { toast } from "../lib/live.ts";
+import { showMarks, toggleMarks } from "../lib/noteMarks.ts";
 import { layout } from "../lib/panes.ts";
 import { act, useAction } from "../lib/query.ts";
 import { createSelection } from "../lib/selection.ts";
@@ -172,6 +174,16 @@ export function NoteView(props: { id: string; pane: number }) {
             </Show>
             <Button
               size="sm"
+              variant="quiet"
+              icon="code"
+              pressed={showMarks()}
+              onClick={toggleMarks}
+              title={`Show the markdown everywhere, not just on the line you're on (${keyLabel("mod+/")})`}
+            >
+              Markdown
+            </Button>
+            <Button
+              size="sm"
               onClick={() => setHistory(!history())}
               title="See and restore earlier versions"
             >
@@ -203,7 +215,7 @@ export function NoteView(props: { id: string; pane: number }) {
               fallback={
                 <DocEditor
                   id={n().id}
-                  placeholder="Start writing… type @ to link anything, or @Pip to ask for help."
+                  placeholder="Start writing… type / for headings and lists, @ to link anything, or @Pip to ask for help."
                 />
               }
             >

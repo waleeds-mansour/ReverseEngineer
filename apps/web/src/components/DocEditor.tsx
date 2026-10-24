@@ -1,6 +1,8 @@
 // The live editor for a note: CodeMirror on a Loro doc, so what you type merges with your other
-// screens and with Jarvis's edits as they happen. @ links anything; links show as chips and
-// checklist boxes can be ticked in place.
+// screens and with Jarvis's edits as they happen. It reads as what it says, with the markdown's
+// marks showing only on the line you're on (notes/preview.ts). @ links anything; links show as
+// chips and checklist boxes can be ticked in place. Select words for the toolbar (notes/toolbar.ts),
+// or start a line with / for the menu (notes/slash.ts).
 
 import {
   autocompletion,
@@ -9,7 +11,7 @@ import {
   completionKeymap,
 } from "@codemirror/autocomplete";
 import { defaultKeymap } from "@codemirror/commands";
-import { markdown } from "@codemirror/lang-markdown";
+import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { Compartment, EditorState, type Range } from "@codemirror/state";
 import {
   Decoration,
@@ -24,16 +26,21 @@ import {
 import { JARVIS_ENTITY_ID, newMentionId, renderMention, unescapeText } from "@hearth/core";
 import { LoroExtensions } from "loro-codemirror";
 import { UndoManager } from "loro-crdt";
-import { createSignal, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createSignal, on, onCleanup, onMount, Show } from "solid-js";
 import { action } from "../lib/api.ts";
 import { type DocStatus, LiveDoc, NoteGone } from "../lib/doc.ts";
 import { TYPE_LABEL, who } from "../lib/format.ts";
 import { onLiveEvent } from "../lib/live.ts";
+import { showMarks } from "../lib/noteMarks.ts";
 import { layout, routeFor } from "../lib/panes.ts";
 import { signInConfirmed } from "../lib/signedIn.ts";
 import type { SearchHit } from "../lib/types.ts";
 import { editorLook } from "./editorLook.ts";
 import { TextButton } from "./kit/TextButton.tsx";
+import { noteKeys } from "./notes/keys.ts";
+import { notePreview } from "./notes/preview.ts";
+import { slashIcon, slashMenu } from "./notes/slash.ts";
+import { selectionBar } from "./notes/toolbar.ts";
 import { remoteCaret } from "./remoteCaret.ts";
 
 const TAG = /<m-ref\s+([^>]*)>([\s\S]*?)<\/m-ref>/g;
@@ -186,6 +193,7 @@ export default function DocEditor(props: { id: string; placeholder?: string }) {
   const [editedBy, setEditedBy] = createSignal<string | null>(null);
   const [copied, setCopied] = createSignal(false);
   const editable = new Compartment();
+  const look = new Compartment();
   let view: EditorView | undefined;
   let live: LiveDoc | undefined;
   let clear: number | undefined;
@@ -250,15 +258,23 @@ export default function DocEditor(props: { id: string; placeholder?: string }) {
           editable.of(gone() ? READ_ONLY : []),
           LoroExtensions(doc.doc, undefined, undo, (d) => d.getText("body")),
           // Undo is Loro's: it undoes only your own edits, not Jarvis's or another screen's.
+          noteKeys,
           keymap.of([...completionKeymap, ...defaultKeymap]),
-          markdown(),
+          // GitHub's markdown, as Pip writes it: checklists, tables, ~~strike~~ and bare links.
+          markdown({ base: markdownLanguage }),
           EditorView.lineWrapping,
+          look.of(notePreview(!showMarks())),
           chips,
+          selectionBar,
           remoteCaret(() => {
             const by = editedBy();
             return by ? who(by) : null;
           }),
-          autocompletion({ override: [(ctx) => mentions(ctx, props.id)], icons: false }),
+          autocompletion({
+            override: [(ctx) => mentions(ctx, props.id), slashMenu],
+            icons: false,
+            addToOptions: [slashIcon],
+          }),
           placeholder(props.placeholder ?? ""),
           theme,
           editorLook,
@@ -268,6 +284,12 @@ export default function DocEditor(props: { id: string; placeholder?: string }) {
     setState("open");
   };
   onMount(() => void start());
+  // The Markdown button (or Ctrl+/), in this note and every other one open.
+  createEffect(
+    on(showMarks, (marks) => view?.dispatch({ effects: look.reconfigure(notePreview(!marks)) }), {
+      defer: true,
+    }),
+  );
   // Restored, here or anywhere, a note that couldn't open (it was in the trash) opens.
   onCleanup(
     onLiveEvent((e) => {
