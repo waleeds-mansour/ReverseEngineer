@@ -82,6 +82,8 @@ export const ownEventActions = [
           title: `Moved ${plainTitle(ev.title)} to ${shortWhen(moved, timeZone)}`,
           body: `${why("moved")} It was ${before.when}${before.when.endsWith(".") ? "" : "."}`,
           entityId: ev.id,
+          // Its title is the email's words, as the turn that added it read them.
+          outside: true,
         },
         { kind: "unmove", eventId: ev.id, before },
       );
@@ -107,6 +109,7 @@ export const ownEventActions = [
           title: `Removed ${plainTitle(ev.title)}, ${at}`,
           body: why("removed"),
           entityId: ev.id,
+          outside: true,
         },
         {
           kind: "unremove",

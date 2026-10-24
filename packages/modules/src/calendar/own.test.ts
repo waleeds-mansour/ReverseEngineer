@@ -112,6 +112,7 @@ describe("moving it without asking", () => {
     expect(n).toMatchObject({
       kind: "calendar.moved",
       title: 'Moved "Dentist" to Wed 2026-10-07, 2 p.m.',
+      outside: true,
       body: expect.stringMatching(/without asking\. It was Tue 2026-10-06, 10 a\.m\.$/),
       entityId: ev.id,
       undo: {
@@ -140,6 +141,7 @@ describe("moving it without asking", () => {
     expect(n).toMatchObject({
       kind: "calendar.removed",
       title: 'Removed "Dentist", Tue 2026-10-06, 10 a.m.',
+      outside: true,
       undo: { kind: "unremove", before: { title: "Dentist", when: "Tue 2026-10-06, 10 a.m." } },
     });
     await undo(n!.id);
@@ -279,6 +281,16 @@ describe("any other event", () => {
     const other = await aTurn({ subjectId: planted });
     await ok("link.add", { fromId: ev.id, toId: planted, kind: "derived_from" }, as(other));
     await refused(ev.id, as(other), /^It wasn't added from what this turn is about\./);
+  });
+
+  it("says so when Google hands back the same event, and you put it in the trash", async () => {
+    const ev = await add(as(turn), thread);
+    await ok("entity.trash", { id: ev.id });
+    const again = { title: "Dentist", ...TUE, threadId: thread };
+    expect(await t.kernel.execute("calendar.create_event", again, as(turn))).toMatchObject({
+      status: "error",
+      code: "not_found",
+    });
   });
 
   it("is refused when a turn adds the same event again from its own email", async () => {

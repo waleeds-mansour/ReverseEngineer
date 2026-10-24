@@ -57,7 +57,10 @@ export async function save(
   if (!m) throw new ActionError("failed", "Google returned an event Nook can't read.");
   const { id: eid, change } = await saveEvent(ctx, m, taskId === undefined ? {} : { taskId });
   emitChange(ctx, eid, change, m);
-  return (await loadEvent(ctx.tx, eid)) as EventView;
+  const ev = await loadEvent(ctx.tx, eid);
+  // Google gave back one it had already (adding the same event again), and it's in Nook's trash.
+  if (!ev) throw new ActionError("not_found", "That event is in Nook's trash. Restore it instead.");
+  return ev;
 }
 
 /** Creates an event on your calendar. Used by the actions below and by time-blocking. */
