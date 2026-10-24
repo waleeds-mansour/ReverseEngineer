@@ -12,6 +12,7 @@
 import { chromium, type Page } from "playwright";
 import { boardSteps } from "./boards.ts";
 import { home } from "./home.ts";
+import { noteSteps } from "./notes.ts";
 import { titleSteps } from "./titles.ts";
 import { storedZip } from "./zip.ts";
 
@@ -170,6 +171,7 @@ try {
     await p.locator("section").nth(1).waitFor();
   });
 
+  await noteSteps({ step, keys, base, tag });
   await boardSteps({ step, keys, base, tag });
 
   await step("a message to Jarvis", async (p) => {
