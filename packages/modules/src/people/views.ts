@@ -26,6 +26,7 @@ import {
   notInArray,
   or,
 } from "drizzle-orm";
+import { firstOfEach } from "../calendar/copies.ts";
 import { type LastContact, lastContacts } from "./store.ts";
 
 const DAY_MS = 24 * 3600_000;
@@ -113,9 +114,17 @@ export async function personView(db: DbOrTx, e: EntityRow, now: Date): Promise<P
           ),
         )
     : [];
-  const events = (when: "upcoming" | "met") =>
-    db
-      .select({ id: entity.id, title: entity.title, at: calendarEvent.startsAt })
+  // A meeting on two of your calendars is one, so each read has room for its other copies.
+  const events = async (when: "upcoming" | "met") => {
+    const n = when === "upcoming" ? 5 : 10;
+    const rows = await db
+      .select({
+        id: entity.id,
+        title: entity.title,
+        startsAt: calendarEvent.startsAt,
+        icalUid: calendarEvent.icalUid,
+        googleId: calendarEvent.googleId,
+      })
       .from(link)
       .innerJoin(calendarEvent, eq(calendarEvent.entityId, link.fromId))
       .innerJoin(entity, eq(entity.id, link.fromId))
@@ -128,7 +137,11 @@ export async function personView(db: DbOrTx, e: EntityRow, now: Date): Promise<P
         ),
       )
       .orderBy(when === "upcoming" ? asc(calendarEvent.startsAt) : desc(calendarEvent.startsAt))
-      .limit(when === "upcoming" ? 5 : 10);
+      .limit(2 * n);
+    return firstOfEach(rows)
+      .slice(0, n)
+      .map((x) => ({ id: x.id, title: x.title, at: x.startsAt, type: "event" }));
+  };
   // Tasks, notes, meetings and the rest, linked either way.
   const other = await db
     .select({ id: entity.id, type: entity.type, title: entity.title, at: entity.updatedAt })
@@ -165,8 +178,8 @@ export async function personView(db: DbOrTx, e: EntityRow, now: Date): Promise<P
         ? []
         : [{ id: t.id, type: "email_thread", title, at: t.at, messages: t.messages }];
     }),
-    upcoming: (await events("upcoming")).map((x) => ({ ...x, type: "event" })),
-    met: (await events("met")).map((x) => ({ ...x, type: "event" })),
+    upcoming: await events("upcoming"),
+    met: await events("met"),
     items: other.filter((x) => !seen.has(x.id) && seen.add(x.id)),
   };
 }

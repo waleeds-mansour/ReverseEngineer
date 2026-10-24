@@ -11,9 +11,16 @@ import type { CalEvent } from "./types.ts";
 /** How far ahead Hearth keeps your calendar (calendar/sync.ts SYNC_AHEAD_DAYS). */
 export const SYNCED_DAYS_AHEAD = 60;
 
+/** How far back Hearth keeps your calendar (calendar/sync.ts SYNC_BACK_DAYS). */
+export const SYNCED_DAYS_BACK = 7;
+
 /** The first day Hearth doesn't have: the start of the day `SYNCED_DAYS_AHEAD` days on. */
 export const syncedUntil = (today: Date) =>
   new Date(today.getFullYear(), today.getMonth(), today.getDate() + SYNCED_DAYS_AHEAD);
+
+/** The first day Hearth has: the start of the day `SYNCED_DAYS_BACK` days back. */
+export const syncedFrom = (today: Date) =>
+  new Date(today.getFullYear(), today.getMonth(), today.getDate() - SYNCED_DAYS_BACK);
 
 /** The start of the day `weeks` weeks on from `day`: by the calendar, so a week the clocks
  *  change in still starts at midnight, not an hour either side of it. */

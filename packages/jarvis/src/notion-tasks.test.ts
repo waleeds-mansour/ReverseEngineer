@@ -145,4 +145,17 @@ describe("Notion tickets as tasks", () => {
       { origin: "untrusted", marked: true },
     ]);
   });
+
+  it("fires a watch once, not again when a ticket's news is told again", async () => {
+    const filter = { field: "kind", op: "eq", value: "notion.task_assigned" };
+    await ok("jarvis.watch", { description: "Tell me", filter }, jarvisCaller("owner"));
+    ticket("a");
+    await sync();
+    // Its task lost (made and mentioned from): the next round tells its news again, and makes one.
+    await h.tdb.db.delete(link);
+    await sync();
+    expect(await tasks()).toHaveLength(2);
+    const watched = await h.tdb.db.select().from(jarvisTurn).where(eq(jarvisTurn.trigger, "watch"));
+    expect(watched).toHaveLength(1);
+  });
 });

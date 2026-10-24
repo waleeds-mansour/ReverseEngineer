@@ -3,7 +3,14 @@
 // exact text, a yes runs once (D58), a change after you were asked refuses, each send has its own
 // standing rule, a turn that read outside content always asks, and outside agents can't send.
 import { memberPrincipal, PRINCIPAL } from "@hearth/core";
-import { approval, conversationLog, notification, principal, slackThread } from "@hearth/db";
+import {
+  approval,
+  conversationLog,
+  notification,
+  principal,
+  slackThread,
+  slackUser,
+} from "@hearth/db";
 import { type Caller, isVisibleTo, jarvisCaller, ownerCaller, setSetting } from "@hearth/kernel";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -60,6 +67,16 @@ describe("finding who you mean", () => {
     // And a DM can go to the person: their Slack account is found by their email.
     expect(await k.ok("slack.dm", { to: sam.id, text: "hi" })).toMatchObject({ to: "Sam Lee" });
     expect((await k.rows())[0]).toMatchObject({ channelId: "USAM" });
+  });
+
+  it("without someone you put in the trash", async () => {
+    const sam = await k.ok<{ id: string }>("person.create", { name: "Sam Lee" });
+    await k.ok("person.add_email", { id: sam.id, email: "sam@acme.example" });
+    await k.t.tdb.db.update(slackUser).set({ personId: sam.id }).where(eq(slackUser.id, "USAM"));
+    await k.ok("entity.trash", { id: sam.id });
+    expect(await k.ok("slack.find_member", { query: "Sam" })).toMatchObject({
+      candidates: [{ id: "USAM", personId: null }],
+    });
   });
 });
 

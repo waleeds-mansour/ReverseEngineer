@@ -5,6 +5,7 @@ import { calendar, calendarEvent, type DbOrTx, googleAccount } from "@hearth/db"
 import { getSetting, type ReflexDef, type ReflexOutcome } from "@hearth/kernel";
 import { and, eq, isNotNull, ne, or } from "drizzle-orm";
 import { preview } from "../shared.ts";
+import { copiesOf } from "./copies.ts";
 import { eventsToPrep, prepsFor, worthPrep } from "./prep.ts";
 import { type EventView, loadEvent } from "./store.ts";
 
@@ -139,7 +140,10 @@ export const meetingSoon: ReflexDef = {
       (await asleepSince(ctx.db, ev.id, ctx.now))
     )
       return [{ ...remind(ev, ctx.now), at: new Date(ctx.now.getTime() + RECHECK_MS) }];
-    const prep = (await prepsFor(ctx.db, [ev.id])).get(ev.id);
+    // Its packet, written for this copy of the meeting or another.
+    const ids = await copiesOf(ctx.db, ev.id);
+    const preps = await prepsFor(ctx.db, ids);
+    const prep = ids.map((x) => preps.get(x)).find(Boolean);
     const minutes = Math.max(1, Math.round((ev.startsAt.getTime() - ctx.now.getTime()) / 60_000));
     const said = prep ? gist(prep.body) : "";
     // Where first: a phone shows only the start of the body.

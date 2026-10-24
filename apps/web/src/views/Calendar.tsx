@@ -11,7 +11,7 @@ import { OutsideMark } from "../components/OutsideMark.tsx";
 import { QueryView } from "../components/QueryView.tsx";
 import { Badge, Button, Empty, PaneHeader, TextButton } from "../components/ui.tsx";
 import { createToday } from "../lib/clock.ts";
-import { emptyWeek, pastKept } from "../lib/emptyWeek.ts";
+import { emptyWeek, notKept, pastKept } from "../lib/emptyWeek.ts";
 import { hours, plural, span, time } from "../lib/format.ts";
 import { toast } from "../lib/live.ts";
 import { layout, routeFor } from "../lib/panes.ts";
@@ -41,14 +41,18 @@ const planned = (ev: EventDraft) =>
 /** A calendar's colour as Google gives it, or none if it isn't one ("#9fe1e7"). */
 const colour = (c: string | null | undefined) => (c && /^#[0-9a-f]{3,8}$/i.test(c) ? c : undefined);
 
-/** A week with nothing on, in words that don't call it free when Hearth wouldn't know. */
-function NoEvents(props: { from: Date; until: Date }) {
+/**
+ * A week with nothing on, in words that don't call it free when Hearth wouldn't know: loading, or
+ * Try again, till it knows what's connected.
+ */
+function NoEvents(props: { from: Date; today: Date }) {
   const setup = useAction<CalendarSetup>("calendar.calendars");
+  const out = () => notKept(props.from, props.today);
   return (
-    <Show when={props.from < props.until} fallback={<Empty>{pastKept(props.until)}</Empty>}>
-      <Show when={setup.data}>
-        {(s) => <Empty>{emptyWeek(props.from, props.until, s())}</Empty>}
-      </Show>
+    <Show when={!out()} fallback={<Empty>{out()}</Empty>}>
+      <QueryView query={setup} what="your calendars">
+        {(s) => <Empty>{emptyWeek(props.from, props.today, s())}</Empty>}
+      </QueryView>
     </Show>
   );
 }
@@ -192,7 +196,7 @@ export function Calendar(props: { pane: number }) {
           query={events}
           what="your calendar"
           isEmpty={(list) => !list.some(isPlan)}
-          empty={<NoEvents from={from()} until={until()} />}
+          empty={<NoEvents from={from()} today={new Date(today())} />}
         >
           {() => (
             <>

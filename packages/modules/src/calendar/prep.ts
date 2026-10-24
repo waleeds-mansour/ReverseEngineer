@@ -7,6 +7,7 @@ import {
   calendarEvent,
   type DbOrTx,
   entity,
+  googleAccount,
   link,
   meeting,
   personEmail,
@@ -38,7 +39,8 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 import { id, preview } from "../shared.ts";
-import { inSelectedCalendar } from "./calendars.ts";
+import { inSelectedCalendar, ownAccount } from "./calendars.ts";
+import { copiesOf, oneEach } from "./copies.ts";
 import { type EventView, guests, NOT_MEETINGS, prepTitle, toEventView, whenText } from "./store.ts";
 
 const HOUR_MS = 3600_000;
@@ -53,10 +55,16 @@ const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 export async function eventsToPrep(ctx: ReadContext, hours = 48): Promise<EventView[]> {
   const min = await getSetting(ctx.db, "calendar.prepMinMinutes");
   const rows = await ctx.db
-    .select({ e: entity, r: calendarEvent })
+    .select({
+      e: entity,
+      r: calendarEvent,
+      own: googleAccount.email,
+      writeDefault: calendar.writeDefault,
+    })
     .from(calendarEvent)
     .innerJoin(entity, eq(entity.id, calendarEvent.entityId))
     .innerJoin(calendar, inSelectedCalendar)
+    .leftJoin(googleAccount, ownAccount)
     .where(
       and(
         isNull(entity.deletedAt),
@@ -68,7 +76,10 @@ export async function eventsToPrep(ctx: ReadContext, hours = 48): Promise<EventV
       ),
     )
     .orderBy(asc(calendarEvent.startsAt));
-  return rows.map((x) => toEventView(x.e, x.r)).filter((v) => worthPrep(v, min));
+  // A meeting on two of your calendars is one, the copy Calendar shows.
+  return oneEach(rows)
+    .map(({ shown: x }) => toEventView(x.e, x.r))
+    .filter((v) => worthPrep(v, min));
 }
 
 /**
@@ -96,8 +107,9 @@ export async function prepsFor(
   return new Map(rows.map((r) => [r.eventId, { id: r.id, body: r.body ?? "" }]));
 }
 
+/** Whether the meeting has its packet, written for this copy of it or another. */
 const hasPrep = async (ctx: ReadContext, eventId: string) =>
-  (await prepsFor(ctx.db, [eventId])).has(eventId);
+  (await prepsFor(ctx.db, await copiesOf(ctx.db, eventId))).size > 0;
 
 /**
  * The plain facts for one event's packet. `outside` says they quote a meeting's notes, which hold
@@ -271,11 +283,13 @@ export const prepPublish = defineAction({
       .where(eq(calendarEvent.entityId, i.eventId));
     if (!ev) throw new Error("No such event");
     const rules = await getSetting(ctx.tx, "owner.dayRules");
+    // One packet a meeting, whichever of its copies it was written for.
+    const copies = await copiesOf(ctx.tx, i.eventId);
     const [existing] = await ctx.tx
       .select({ id: entity.id })
       .from(link)
       .innerJoin(entity, eq(entity.id, link.fromId))
-      .where(and(eq(link.toId, i.eventId), eq(entity.type, "prep"), isNull(entity.deletedAt)));
+      .where(and(inArray(link.toId, copies), eq(entity.type, "prep"), isNull(entity.deletedAt)));
     if (existing) {
       await updateEntity(ctx, existing.id, { body: i.markdown });
       return { id: existing.id };

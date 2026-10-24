@@ -244,13 +244,14 @@ describe.runIf(h.run)("Jarvis's browser actions on the server's driver", () => {
     vi.stubEnv("HEARTH_ORIGIN", chrome().url("hearth.test", ""));
     try {
       // How many keys reached Hearth's page, once the tab is there. A slow page comes as soon as
-      // the tab has asked for it, which it may not have yet the first time round.
+      // the tab has asked for it, which it may not have yet the first time round. A busy machine
+      // can keep a tab that long, so it waits past the 20 s the slow page takes on its own.
       const keysOn = async (tabId: number, path: string) => {
         const arrived = () => {
           chrome().server.finish();
           return chrome().peek<string>(tabId, "location.pathname");
         };
-        await expect.poll(arrived, { timeout: 10_000 }).toBe(path);
+        await expect.poll(arrived, { timeout: 30_000 }).toBe(path);
         const now = await title(tabId);
         return now === "Hearth" ? 0 : Number(now.replace("keys ", ""));
       };
@@ -267,5 +268,5 @@ describe.runIf(h.run)("Jarvis's browser actions on the server's driver", () => {
     } finally {
       vi.unstubAllEnvs();
     }
-  });
+  }, 90_000);
 });

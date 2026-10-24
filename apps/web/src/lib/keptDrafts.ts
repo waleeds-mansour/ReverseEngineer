@@ -18,6 +18,8 @@ export const KEPT_HERE =
   "This device has changes to this draft that haven't reached Nook. Edit to see them.";
 /** Saves turned down in a row for the draft changing meanwhile, before it waits for next time. */
 const MERGES = 3;
+/** A request that hasn't answered by now gives up, so it holds neither the copy nor later sends. */
+const IN_TIME = { timeoutMs: 10_000 };
 const EMPTY: DraftFields = { from: null, to: "", cc: "", bcc: "", subject: "", text: "" };
 
 /** Bumped as kept drafts are sent, so whatever shows one waiting looks again. */
@@ -83,13 +85,13 @@ async function sendKept(id: string): Promise<void> {
   await withClosedCopies<DraftFields, void>(`draft:${id}`, async (copies) => {
     if (!copies.length) return;
     for (let i = 0; i < MERGES; i++) {
-      const theirs = (await action<MailDraft[]>("mail.drafts", { id }))[0];
+      const theirs = (await action<MailDraft[]>("mail.drafts", { id }, IN_TIME))[0];
       if (!theirs) return;
       let data = fieldsOf(theirs);
       for (const k of copies) data = mergeDraft(k.base ?? EMPTY, k.data, data);
       const account = data.from && data.from !== theirs.account ? data.from : undefined;
       try {
-        await action("mail.draft_update", draftInput(id, data, theirs.version, account));
+        await action("mail.draft_update", draftInput(id, data, theirs.version, account), IN_TIME);
       } catch (err) {
         if (err instanceof ApiError && err.code === "conflict") continue;
         throw err;

@@ -104,9 +104,10 @@ export const makeTaskAction = defineAction({
   risk: "internal",
   callers: ["system"],
   async handler(i, ctx) {
+    // Held till its task is in, so the ticket's news told twice at once still makes one task.
+    await ctx.tx.select().from(notionTask).where(eq(notionTask.entityId, i.ticketId)).for("update");
     const ticket = await liveEntity(ctx.tx, i.ticketId, "notion_task");
     if (!ticket) throw new ActionError("not_found", "No such Notion ticket");
-    // Its news told twice still makes one task.
     if (await hasAnyTask(ctx.tx, i.ticketId)) return null;
     const ref = renderMention({ type: "notion_task", id: i.ticketId, label: "Notion ticket" });
     const made = await ctx.call<{ id: string }>("task.create", {

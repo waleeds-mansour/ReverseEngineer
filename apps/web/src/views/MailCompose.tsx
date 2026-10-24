@@ -22,6 +22,7 @@ import {
   mergeDraft,
   showsCc,
 } from "../lib/compose.ts";
+import { sendKeptDrafts } from "../lib/keptDrafts.ts";
 import { toast } from "../lib/live.ts";
 import { cursorFor, cursorPlaced } from "../lib/mailActions.ts";
 import { act, useAction } from "../lib/query.ts";
@@ -156,6 +157,14 @@ export function Composer(props: { draft: MailDraft; conversation?: string; onDon
           "The draft changed elsewhere as you pressed Send, so nothing was sent. Check it and send again.",
           "error",
         );
+      // Changes to it typed on another screen here that Nook doesn't have yet: they'd be left out.
+      if (await saver.othersKept()) {
+        void sendKeptDrafts();
+        return toast.show(
+          "This device has changes to this draft that haven't reached Nook yet, so nothing was sent. Check it and send again in a moment.",
+          "error",
+        );
+      }
       const sent = await act<{ alreadySent?: boolean }>("mail.send", { id, version });
       // Not sent. If that's because it changed after the version you saw (Jarvis, another
       // screen), the newer one shows now, to check before sending again.

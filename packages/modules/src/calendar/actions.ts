@@ -1,6 +1,6 @@
 // Writing your calendar. Your own events (no guests) change directly; anything guests would see
 // is a separate action that waits for your yes (PLAN.md section 5.5).
-import { type DbOrTx, entity } from "@hearth/db";
+import { calendarEvent, type DbOrTx, entity } from "@hearth/db";
 import { type ActionContext, ActionError, addLink, defineAction, getSetting } from "@hearth/kernel";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -57,7 +57,10 @@ export async function save(
   if (!m) throw new ActionError("failed", "Google returned an event Nook can't read.");
   const { id: eid, change } = await saveEvent(ctx, m, taskId === undefined ? {} : { taskId });
   emitChange(ctx, eid, change, m);
-  return (await loadEvent(ctx.tx, eid)) as EventView;
+  const ev = await loadEvent(ctx.tx, eid);
+  // Google gave back one it had already (adding the same event again), and it's in Nook's trash.
+  if (!ev) throw new ActionError("not_found", "That event is in Nook's trash. Restore it instead.");
+  return ev;
 }
 
 /** Creates an event on your calendar. Used by the actions below and by time-blocking. */
@@ -149,8 +152,14 @@ export async function patchEvent(
 export async function removeEvent(ctx: ActionContext, eventId: string, shared = false) {
   const { ev, cal } = await editable(ctx, eventId, shared);
   await api(ctx).remove(cal.account, cal.googleId, ev.googleId, shared ? "all" : "none");
+  // It keeps its iCalUID, so it's still a copy of the same meeting (copies.ts).
+  const [r] = await ctx.tx
+    .select({ icalUid: calendarEvent.icalUid })
+    .from(calendarEvent)
+    .where(eq(calendarEvent.entityId, ev.id));
   await save(ctx, cal.id, {
     id: ev.googleId,
+    ...(r?.icalUid ? { iCalUID: r.icalUid } : {}),
     status: "cancelled",
     summary: ev.title,
     start: { dateTime: ev.startsAt.toISOString() },

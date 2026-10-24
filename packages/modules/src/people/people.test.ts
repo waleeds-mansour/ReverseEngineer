@@ -286,6 +286,22 @@ describe("who isn't a person", () => {
     await sync();
     expect((await people()).map((p) => p.name)).toEqual(["Cy Young"]);
   });
+
+  it("takes no name from spam or a mailing list's mail", async () => {
+    write([{ address: "cy@acme.example" }]);
+    await sync();
+    const from = { address: "cy@acme.example", name: "PayPal Billing" };
+    g.gmail.deliver({ from, subject: "Act now", text: "Hi" }, ["SPAM", "UNREAD"]);
+    const list = { "List-Id": "<team.groups.example>" };
+    g.gmail.deliver({
+      from: { ...from, name: "Cy via Team" },
+      subject: "Re",
+      text: "Hi",
+      headers: list,
+    });
+    await sync();
+    expect((await people()).map((p) => p.name)).toEqual(["cy@acme.example"]);
+  });
 });
 
 describe("you", () => {
