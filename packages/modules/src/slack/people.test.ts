@@ -14,6 +14,7 @@ import { personFor } from "../people/store.ts";
 import type { PersonSummary } from "../people/views.ts";
 import { SLACK_SERVICE, type SlackUser } from "./api.ts";
 import { FakeSlack } from "./fake.ts";
+import type { SlackSyncResult } from "./sync.ts";
 
 let t: TestKernel;
 let s: FakeSlack;
@@ -36,14 +37,23 @@ async function ok<T>(name: string, input: unknown = {}, caller: Caller = ownerCa
   if (res.status !== "ok") throw new Error(`${name}: ${JSON.stringify(res)}`);
   return res.result;
 }
-const sync = () =>
-  ok<{ people: number; error?: string }>("slack.sync", {}, integrationCaller("slack"));
+const sync = () => ok<SlackSyncResult>("slack.sync", {}, integrationCaller("slack"));
 const connect = () => ok("slack.connect", { token: s.token });
 // Everyone but you (the owner has a person record of their own).
 const people = async () =>
   (await ok<PersonSummary[]>("person.list")).filter((p) => p.name !== "You").map((p) => p.name);
 const linkedTo = (userId: string) =>
   t.tdb.db.select().from(slackUser).where(eq(slackUser.id, userId));
+/** As if read in before people came from Slack: no message looked at, and no one made from one. */
+async function forget(more: Partial<typeof slackMessage.$inferInsert> = {}) {
+  const made = await t.tdb.db
+    .select({ id: entity.id })
+    .from(entity)
+    .where(and(eq(entity.type, "person"), eq(entity.createdBy, "integration:slack")));
+  for (const p of made) await t.tdb.db.delete(entity).where(eq(entity.id, p.id));
+  await t.tdb.db.update(slackMessage).set({ peopleLinked: false, ...more });
+  await t.tdb.db.update(slackUser).set({ personId: null });
+}
 
 describe("people from Slack", () => {
   it("makes a person of each one you've talked with directly, and no one else", async () => {
@@ -152,6 +162,72 @@ describe("people from Slack", () => {
     expect(await personFor(t.tdb.db, "no-reply@acme.example")).toBeNull();
   });
 
+  it("looks even in a round Slack slowed down", async () => {
+    s.conversations = [
+      { id: "C1", name: "general", kind: "channel" },
+      { id: "D1", name: "", kind: "dm", user: "UANA" },
+      { id: "D2", name: "", kind: "dm", user: "UCAT" },
+    ];
+    member("UANA", "Ana", { email: "ana@acme.example" });
+    member("UCAT", "Cat", { email: "cat@acme.example" });
+    member("UDAN", "Dan", { email: "dan@acme.example" });
+    s.post("D1", "UANA", "Morning!");
+    s.post("D2", "UCAT", "Got a sec?");
+    s.post("C1", "UME", "Thanks Dan", s.post("C1", "UDAN", "Notes are up"));
+    await connect();
+
+    // A channel's history: C1 and D1 were read before Slack said to slow down.
+    s.failCalls.set("history D2", "ratelimited");
+    let r = await sync();
+    expect(r).toMatchObject({ channels: 2, people: 1 });
+    expect(r.error).toBeUndefined();
+    expect(await people()).toEqual(["Ana"]);
+
+    // A thread's replies: the channels were read, the thread in C1 wasn't.
+    s.failCalls.delete("history D2");
+    s.failCalls.set("replies C1", "ratelimited");
+    s.calls = [];
+    r = await sync();
+    expect(r).toMatchObject({ channels: 3, replies: 0, people: 1 });
+    expect(s.calls.filter((c) => c.startsWith("replies"))).toHaveLength(1);
+    expect((await people()).sort()).toEqual(["Ana", "Cat"]);
+
+    // Your mentions, before anything else is read: what's already in is looked at.
+    s.failCalls.delete("replies C1");
+    s.failCalls.set("search <@UME>", "ratelimited");
+    await forget();
+    r = await sync();
+    expect(r).toMatchObject({ channels: 0, people: 2 });
+    expect((await people()).sort()).toEqual(["Ana", "Cat"]);
+  });
+
+  it("waits a round when Slack slows its look at someone, and says so", async () => {
+    s.conversations = [
+      { id: "D1", name: "", kind: "dm", user: "UANA" },
+      { id: "D2", name: "", kind: "dm", user: "UCAT" },
+    ];
+    member("UANA", "Ana", { email: "ana@acme.example" });
+    member("UCAT", "Cat", { email: "cat@acme.example" });
+    s.post("D1", "UANA", "Morning!");
+    s.post("D2", "UCAT", "Got a sec?");
+    await connect();
+    await sync();
+    // As if read in before, with Slack asked about each of them again.
+    await forget();
+    await t.tdb.db.update(slackUser).set({ checkedAt: null });
+
+    s.failCalls.set("user UCAT", "ratelimited");
+    let r = await sync();
+    expect(r).toMatchObject({ people: 1, lookupsStopped: "ratelimited" });
+    expect(r.error).toBeUndefined();
+    expect(await people()).toEqual(["Ana"]);
+    s.failCalls.clear();
+    r = await sync();
+    expect(r).toMatchObject({ people: 1 });
+    expect(r.lookupsStopped).toBeUndefined();
+    expect((await people()).sort()).toEqual(["Ana", "Cat"]);
+  });
+
   it("looks at what was read in before, a round's lookups at a time", async () => {
     s.conversations = Array.from({ length: 20 }, (_, i) => ({
       id: `D${i}`,
@@ -170,12 +246,7 @@ describe("people from Slack", () => {
     expect(await people()).toHaveLength(20);
 
     // As if read in before people came from Slack: not looked at yet, and no one made.
-    const made = await t.tdb.db
-      .select({ id: entity.id })
-      .from(entity)
-      .where(and(eq(entity.type, "person"), eq(entity.createdBy, "integration:slack")));
-    for (const p of made) await t.tdb.db.delete(entity).where(eq(entity.id, p.id));
-    await t.tdb.db.update(slackMessage).set({ peopleLinked: false, mentions: null });
+    await forget({ mentions: null });
     expect(await people()).toEqual([]);
     expect((await sync()).people).toBe(20);
     expect(await people()).toHaveLength(20);

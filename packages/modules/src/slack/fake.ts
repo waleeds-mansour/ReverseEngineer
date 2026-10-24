@@ -52,8 +52,8 @@ export class FakeSlack {
   /** Set to an error code (token_revoked) to have every call fail with it. */
   failWith: string | null = null;
   /**
-   * Error codes for some calls only, by what `calls` would note: "replies C1", "history C2". A
-   * ratelimited one can say how long to wait.
+   * Error codes for some calls only, by what `calls` would note: "replies C1", "history C2", or
+   * by user for users.info: "user U1". A ratelimited one can say how long to wait.
    */
   failCalls = new Map<string, string | { code: string; retryAfter?: number }>();
   /** Every call Hearth made, of any kind. */
@@ -197,6 +197,7 @@ export class FakeSlack {
       },
       user: async (token, id) => {
         check(token);
+        this.failIf(`user ${id}`);
         // Jarvis's bot's own user, as users.info shows a bot: whose app it is.
         if (id === this.bot.userId)
           return {

@@ -114,6 +114,8 @@ export interface SlackSyncResult {
   replies: number;
   /** People met: made from someone you talked with, or found to be someone you know. */
   people: number;
+  /** Why Slack stopped being asked about people this round (ratelimited): the rest wait a round. */
+  lookupsStopped?: string;
   error?: string;
 }
 
@@ -132,8 +134,10 @@ export async function syncSlack(ctx: ActionContext): Promise<SlackSyncResult> {
   const troubles: Trouble[] = [];
   let progressed = false;
   let slowed = false;
+  let opened: string | null = null;
   try {
     const token = openToken(ctx, ws);
+    opened = token;
     const settled = ws.syncedAt !== null;
     if (!ws.channelsAt || ctx.now.getTime() - ws.channelsAt.getTime() > CHANNEL_LIST_MS)
       await savepoint(ctx, (sp) => refreshChannels(sp, ws, token));
@@ -163,13 +167,22 @@ export async function syncSlack(ctx: ActionContext): Promise<SlackSyncResult> {
       }
     }
     result.replies = await readThreads(ctx, ws, token, budget, settled, troubles);
-    // Then who you've talked with, in what's been read in so far.
-    result.people = await savepoint(ctx, (sp) => meetPeople(sp, ws, token));
   } catch (err) {
     // Slowing down when asked is normal; the next round picks up where this one stopped.
     if (err instanceof SlackError && err.code === "ratelimited") slowed = true;
     else troubles.unshift(troubleOf(err));
   }
+  // Then who you've talked with, in what's been read in so far, however the reading went: Slack
+  // slows reading down most rounds, and this asks it only about people, within its own limit.
+  const key = opened;
+  if (key)
+    try {
+      const { met, stopped } = await savepoint(ctx, (sp) => meetPeople(sp, ws, key));
+      result.people = met;
+      if (stopped) result.lookupsStopped = stopped;
+    } catch (err) {
+      troubles.push(troubleOf(err));
+    }
   const trouble = worst(troubles);
   if (trouble) result.error = trouble.message;
   if (slowed && !trouble && !progressed) return result;
