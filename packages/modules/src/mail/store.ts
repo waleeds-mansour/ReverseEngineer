@@ -173,7 +173,8 @@ export async function saveMail(
     copyKey: key,
   });
   const mine = outbound ? await sentAs() : await yours();
-  await linkPeople(ctx, message.id, { outbound, from: p.from, to: p.to, cc: p.cc }, mine);
+  const anyName = p.bulk || mail.labels.includes("SPAM");
+  await linkPeople(ctx, message.id, { outbound, from: p.from, to: p.to, cc: p.cc, anyName }, mine);
   await recomputeThread(ctx, threadId);
   return { id: message.id, threadId, added: true, outbound, parsed: p };
 }

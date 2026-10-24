@@ -68,7 +68,14 @@ export async function laneFor(
 export async function linkPeople(
   ctx: ActionContext,
   messageId: string,
-  m: { outbound: boolean; from: MailAddress | null; to: MailAddress[]; cc: MailAddress[] },
+  m: {
+    outbound: boolean;
+    from: MailAddress | null;
+    to: MailAddress[];
+    cc: MailAddress[];
+    /** Spam, or a list's mail: the name on From is anyone's ("PayPal", "Jane via Group"). */
+    anyName: boolean;
+  },
   mine: ReadonlySet<string>,
 ): Promise<void> {
   const others = (list: MailAddress[]) => list.filter((a) => !mine.has(addressKey(a.address)));
@@ -85,6 +92,6 @@ export async function linkPeople(
     if (!personId) continue;
     await linkPerson(ctx, messageId, personId);
     // What they call themselves, for someone known only by their address so far.
-    if (who === m.from) await nameFrom(ctx, personId, who);
+    if (who === m.from && !m.anyName) await nameFrom(ctx, personId, who);
   }
 }

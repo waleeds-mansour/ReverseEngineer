@@ -3,9 +3,10 @@
 // to go if it changed by the time you said yes (D33, D58). Names are written by the people
 // themselves, so they're kept short and can't carry Hearth's link tags.
 import { isUuid } from "@hearth/core";
-import { type DbOrTx, personEmail, slackBot, slackUser, slackWorkspace } from "@hearth/db";
+import { type DbOrTx, entity, personEmail, slackBot, slackUser, slackWorkspace } from "@hearth/db";
 import { type ActionContext, ActionError, getSetting, type ReadContext } from "@hearth/kernel";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
+import { personFor } from "../../people/store.ts";
 import { SlackError, type SlackUser } from "../api.ts";
 import { named, openToken, slackApi } from "../save.ts";
 
@@ -222,34 +223,30 @@ export async function findMembers(r: Reader, query: string) {
   return { candidates, more: found.length > top.length };
 }
 
-/** The person each user is in Hearth: linked when Slack was read in, or by email. */
+/**
+ * The person each user is in Hearth: linked when Slack was read in, or by email. Someone you put
+ * in the trash isn't anyone.
+ */
 async function linkedPeople(db: DbOrTx, users: SlackUser[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   if (!users.length) return out;
   const linked = await db
     .select({ id: slackUser.id, person: slackUser.personId })
     .from(slackUser)
+    .innerJoin(entity, eq(entity.id, slackUser.personId))
     .where(
-      inArray(
-        slackUser.id,
-        users.map((u) => u.id),
+      and(
+        inArray(
+          slackUser.id,
+          users.map((u) => u.id),
+        ),
+        isNull(entity.deletedAt),
       ),
     );
   for (const l of linked) if (l.person) out.set(l.id, l.person);
-  const emails = users.filter((u) => !out.has(u.id) && u.email);
-  if (!emails.length) return out;
-  const byEmail = await db
-    .select()
-    .from(personEmail)
-    .where(
-      inArray(
-        personEmail.address,
-        emails.map((u) => u.email!.toLowerCase()),
-      ),
-    );
-  for (const u of emails) {
-    const p = byEmail.find((e) => e.address === u.email!.toLowerCase());
-    if (p) out.set(u.id, p.personId);
+  for (const u of users) {
+    const person = out.has(u.id) || !u.email ? null : await personFor(db, u.email.toLowerCase());
+    if (person) out.set(u.id, person);
   }
   return out;
 }
