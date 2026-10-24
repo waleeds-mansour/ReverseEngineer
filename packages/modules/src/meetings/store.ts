@@ -155,11 +155,14 @@ export async function recordMeeting(
     .limit(1);
   let id: string;
   if (ev) {
+    // Its notes, taken on this copy of it or another, as startMeeting finds them.
     const [known] = await ctx.tx
       .select({ endedAt: meeting.endedAt })
       .from(meeting)
       .innerJoin(entity, eq(entity.id, meeting.entityId))
-      .where(and(eq(meeting.eventId, ev.id), isNull(entity.deletedAt)));
+      .where(and(inArray(meeting.eventId, await copiesOf(ctx.tx, ev.id)), isNull(entity.deletedAt)))
+      .orderBy(asc(entity.createdAt))
+      .limit(1);
     // Already ended: a second recording is its own meeting, with the same people.
     id = known?.endedAt
       ? await startMeeting(ctx, {

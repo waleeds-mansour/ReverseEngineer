@@ -3,6 +3,7 @@
 import { addLocalDays, atLocal, formatTime } from "@hearth/core";
 import { calendar, calendarEvent, type DbOrTx, entity, task } from "@hearth/db";
 import { and, asc, count, eq, gte, isNull, lt, ne, notInArray, or } from "drizzle-orm";
+import { firstOfEach } from "../calendar/copies.ts";
 import { NOT_PLANS } from "../calendar/store.ts";
 
 /** Meetings named on the card; the rest are counted. */
@@ -27,6 +28,7 @@ export async function tomorrowAtAGlance(db: DbOrTx, date: string, tz: string): P
       title: entity.title,
       startsAt: calendarEvent.startsAt,
       icalUid: calendarEvent.icalUid,
+      googleId: calendarEvent.googleId,
     })
     .from(calendarEvent)
     .innerJoin(entity, eq(entity.id, calendarEvent.entityId))
@@ -60,13 +62,7 @@ export async function tomorrowAtAGlance(db: DbOrTx, date: string, tz: string): P
       ),
     );
   // The same invitation on two of your calendars is one meeting.
-  const seen = new Set<string>();
-  const once = meetings.filter((m) => {
-    const key = `${m.icalUid ?? m.id}:${m.startsAt.toISOString()}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const once = firstOfEach(meetings);
   const named = once
     .slice(0, FIRST_MEETINGS)
     .map((m) => `${formatTime(m.startsAt, tz)} ${plain(m.title)}`);

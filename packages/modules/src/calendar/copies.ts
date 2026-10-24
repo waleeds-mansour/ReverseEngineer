@@ -43,7 +43,14 @@ export function rankOf(x: Copy): number {
   );
 }
 
-const keyOf = (r: Copy["r"]) => `${r.icalUid ?? r.googleId}@${r.startsAt.toISOString()}`;
+type Keyed = Pick<Copy["r"], "icalUid" | "googleId" | "startsAt">;
+const keyOf = (r: Keyed) => `${r.icalUid ?? r.googleId}@${r.startsAt.toISOString()}`;
+
+/** Each meeting at a time once, as the first of its copies given: for a list that names them. */
+export function firstOfEach<T extends Keyed>(rows: readonly T[]): T[] {
+  const seen = new Set<string>();
+  return rows.filter((r) => !seen.has(keyOf(r)) && Boolean(seen.add(keyOf(r))));
+}
 
 /**
  * Each meeting at a time once, in the order given, with every copy of it and the one to show. Ties

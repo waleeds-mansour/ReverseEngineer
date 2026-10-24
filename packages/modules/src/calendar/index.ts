@@ -241,10 +241,16 @@ export const calendarModule = defineModule({
     const rules = await getSetting(ctx.db, "owner.dayRules");
     const today = localDate(ctx.now, rules.timeZone);
     const rows = await ctx.db
-      .select({ e: entity, r: calendarEvent })
+      .select({
+        e: entity,
+        r: calendarEvent,
+        own: googleAccount.email,
+        writeDefault: calendar.writeDefault,
+      })
       .from(calendarEvent)
       .innerJoin(entity, eq(entity.id, calendarEvent.entityId))
       .innerJoin(calendar, eq(calendar.id, calendarEvent.calendarId))
+      .leftJoin(googleAccount, ownAccount)
       .where(
         and(
           eq(calendar.selected, true),
@@ -256,8 +262,9 @@ export const calendarModule = defineModule({
       )
       .orderBy(asc(calendarEvent.startsAt))
       .limit(30);
-    const items: DigestItem[] = rows
-      .map((x) => toEventView(x.e, x.r))
+    // A meeting on two of your calendars is one line, the copy Calendar shows.
+    const items: DigestItem[] = oneEach(rows)
+      .map(({ shown: x }) => toEventView(x.e, x.r))
       // Begun by today: tomorrow's all-day events start at tomorrow's midnight, so they wait.
       .filter((v) => localDate(v.startsAt, rules.timeZone) <= today)
       .filter((v) => v.selfResponse !== "declined")

@@ -1,6 +1,6 @@
 // Writing your calendar. Your own events (no guests) change directly; anything guests would see
 // is a separate action that waits for your yes (PLAN.md section 5.5).
-import { type DbOrTx, entity } from "@hearth/db";
+import { calendarEvent, type DbOrTx, entity } from "@hearth/db";
 import { type ActionContext, ActionError, addLink, defineAction, getSetting } from "@hearth/kernel";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -149,8 +149,14 @@ export async function patchEvent(
 export async function removeEvent(ctx: ActionContext, eventId: string, shared = false) {
   const { ev, cal } = await editable(ctx, eventId, shared);
   await api(ctx).remove(cal.account, cal.googleId, ev.googleId, shared ? "all" : "none");
+  // It keeps its iCalUID, so it's still a copy of the same meeting (copies.ts).
+  const [r] = await ctx.tx
+    .select({ icalUid: calendarEvent.icalUid })
+    .from(calendarEvent)
+    .where(eq(calendarEvent.entityId, ev.id));
   await save(ctx, cal.id, {
     id: ev.googleId,
+    ...(r?.icalUid ? { iCalUID: r.icalUid } : {}),
     status: "cancelled",
     summary: ev.title,
     start: { dateTime: ev.startsAt.toISOString() },
