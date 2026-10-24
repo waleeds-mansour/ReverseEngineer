@@ -40,7 +40,13 @@ export function NodeView(props: {
       class="h-full w-full resize-none bg-transparent p-2"
       style={{ color: "inherit", "text-align": n().type === "shape" ? "center" : undefined }}
       value={text()}
-      ref={(el) => queueMicrotask(() => el.focus())}
+      // Opened to add to what's there: the caret goes after the text.
+      ref={(el) =>
+        queueMicrotask(() => {
+          el.focus();
+          el.setSelectionRange(el.value.length, el.value.length);
+        })
+      }
       onPointerDown={(e) => e.stopPropagation()}
       onBlur={(e) => props.onText(e.currentTarget.value)}
       onKeyDown={(e) => {
