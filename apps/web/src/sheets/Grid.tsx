@@ -195,6 +195,8 @@ export function SheetGrid(props: { id: string; pane: number }) {
   };
 
   const curRef = () => cellName(cur().row, cur().col);
+  // A new spreadsheet shows its name as the hint, so typing a name replaces it.
+  const name = () => (s.title() === "Untitled spreadsheet" ? "" : s.title());
 
   return (
     <div class="flex h-full flex-col">
@@ -203,7 +205,7 @@ export function SheetGrid(props: { id: string; pane: number }) {
           <input
             class="w-full bg-transparent"
             aria-label="Spreadsheet name"
-            value={s.title()}
+            value={name()}
             placeholder="Untitled spreadsheet"
             readOnly={!s.loaded()}
             onChange={(e) => void s.rename(e.currentTarget.value.trim() || "Untitled spreadsheet")}

@@ -221,8 +221,9 @@ export function CanvasBoard(props: { id: string; pane: number }) {
 
   const dblclick = (e: MouseEvent) => {
     if ((e.target as HTMLElement).closest("[data-toolbar]")) return;
-    const nodeId = (e.target as HTMLElement).closest<HTMLElement>("[data-node]")?.dataset.node;
-    const n = nodeId ? nodeOf(nodeId) : undefined;
+    // Found by where it landed, not by its target: the board holds the pointer from pointerdown, so
+    // the browser hands the double-click to the board even when it was on a card.
+    const n = nodeAt(b.board, point(e));
     if (!n) return place("text", point(e));
     if (n.type === "entitymention")
       layout.open(routeFor(n.entityType, n.file), { pane: props.pane, beside: true });
@@ -268,6 +269,8 @@ export function CanvasBoard(props: { id: string; pane: number }) {
   };
 
   const grid = () => `${24 * cam().zoom}px ${24 * cam().zoom}px`;
+  // A new board shows its name as the hint, so typing a name replaces it instead of adding to it.
+  const name = () => (b.title() === "Untitled board" ? "" : b.title());
 
   return (
     <div class="flex h-full flex-col">
@@ -276,7 +279,7 @@ export function CanvasBoard(props: { id: string; pane: number }) {
           <input
             class="w-full bg-transparent"
             aria-label="Board name"
-            value={b.title()}
+            value={name()}
             placeholder="Untitled board"
             readOnly={!b.loaded()}
             onChange={(e) => void b.rename(e.currentTarget.value.trim() || "Untitled board")}

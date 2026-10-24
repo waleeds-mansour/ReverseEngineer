@@ -16,13 +16,19 @@ export async function boardSteps({ step, keys, base, tag }: Smoke) {
     // Name it and draw once the board has loaded: the toolbar shows before that, and loading sets
     // the name the board came with and frames the view, which would move what's drawn already.
     await p.getByText("Double-click anywhere to write").waitFor();
+    // Named the way a person does it, clicking in and typing: the name it came with is only a hint.
     const name = p.getByLabel("Board name");
-    await name.fill(`Trip plan ${tag}`);
+    await name.click();
+    await p.keyboard.type(`Trip plan ${tag}`);
     await name.press("Enter");
     const board = p.locator("[data-toolbar]").locator("..");
     const box = (await board.boundingBox())!;
     await p.mouse.dblclick(box.x + 200, box.y + 250);
     await p.keyboard.type(`Book flights ${tag}`);
+    await keys("Escape");
+    // Double-clicking the card again writes more in it, not on a new card over it.
+    await p.mouse.dblclick(box.x + 200, box.y + 250);
+    await p.keyboard.type(" today");
     await keys("Escape");
     await p.getByTitle("Box (R)").click();
     await p.mouse.click(box.x + 600, box.y + 250);
@@ -41,7 +47,7 @@ export async function boardSteps({ step, keys, base, tag }: Smoke) {
     type Saved = {
       title: string;
       board: {
-        nodes: { type: string }[];
+        nodes: { type: string; text?: string }[];
         edges: { from: { type: string }; to: { type: string } }[];
       };
     };
@@ -59,12 +65,15 @@ export async function boardSteps({ step, keys, base, tag }: Smoke) {
         .map((n) => n.type)
         .sort()
         .join(",");
+    const sticky = `Book flights ${tag} today`;
+    const wrote = (b: Saved) => b.board.nodes.some((n) => n.text === sticky);
     // The board saves a moment after the last change, later on a busy PC: read until it has.
     let saved = await read();
     for (let waited = 0; waited < 15_000; waited += 250) {
       if (
         saved.title === `Trip plan ${tag}` &&
         kindsOf(saved) === "entitymention,shape,text" &&
+        wrote(saved) &&
         saved.board.edges.length > 0
       )
         break;
@@ -74,11 +83,12 @@ export async function boardSteps({ step, keys, base, tag }: Smoke) {
     const kinds = kindsOf(saved);
     if (saved.title !== `Trip plan ${tag}`) throw new Error(`board named ${saved.title}`);
     if (kinds !== "entitymention,shape,text") throw new Error(`board holds ${kinds}`);
+    if (!wrote(saved)) throw new Error(`cards say ${JSON.stringify(saved.board.nodes)}`);
     const edge = saved.board.edges[0];
     if (edge?.from.type !== "connected" || edge?.to.type !== "connected")
       throw new Error(`arrow ${JSON.stringify(saved.board.edges)}`);
     await p.reload();
-    await p.getByText(`Book flights ${tag}`).waitFor();
+    await p.getByText(sticky).waitFor();
   });
 
   await step("a spreadsheet that adds up as you type", async (p) => {
@@ -87,7 +97,8 @@ export async function boardSteps({ step, keys, base, tag }: Smoke) {
     await p.getByRole("button", { name: "New spreadsheet" }).click();
     await p.locator('[data-cell="A1"]').waitFor();
     const name = p.getByLabel("Spreadsheet name");
-    await name.fill(`Budget ${tag}`);
+    await name.click();
+    await p.keyboard.type(`Budget ${tag}`);
     await name.press("Enter");
     await p.locator('[data-cell="A1"]').click();
     for (const v of ["1200", "300", "=SUM(A1:A2)"]) {
