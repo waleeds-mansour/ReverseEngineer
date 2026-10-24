@@ -139,8 +139,18 @@ export function startWorker(opts: WorkerOptions) {
         .from(slackWorkspace)
         .limit(1);
       if (!any) return;
-      const res = await kernel.execute("slack.sync", {}, integrationCaller("slack"));
+      const res = await kernel.execute<{ people: number; lookupsStopped?: string }>(
+        "slack.sync",
+        {},
+        integrationCaller("slack"),
+      );
       if (res.status !== "ok") log(`slack sync: ${JSON.stringify(res)}`);
+      else {
+        // Who you've talked with became people this round, or asking Slack about them stopped.
+        const { people, lookupsStopped: stopped } = res.result;
+        if (stopped) log(`slack sync: met ${people} people, then lookups stopped (${stopped})`);
+        else if (people) log(`slack sync: met ${people} people`);
+      }
     } catch (err) {
       log("slack sync failed", err);
     } finally {

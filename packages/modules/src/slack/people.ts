@@ -17,6 +17,7 @@ import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { accountAddresses, addressKey } from "../mail/mine.ts";
 import { isMachineAddress } from "../people/domains.ts";
 import { ensurePerson, personFor } from "../people/store.ts";
+import { SlackError } from "./api.ts";
 import { linkEarlier, profileOf, slackApi, type WorkspaceRow } from "./save.ts";
 
 /** Messages looked at a round, and users.info lookups (Slack allows about 100 a minute). */
@@ -111,7 +112,8 @@ async function talkedWith(db: DbOrTx, me: string, batch: Seen[]) {
   return out;
 }
 
-type Lookups = { left: number };
+/** What a round may still ask Slack about people, and why it stopped asking, when it did. */
+type Lookups = { left: number; stopped?: string };
 type Known = typeof slackUser.$inferSelect;
 
 /** What Slack says of them now, read again once it's a week old. Null: not this round. */
@@ -131,9 +133,10 @@ async function facts(
   let u: Awaited<ReturnType<ReturnType<typeof slackApi>["user"]>>;
   try {
     u = await slackApi(ctx).user(token, id);
-  } catch {
+  } catch (err) {
     // Slowed down or refused: the rest waits a round, as the member check does (member/check.ts).
     lookups.left = 0;
+    lookups.stopped = err instanceof SlackError ? err.code : "unreachable";
     return null;
   }
   const flags = {
@@ -191,10 +194,20 @@ async function meet(
 }
 
 /**
- * Looks at messages not yet looked at for the people in them: the oldest first, a round's worth.
- * Returns how many became people (or were found to be someone you know).
+ * A round's look: how many became people (or were found to be someone you know), and why Slack
+ * stopped being asked about people, when it was.
  */
-export async function meetPeople(ctx: ActionContext, ws: WorkspaceRow, token: string) {
+export interface Met {
+  met: number;
+  stopped?: string;
+}
+
+/** Looks at messages not yet looked at for the people in them: the oldest first, a round's worth. */
+export async function meetPeople(
+  ctx: ActionContext,
+  ws: WorkspaceRow,
+  token: string,
+): Promise<Met> {
   const batch: Seen[] = await ctx.tx
     .select({
       id: slackMessage.entityId,
@@ -212,7 +225,7 @@ export async function meetPeople(ctx: ActionContext, ws: WorkspaceRow, token: st
     .where(and(eq(slackChannel.teamId, ws.teamId), eq(slackMessage.peopleLinked, false)))
     .orderBy(asc(slackMessage.sentAt))
     .limit(PER_ROUND);
-  if (!batch.length) return 0;
+  if (!batch.length) return { met: 0 };
   const talked = await talkedWith(ctx.tx, ws.userId, batch);
   // Jarvis's own bot is no one.
   if (ws.jarvis) talked.delete(ws.jarvis.botUserId);
@@ -231,5 +244,5 @@ export async function meetPeople(ctx: ActionContext, ws: WorkspaceRow, token: st
       .update(slackMessage)
       .set({ peopleLinked: true })
       .where(inArray(slackMessage.entityId, done));
-  return met;
+  return { met, ...(lookups.stopped ? { stopped: lookups.stopped } : {}) };
 }
