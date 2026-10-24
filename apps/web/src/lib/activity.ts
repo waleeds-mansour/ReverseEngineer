@@ -111,6 +111,7 @@ const ROUTINE: Record<string, string> = {
   reply_drafts: "Reply drafts",
   follow_ups: "Follow-ups",
   memory: "Tidying what it remembers",
+  "people.personas": "Getting to know people",
   "jarvis.heartbeat": "Heartbeat",
 };
 

@@ -79,6 +79,10 @@ export interface SlackUser {
   /** For a bot's user: the app it belongs to, and the bot (B…). */
   appId?: string;
   botId?: string;
+  /** From their profile: the name they chose to go by, their title, their time zone (IANA). */
+  displayName?: string;
+  title?: string;
+  tz?: string;
 }
 
 export interface SlackMatch extends SlackMessage {

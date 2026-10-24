@@ -176,8 +176,14 @@ export interface ReadContext {
   now: Date;
 }
 
-/** Describes one record of a module's entity type as markdown, for Jarvis to read and cite. */
-export type Describe = (entityId: string, ctx: ReadContext) => Promise<string | null>;
+/**
+ * A record as markdown, for Jarvis to read and cite. `outside`: some of it is other people's words
+ * (a person's persona, written from their messages), so it reads as outside content (D58).
+ */
+export type Described = string | { text: string; outside: boolean };
+
+/** Describes one record of a module's entity type, for Jarvis to read and cite. */
+export type Describe = (entityId: string, ctx: ReadContext) => Promise<Described | null>;
 
 export interface NewNotification {
   kind: string;

@@ -782,7 +782,7 @@ Reading every channel every round (a workspace with 100 channels would hit Slack
 **Why:** Polling with one read-only token is the least setup and the smallest thing to leak, and
 it fits a PC with no public address.
 
-*Later:* posting as its own bot: D62.
+*Later:* posting as its own bot: D62. People from Slack, and Pip's lines about them: D83.
 
 ## D49. The GitHub loop reads pull requests with your token and only moves tasks forward (2026-10-03)
 
@@ -2415,6 +2415,7 @@ and the job picks a tier and, for Sonnet, how hard it thinks. All of it is one m
 | Heartbeat, sorting what came in | Haiku | Sonnet |
 | A watch firing | Haiku | Sonnet |
 | Tidying what you said by voice | Haiku, low | Sonnet |
+| A few lines about people you talk with on Slack (D83) | Haiku, low | new |
 | The health check's "are you there" | Haiku, low | Sonnet |
 
 **Code is always Opus.** A chat message or an @mention is about code when it has a code block,
@@ -2475,3 +2476,40 @@ with a key for the cheap jobs: paid per token outside the owner's plan.
 can properly tier each task to these 3 models... it will significantly use my weekly usage unless
 we optimize this", so they can connect all their connectors and start Pip again every day. On
 approving the table, 2026-10-23: "anything coding related would have to be opus though."
+
+## D83. People from Slack, and a few lines from Pip about each (2026-10-23)
+
+*This changes D48's "Slack never creates people".*
+
+**Decision:** Slack follows mail's rule (section 8.7): someone you've talked with becomes a person,
+not the whole workspace. In Slack that's a DM or a group DM you both wrote in, a thread you both
+wrote in, or an @mention either way (`slack/people.ts`).
+- **No one else:** bots, deactivated users and Slackbot are no one. A guest or someone from
+  another org (Slack Connect) is someone only once you've written to them, not because they wrote
+  to you. Someone with no email on Slack isn't made a person.
+- **One person, by email:** their Slack profile email is the person's address, so mail and Slack
+  meet in one person whichever came first. The rules mail keeps hold here too: someone in the
+  trash stays there, a desk's address (support@, no-reply@) is no one, and a name you gave stays.
+- **What was read in before:** each message has a `people_linked` flag, false until it's looked
+  at, so what Slack read in before this is looked at over the next rounds: 500 messages a round,
+  oldest first, with at most 15 profile lookups (users.info), the rest waiting a round. Profiles
+  (display name, title, time zone) are read again once a week old. Mentions you wrote in old
+  messages were kept only as names, so those alone don't make anyone a person; new ones do.
+- **Personas:** each morning at 5:40 (`people.personas`, on Haiku, low effort, D82) Pip writes a
+  few lines, at most 800 characters, about up to six people: what they work on with you and how
+  you work together, from your shared Slack talk (the last 40 messages). Someone is due once you've
+  shared 6 messages, then again a week later if you've talked since, or sooner after 40 new ones.
+  Pip is given the talk as other people's words (`untrusted`), and the persona is in its own field
+  on the person, beside the Slack profile, so your notes are never touched. Only Pip writes one
+  (`person.write_persona`). The person page shows both under "From Slack", marked as from their
+  messages, and Jarvis reading a person with either reads outside content (D58), even someone you
+  added yourself.
+
+**Alternatives:** Everyone in the workspace (a big Slack would fill People with strangers). Only
+DMs (a thread you work in together is talking too). Writing the persona into your notes (it would
+mix Pip's words, drawn from other people's messages, with yours). Writing personas on each sync
+(one model call per person per round, for lines that change slowly).
+
+**Why:** Asked for on 2026-10-23: Nook saves people from Slack and gives each a short persona.
+People had never had a person but "You", since Slack, where most of the owner's talk is, made no
+one, and Pip should know who people are and how the owner works with them.

@@ -1,11 +1,11 @@
 // Saving what Slack says: messages are records written by Slack (outside content), and one that
 // @mentions you or is a direct message lands in the inbox when `announce` says so.
-import { type slackChannel, slackMessage, slackUser, type slackWorkspace } from "@hearth/db";
+import { link, type slackChannel, slackMessage, slackUser, type slackWorkspace } from "@hearth/db";
 import { type ActionContext, addLink, createEntity, createNotification } from "@hearth/kernel";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { VAULT_SERVICE, type Vault } from "../browser/vault.ts";
-import { personFor } from "../people/store.ts";
-import { SLACK_SERVICE, type SlackApi, type SlackMessage } from "./api.ts";
+import { linkPerson, personFor } from "../people/store.ts";
+import { SLACK_SERVICE, type SlackApi, type SlackMessage, type SlackUser } from "./api.ts";
 
 /**
  * The workspace as a sync round reads it. `jarvis` is Jarvis's own bot, when it's connected: its
@@ -87,6 +87,28 @@ export function plainText(text: string, names: Map<string, string>): string {
 /** A name someone else chose (a person, a channel), safe to put in Hearth's text. */
 export const named = (s: string) => s.replace(/<(\/?m-ref)/gi, "‹$1");
 
+/** Someone's newest messages linked to them when they become someone you know. */
+const EARLIER = 200;
+
+/** What someone wrote before they were someone you know is theirs too, as their mail is. */
+export async function linkEarlier(ctx: ActionContext, userId: string, personId: string) {
+  const rows = await ctx.tx
+    .select({ id: slackMessage.entityId })
+    .from(slackMessage)
+    .leftJoin(
+      link,
+      and(
+        eq(link.fromId, slackMessage.entityId),
+        eq(link.toId, personId),
+        eq(link.kind, "participant"),
+      ),
+    )
+    .where(and(eq(slackMessage.userId, userId), isNull(link.id)))
+    .orderBy(desc(slackMessage.sentAt))
+    .limit(EARLIER);
+  for (const r of rows) await linkPerson(ctx, r.id, personId);
+}
+
 /**
  * A Slack user's name, asked of Slack once and kept, with the person they are by email. Who they
  * are is looked up each time: someone you meet or write to later becomes theirs, and someone you
@@ -98,6 +120,7 @@ export async function userName(ctx: ActionContext, ws: WorkspaceRow, token: stri
     const personId = known.email ? await personFor(ctx.tx, known.email) : null;
     if (personId === known.personId) return known;
     await ctx.tx.update(slackUser).set({ personId }).where(eq(slackUser.id, id));
+    if (personId) await linkEarlier(ctx, id, personId);
     return { ...known, personId };
   }
   const u = await slackApi(ctx).user(token, id);
@@ -110,14 +133,27 @@ export async function userName(ctx: ActionContext, ws: WorkspaceRow, token: stri
     bot: u?.bot ?? false,
     personId: email ? await personFor(ctx.tx, email) : null,
   };
-  await ctx.tx.insert(slackUser).values(row).onConflictDoNothing();
+  await ctx.tx
+    .insert(slackUser)
+    .values({ ...row, ...(u ? profileOf(u) : {}) })
+    .onConflictDoNothing();
   return row;
 }
 
+/** What a profile says about someone, as slack_user keeps it. Their own words, kept short. */
+export const profileOf = (u: SlackUser) => ({
+  displayName: u.displayName?.slice(0, 200) ?? null,
+  title: u.title?.slice(0, 200) ?? null,
+  timeZone: u.tz?.slice(0, 64) ?? null,
+});
+
+/** Who a message @mentions, by Slack id: at most 20. */
+const mentionsIn = (text: string) =>
+  [...new Set([...text.matchAll(/<@([A-Z0-9]+)/g)].map(([, id]) => id!))].slice(0, 20);
+
 async function names(ctx: ActionContext, ws: WorkspaceRow, token: string, text: string) {
   const out = new Map<string, string>();
-  for (const [, id] of text.matchAll(/<@([A-Z0-9]+)/g))
-    if (id && !out.has(id) && out.size < 20) out.set(id, (await userName(ctx, ws, token, id)).name);
+  for (const id of mentionsIn(text)) out.set(id, (await userName(ctx, ws, token, id)).name);
   return out;
 }
 
@@ -198,6 +234,7 @@ export async function saveMessage(
     mentionsMe,
     sentAt: tsDate(m.ts),
     latestReply: !reply && m.replyCount ? (m.latestReply ?? null) : null,
+    mentions: mentionsIn(m.text),
   });
   if (author?.personId)
     await addLink(ctx, { fromId: record.id, toId: author.personId, kind: "participant" });

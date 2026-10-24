@@ -1,16 +1,25 @@
 // A person's page: how to reach them, their company, when you last talked, a follow-up if you
-// want one, your own fields, and everything linked to them. And a company's page: its people.
+// want one, who they are in Slack and Pip's few lines about them, your own fields, and everything
+// linked to them. And a company's page: its people.
 
 import { createSignal, For, type JSX, Show } from "solid-js";
 import { Icon } from "../components/icons.tsx";
 import { Overflow, ROW_MENU } from "../components/Menu.tsx";
+import { OutsideMark } from "../components/OutsideMark.tsx";
 import { Empty, TextButton } from "../components/ui.tsx";
 import { ago, day, TYPE_LABEL } from "../lib/format.ts";
 import { orBack } from "../lib/orBack.ts";
 import { layout, routeFor } from "../lib/panes.ts";
 import { act, useAction } from "../lib/query.ts";
 import { moveToTrash } from "../lib/trash.ts";
-import type { CompanyDetail, LastContact, Linked, Person, PersonDetail } from "../lib/types.ts";
+import type {
+  CompanyDetail,
+  LastContact,
+  Linked,
+  Person,
+  PersonDetail,
+  SlackSelf,
+} from "../lib/types.ts";
 
 const FOLLOW_UP = [
   { days: 0, label: "No reminder" },
@@ -62,6 +71,41 @@ function Items(props: { title: string; rows: Linked[]; detail?: (l: Linked) => s
             )}
           </For>
         </ul>
+      </Section>
+    </Show>
+  );
+}
+
+/** "3:42 PM their time", or nothing for a time zone this browser doesn't know. */
+export function theirTime(timeZone: string, now = new Date()): string {
+  try {
+    return `${now.toLocaleTimeString([], { timeZone, hour: "numeric", minute: "2-digit" })} their time`;
+  } catch {
+    return "";
+  }
+}
+
+/** "@ana · Designer · 3:42 PM their time". */
+export function slackLine(s: SlackSelf, now = new Date()): string {
+  const time = s.timeZone ? theirTime(s.timeZone, now) : "";
+  return [`@${s.displayName ?? s.name}`, s.title, time].filter(Boolean).join(" · ");
+}
+
+/** Who they are in Slack, and Pip's few lines from your talk: both their words, so marked. */
+function FromSlack(props: { v: PersonDetail }) {
+  return (
+    <Show when={props.v.slack || props.v.persona}>
+      <Section title="From Slack">
+        <div class="space-y-1 px-2 text-sm">
+          <Show when={props.v.slack}>{(s) => <p class="text-muted">{slackLine(s())}</p>}</Show>
+          <Show when={props.v.persona}>{(p) => <p class="whitespace-pre-wrap">{p().text}</p>}</Show>
+          <p class="flex flex-wrap items-center gap-2 text-xs text-faint">
+            <OutsideMark>From their messages</OutsideMark>
+            <Show when={props.v.persona}>
+              {(p) => <span>Pip wrote this {ago(p().writtenAt)}, from your Slack talk</span>}
+            </Show>
+          </p>
+        </div>
       </Section>
     </Show>
   );
@@ -189,6 +233,7 @@ export function PersonPanel(props: { id: string }) {
               <span class="text-faint">if we haven't talked</span>
             </label>
           </div>
+          <FromSlack v={v()} />
           <Fields id={v().id} fields={v().fields} />
           <Items title="Coming up" rows={v().upcoming} />
           <Items

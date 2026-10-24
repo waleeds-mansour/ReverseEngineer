@@ -114,6 +114,7 @@ const BUILT_IN_ROUTINES = [
   "memory",
   "follow_ups",
   "reply_drafts",
+  "personas",
 ] as const;
 
 export async function turnStats(db: Db, now: Date): Promise<TurnStats> {

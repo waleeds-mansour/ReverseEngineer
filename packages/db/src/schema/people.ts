@@ -1,4 +1,5 @@
-// People, companies and meetings (M5). Mirrors migrations/0010_people.up.sql.
+// People, companies and meetings (M5). Mirrors migrations/0010_people.up.sql, and the persona
+// 0056_slack_people.up.sql adds.
 import { integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
@@ -16,6 +17,9 @@ export const person = pgTable("person", {
   followUpDays: integer("follow_up_days"),
   /** Your own fields: "Birthday", "Kids", "Met at". */
   fields: jsonb("fields").$type<Record<string, string>>().notNull().default({}),
+  /** Pip's few lines about them from your Slack messages together: outside content (D58). */
+  persona: text("persona"),
+  personaAt: ts("persona_at"),
 });
 
 // Meeting notes (M5). Mirrors migrations/0011_meetings.up.sql.

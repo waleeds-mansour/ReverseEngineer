@@ -7,6 +7,7 @@ import { type ActionContext, savepoint } from "@hearth/kernel";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { closeAlerts, nextHealth, type Trouble, worst } from "../connector-health.ts";
 import { SlackError } from "./api.ts";
+import { meetPeople } from "./people.ts";
 import {
   type Budget,
   CALLS_PER_SYNC,
@@ -111,12 +112,14 @@ export interface SlackSyncResult {
   channels: number;
   /** Thread replies read in. */
   replies: number;
+  /** People met: made from someone you talked with, or found to be someone you know. */
+  people: number;
   error?: string;
 }
 
 /** One round: the channel list now and then, your mentions, the least recently read channels. */
 export async function syncSlack(ctx: ActionContext): Promise<SlackSyncResult> {
-  const result: SlackSyncResult = { added: 0, mentions: 0, channels: 0, replies: 0 };
+  const result: SlackSyncResult = { added: 0, mentions: 0, channels: 0, replies: 0, people: 0 };
   const [row] = await ctx.tx.select().from(slackWorkspace).limit(1);
   if (!row) return result;
   const [jarvis] = await ctx.tx
@@ -160,6 +163,8 @@ export async function syncSlack(ctx: ActionContext): Promise<SlackSyncResult> {
       }
     }
     result.replies = await readThreads(ctx, ws, token, budget, settled, troubles);
+    // Then who you've talked with, in what's been read in so far.
+    result.people = await savepoint(ctx, (sp) => meetPeople(sp, ws, token));
   } catch (err) {
     // Slowing down when asked is normal; the next round picks up where this one stopped.
     if (err instanceof SlackError && err.code === "ratelimited") slowed = true;

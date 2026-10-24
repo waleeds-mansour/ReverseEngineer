@@ -1,7 +1,8 @@
 // People and companies: a personal CRM built from your mail and calendar (PLAN.md section 8.7).
 // Writing to someone or meeting them makes them a person; their work domain makes a company.
 // Each person page shows every linked thread, meeting, task and note, when you last talked, and
-// a follow-up reminder ("you haven't talked to X in 60 days") when you want one.
+// a follow-up reminder ("you haven't talked to X in 60 days") when you want one. Someone you talk
+// with on Slack gets a persona: a few lines Pip writes from your talk (persona.ts).
 import { formatDateTime } from "@hearth/core";
 import { company, entity, person, personEmail } from "@hearth/db";
 import {
@@ -18,6 +19,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { body, describeRow, id, isOutside, liveEntity } from "../shared.ts";
 import { companyDomain } from "./domains.ts";
+import { personaRoutine, writePersonaAction } from "./persona.ts";
 import { ensureCompany, ensureProfile, lastContacts, personFor, trashedFor } from "./store.ts";
 import { listPeople, overdue, personFacts, personView } from "./views.ts";
 
@@ -228,11 +230,13 @@ export const peopleModule = defineModule({
       if (!row) return null;
       const rules = await getSetting(ctx.db, "owner.dayRules");
       const v = await personView(ctx.db, row, ctx.now);
-      return describeRow(
+      const text = describeRow(
         row,
         [],
         personFacts(v, (d) => formatDateTime(d, rules.timeZone)),
       );
+      // Their Slack profile and Pip's persona are their words (D58).
+      return v.slack || v.persona ? { text, outside: true } : text;
     },
     async company(entityId, ctx) {
       const row = await liveEntity(ctx.db, entityId, "company");
@@ -246,7 +250,7 @@ export const peopleModule = defineModule({
       return row ? describeRow(row, ["an AI agent"]) : null;
     },
   },
-  actions: [...personActions, ...companyActions],
+  actions: [...personActions, writePersonaAction, ...companyActions],
   reflexes: [],
   noReflexesBecause:
     "Follow-ups are a daily digest line, not a reaction to any one event; mail and calendar sync link people as they go.",
@@ -258,6 +262,7 @@ export const peopleModule = defineModule({
       staleAfterSeconds: null,
       run: async () => [{ kind: "act", action: "people.tidy", input: {} }],
     },
+    personaRoutine,
   ],
   /** "You haven't talked to Ana in 64 days" for each person whose follow-up has come due. */
   async digest(ctx): Promise<DigestItem[]> {

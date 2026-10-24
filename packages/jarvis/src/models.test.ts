@@ -28,7 +28,15 @@ describe("the job a turn does", () => {
   });
 
   it("knows the built-in routines by name, and anything else is one of yours", () => {
-    for (const r of ["brief", "journal", "memory", "prep", "reply_drafts", "follow_ups"])
+    for (const r of [
+      "brief",
+      "journal",
+      "memory",
+      "prep",
+      "reply_drafts",
+      "follow_ups",
+      "personas",
+    ])
       expect(jobOf(turn("routine", "deep", { routine: r }))).toBe(r);
     // Every timed turn carries its schedule; the journal is still the journal.
     expect(jobOf(turn("routine", "deep", { routine: "journal", scheduleId: "s1" }))).toBe(

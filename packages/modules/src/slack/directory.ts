@@ -52,6 +52,9 @@ export function userOf(u: Raw, id = String(u.id)): SlackUser {
     teamId: str(u.team_id),
     ...(str(profile.api_app_id) ? { appId: str(profile.api_app_id) } : {}),
     ...(str(profile.bot_id) ? { botId: str(profile.bot_id) } : {}),
+    ...(str(profile.display_name) ? { displayName: str(profile.display_name) } : {}),
+    ...(str(profile.title) ? { title: str(profile.title) } : {}),
+    ...(str(u.tz) ? { tz: str(u.tz) } : {}),
   };
 }
 
