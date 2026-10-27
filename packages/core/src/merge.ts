@@ -1,10 +1,11 @@
 // Three-way merges for what's saved whole (D59). When a board or a workbook is saved over a
 // newer version than the one it was edited from (Jarvis added cards, another screen typed in a
 // cell), the screen takes the newer one and puts its own changes on top, piece by piece: a
-// board's cards and arrows by id, a workbook's sheets by id and their cells by name. A piece only
-// one side changed takes that side; a piece both changed takes this screen's.
+// board's cards and arrows by id, a workbook's sheets by id and their cells (and the cells'
+// formats) by name. A piece only one side changed takes that side; a piece both changed takes
+// this screen's.
 import type { Canvas } from "./canvas.ts";
-import type { Workbook, Worksheet } from "./sheet.ts";
+import { NO_FREEZE, type Workbook, type Worksheet } from "./sheet.ts";
 
 /** JSON with keys sorted, so the same value reads the same whichever side built it. */
 const canonical = (v: unknown): string =>
@@ -74,12 +75,19 @@ function mergeSheet(
   t: Worksheet | undefined,
 ): Worksheet | undefined {
   if (!m || !t) return pick(b, m, t);
-  const from = b ?? { ...t, cells: {}, widths: {} };
+  const from = b ?? { ...t, cells: {}, widths: {}, formats: {} };
+  // A copy kept on a device before sheets had formats has none.
+  const formats = (s: Worksheet) => s.formats ?? {};
+  const freeze = (s: Worksheet) => s.freeze ?? { ...NO_FREEZE };
   return {
     ...t,
     name: same(m.name, from.name) ? t.name : m.name,
     cells: mergeRecord(from.cells, m.cells, t.cells),
     widths: mergeRecord(from.widths, m.widths, t.widths),
+    // Cell by cell, as their values: bold here and currency there both stay.
+    formats: mergeRecord(formats(from), formats(m), formats(t)),
+    // Like the name: this screen's, if it changed it.
+    freeze: same(freeze(m), freeze(from)) ? freeze(t) : freeze(m),
   };
 }
 

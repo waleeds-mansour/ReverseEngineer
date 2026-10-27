@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Canvas } from "./canvas.ts";
 import { mergeCanvas, mergeRecord, mergeText, mergeWorkbook } from "./merge.ts";
-import { emptyWorkbook, type Workbook } from "./sheet.ts";
+import { emptyWorkbook, type Workbook, type Worksheet } from "./sheet.ts";
 
 const card = (id: string, text: string, y = 0) =>
   ({ id, type: "text", text, x: 0, y, width: 200, height: 80 }) as const;
@@ -52,11 +52,13 @@ describe("merging a board", () => {
 });
 
 describe("merging a workbook", () => {
-  const sheet = (id: string, name: string, cells: Record<string, string>) => ({
+  const sheet = (id: string, name: string, cells: Record<string, string>): Worksheet => ({
     id,
     name,
     cells,
     widths: {},
+    formats: {},
+    freeze: { rows: 0, cols: 0 },
   });
   const base: Workbook = { sheets: [sheet("s1", "Costs", { A1: "Rent", B1: "1200" })] };
 
@@ -86,6 +88,47 @@ describe("merging a workbook", () => {
     const theirs: Workbook = { sheets: [sheet("s1", "Costs", { A1: "Rent", B1: "1250" })] };
     const out = mergeWorkbook(base, mine, theirs).sheets[0]!;
     expect([out.name, out.cells.B1]).toEqual(["Spending", "1250"]);
+  });
+
+  it("merges formats cell by cell, and the frozen rows like a sheet's name", () => {
+    const formatted = (formats: Worksheet["formats"], rows = 0): Workbook => ({
+      sheets: [{ ...base.sheets[0]!, formats, freeze: { rows, cols: 0 } }],
+    });
+    const was = formatted({ A1: { italic: true } });
+    // Here: B1 bold, and the top row frozen. Pip, meanwhile: B1 as currency, A1 no longer italic.
+    const mine = formatted({ A1: { italic: true }, B1: { bold: true } }, 1);
+    const theirs = formatted({ B1: { number: "currency" } });
+    const out = mergeWorkbook(was, mine, theirs).sheets[0]!;
+    // Both changed B1: this screen's, as with a cell's value.
+    expect(out.formats).toEqual({ B1: { bold: true } });
+    expect(out.freeze).toEqual({ rows: 1, cols: 0 });
+    const other = formatted({ A1: { italic: true }, A2: { fill: "blue" } });
+    const both = mergeWorkbook(was, mine, other).sheets[0]!;
+    expect(both.formats).toEqual({
+      A1: { italic: true },
+      B1: { bold: true },
+      A2: { fill: "blue" },
+    });
+    // Unfrozen elsewhere, left alone here: unfrozen.
+    expect(mergeWorkbook(mine, mine, formatted(mine.sheets[0]!.formats)).sheets[0]!.freeze).toEqual(
+      {
+        rows: 0,
+        cols: 0,
+      },
+    );
+  });
+
+  it("merges a copy kept on a device before sheets had formats", () => {
+    const old = {
+      sheets: [{ id: "s1", name: "Costs", cells: { A1: "Rent", B1: "1300" }, widths: {} }],
+    } as unknown as Workbook;
+    const theirs: Workbook = {
+      sheets: [{ ...base.sheets[0]!, formats: { B1: { number: "currency" } } }],
+    };
+    const out = mergeWorkbook(old, old, theirs).sheets[0]!;
+    expect(out).toMatchObject({ cells: { B1: "1200" }, formats: { B1: { number: "currency" } } });
+    const typed = mergeWorkbook(base, old, theirs).sheets[0]!;
+    expect(typed).toMatchObject({ cells: { B1: "1300" }, formats: { B1: { number: "currency" } } });
   });
 
   it("clears a cell only the screen cleared", () => {
@@ -121,11 +164,18 @@ describe("merging onto an empty base", () => {
     const mine = emptyWorkbook();
     mine.sheets[0]!.cells.A1 = "typed";
     const theirs: Workbook = {
-      sheets: [{ id: "s1", name: "Budget", cells: { B2: "1250" }, widths: {} }],
+      sheets: [{ ...emptyWorkbook().sheets[0]!, name: "Budget", cells: { B2: "1250" } }],
     };
     const out = mergeWorkbook(emptyWorkbook(), mine, theirs).sheets;
     expect(out).toEqual([
-      { id: "s1", name: "Budget", cells: { B2: "1250", A1: "typed" }, widths: {} },
+      {
+        id: "s1",
+        name: "Budget",
+        cells: { B2: "1250", A1: "typed" },
+        widths: {},
+        formats: {},
+        freeze: { rows: 0, cols: 0 },
+      },
     ]);
   });
 

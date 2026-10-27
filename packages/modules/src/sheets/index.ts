@@ -2,11 +2,14 @@
 // workbook is saved whole, one save at a time under its row's lock; a save says which version it
 // was made from, and one made from an older version is refused so the screen can merge cell by
 // cell and try again (D59). Its body is the results as markdown tables, so search, backlinks and
-// Jarvis read it. Jarvis changes cells with sheet.set (D51).
+// Jarvis read it. Jarvis changes cells, and their formats, with sheet.set (D51).
 import {
+  blankSheet,
+  CellFormatSchema,
   emptyWorkbook,
   parseCell,
   type Results,
+  tidyFormat,
   type Workbook,
   WorkbookSchema,
   workbookMarkdown,
@@ -122,7 +125,7 @@ export const sheetsModule = defineModule({
     defineAction({
       name: "sheet.get",
       description:
-        "A spreadsheet: each sheet's cells as typed (values and =formulas), their results, and the version.",
+        'A spreadsheet: each sheet\'s cells as typed (values and =formulas), their formats, their results (formatted, as "$1,200.00"), and the version.',
       input: z.object({ id }),
       risk: "read",
       async handler(i, ctx) {
@@ -163,39 +166,45 @@ export const sheetsModule = defineModule({
     defineAction({
       name: "sheet.set",
       description:
-        'Change cells: { "B3": "42", "Budget!C1": "=SUM(A1:A9)" }. Cells without a sheet name are on the first sheet; an empty string clears a cell. Add a sheet by naming it in addSheet. Returns the new results of the cells set.',
+        'Change cells: { "B3": "42", "Budget!C1": "=SUM(A1:A9)" }. Cells without a sheet name are on the first sheet; an empty string clears a cell. Add a sheet by naming it in addSheet. Format cells with formats: { "B3": { "bold": true, "number": "currency" } } (number is number, currency, percent or date; align is left, center or right; fill is red, orange, yellow, green, blue, purple or gray); what you leave out stays, and null clears a cell of its format. Returns the new results of the cells set.',
       input: z.object({
         id,
-        cells: z.record(z.string().max(80), z.string().max(2000)),
+        cells: z.record(z.string().max(80), z.string().max(2000)).default({}),
+        formats: z.record(z.string().max(80), CellFormatSchema.nullable()).default({}),
         addSheet: z.string().trim().min(1).max(31).optional(),
       }),
       risk: "internal",
       async handler(i, ctx) {
         const refs = Object.keys(i.cells);
-        if (refs.length > 500) throw new ActionError("invalid_input", "At most 500 cells at once");
+        if (refs.length + Object.keys(i.formats).length > 500)
+          throw new ActionError("invalid_input", "At most 500 cells at once");
         const b = await load(ctx.tx, i.id, true);
         const book = structuredClone(b.book);
         if (
           i.addSheet &&
           !book.sheets.some((s) => s.name.toLowerCase() === i.addSheet!.toLowerCase())
         )
-          book.sheets.push({
-            id: crypto.randomUUID().slice(0, 8),
-            name: i.addSheet,
-            cells: {},
-            widths: {},
-          });
+          book.sheets.push(blankSheet(crypto.randomUUID().slice(0, 8), i.addSheet));
         for (const [ref, value] of Object.entries(i.cells)) {
           const t = target(book, ref);
           if (value === "") delete t.sheet.cells[t.cell];
           else t.sheet.cells[t.cell] = value;
+        }
+        for (const [ref, f] of Object.entries(i.formats)) {
+          const t = target(book, ref);
+          // A part left out (or one that didn't read) leaves the cell's own; false turns one off.
+          const said = f && Object.entries(f).filter(([, v]) => v !== undefined);
+          const next =
+            said && tidyFormat({ ...t.sheet.formats[t.cell], ...Object.fromEntries(said) });
+          if (next) t.sheet.formats[t.cell] = next;
+          else delete t.sheet.formats[t.cell];
         }
         const checked = WorkbookSchema.safeParse(book);
         if (!checked.success)
           throw new ActionError("invalid_input", checked.error.issues[0]!.message);
         const saved = await store(ctx, i.id, checked.data);
         const now: Record<string, string> = {};
-        for (const ref of refs) {
+        for (const ref of new Set([...refs, ...Object.keys(i.formats)])) {
           const t = target(checked.data, ref);
           now[ref] = saved.results[checked.data.sheets.indexOf(t.sheet)]?.[t.cell] ?? "";
         }

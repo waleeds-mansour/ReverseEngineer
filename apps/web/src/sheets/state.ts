@@ -6,6 +6,7 @@
 
 import {
   emptyWorkbook,
+  filledWorkbook,
   mergeWorkbook,
   type Results,
   renameSheetRefs,
@@ -17,6 +18,7 @@ import { action } from "../lib/api.ts";
 import { reportError } from "../lib/live.ts";
 import { createSaver } from "../lib/wholeSave.ts";
 import { engine } from "./engine.ts";
+import { applyFormat, type FormatPatch } from "./format.ts";
 
 const MAX_UNDO = 100;
 
@@ -83,7 +85,8 @@ export function createSheet(id: string) {
     show(data, name) {
       batch(() => {
         if (name !== undefined && !saver.renaming()) setTitle(name);
-        setBook(data);
+        // A copy kept on this device before sheets had formats has none.
+        setBook(filledWorkbook(data));
         setLoaded(true);
       });
     },
@@ -137,6 +140,25 @@ export function createSheet(id: string) {
           if (v === "") delete target.cells[k];
           else target.cells[k] = v;
         }
+      });
+    },
+    /** Formats cells on one sheet, as one step to undo: a part set to null comes off. */
+    format(sheet: number, refs: string[], patch: FormatPatch) {
+      const s = book.sheets[sheet];
+      if (!s) return;
+      const now = unwrap(s.formats);
+      const next = applyFormat(now, refs, patch);
+      if (JSON.stringify(next) === JSON.stringify(now)) return;
+      change((d) => {
+        d.sheets[sheet]!.formats = structuredClone(next);
+      });
+    },
+    /** Keeps the top `rows` and left `cols` in place while the rest scrolls. */
+    setFreeze(sheet: number, rows: number, cols: number) {
+      const s = book.sheets[sheet];
+      if (!s || (s.freeze.rows === rows && s.freeze.cols === cols)) return;
+      change((d) => {
+        d.sheets[sheet]!.freeze = { rows, cols };
       });
     },
     /** Renames a sheet, and every formula that points at it. */

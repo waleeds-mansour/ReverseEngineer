@@ -91,7 +91,7 @@ export async function boardSteps({ step, keys, base, tag }: Smoke) {
     await p.getByText(sticky).waitFor();
   });
 
-  await step("a spreadsheet that adds up as you type", async (p) => {
+  await step("a spreadsheet that adds up as you type, its total in bold as currency", async (p) => {
     await p.goto(`${base}/sheets`);
     await p.getByRole("heading", { name: "Sheets" }).waitFor();
     await p.getByRole("button", { name: "New spreadsheet" }).click();
@@ -105,22 +105,69 @@ export async function boardSteps({ step, keys, base, tag }: Smoke) {
       await p.keyboard.type(v);
       await keys("Enter");
     }
-    await p.locator('[data-cell="A3"]', { hasText: "1500" }).waitFor();
-    await p.waitForTimeout(1500);
+    const total = p.locator('[data-cell="A3"]');
+    await total.filter({ hasText: "1500" }).waitFor();
+    // The way a person formats it: click the total, Ctrl+B, Currency, and keep the top row put.
+    await total.click();
+    await keys("Control+b");
+    await p.getByRole("button", { name: "Number format" }).click();
+    await p.getByRole("menuitem", { name: /^Currency/ }).click();
+    await p.getByRole("button", { name: "Freeze top row" }).click();
+    await total.filter({ hasText: "$1,500.00" }).waitFor();
     const id = new URL(p.url()).pathname.split("sheet/")[1]!.split("+")[0]!;
-    const saved = await p.evaluate(async (id) => {
-      const r = await fetch("/api/actions/sheet.get", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
-      type Saved = { title: string; book: { sheets: { cells: Record<string, string> }[] } };
-      return ((await r.json()) as { result: Saved & { results: Record<string, string>[] } }).result;
-    }, id);
-    if (saved.title !== `Budget ${tag}`) throw new Error(`spreadsheet named ${saved.title}`);
-    if (saved.book.sheets[0]?.cells.A3 !== "=SUM(A1:A2)" || saved.results[0]?.A3 !== "1500")
-      throw new Error(`saved ${JSON.stringify(saved)}`);
+    type Saved = {
+      title: string;
+      version: number;
+      book: {
+        sheets: {
+          cells: Record<string, string>;
+          formats: Record<string, Record<string, unknown>>;
+          freeze: { rows: number; cols: number };
+        }[];
+      };
+      results: Record<string, string>[];
+    };
+    const read = () =>
+      p.evaluate(async (id) => {
+        const r = await fetch("/api/actions/sheet.get", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ id }),
+        });
+        return ((await r.json()) as { result: Saved }).result;
+      }, id);
+    const done = (s: Saved) =>
+      s.title === `Budget ${tag}` &&
+      s.book.sheets[0]?.cells.A3 === "=SUM(A1:A2)" &&
+      s.results[0]?.A3 === "$1,500.00" &&
+      s.book.sheets[0]?.formats.A3?.bold === true &&
+      s.book.sheets[0]?.formats.A3?.number === "currency" &&
+      s.book.sheets[0]?.freeze.rows === 1;
+    // The sheet saves a moment after the last change, later on a busy PC: read until it has.
+    let saved = await read();
+    for (let waited = 0; waited < 15_000 && !done(saved); waited += 250) {
+      await p.waitForTimeout(250);
+      saved = await read();
+    }
+    if (!done(saved)) throw new Error(`saved ${JSON.stringify(saved)}`);
     await p.reload();
-    await p.locator('[data-cell="A3"]', { hasText: "1500" }).waitFor();
+    await total.filter({ hasText: "$1,500.00" }).waitFor();
+    const weight = await total.evaluate(
+      (el) => el.ownerDocument.defaultView.getComputedStyle(el).fontWeight as string,
+    );
+    if (Number(weight) < 600) throw new Error(`the total's weight is ${weight}, not bold`);
+    // Scrolled down, the top row is still there under the column letters.
+    const grid = p.locator("[data-sheet-grid]");
+    const scrolled = await grid.evaluate((el) => {
+      el.scrollTo({ top: el.scrollHeight });
+      return el.scrollTop as number;
+    });
+    const [box, a1] = await Promise.all([
+      grid.boundingBox(),
+      p.locator('[data-cell="A1"]').boundingBox(),
+    ]);
+    const below = (a1?.y ?? 0) - (box?.y ?? 0);
+    if (scrolled < 100 || Math.abs(below - 24) > 2)
+      throw new Error(`row 1 after scrolling ${scrolled} px is ${below} px down`);
   });
 }
