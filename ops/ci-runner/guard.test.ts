@@ -30,9 +30,10 @@ const WINDOWS: NodeJS.ProcessEnv = {
 };
 
 const LT = "/home/runner/_work/_temp";
-/** What the Linux job sets, inside its container. */
+/** What the Linux job sets, inside the PC's container (where it ran until GitHub's machine). */
 const LINUX: NodeJS.ProcessEnv = {
   ...WINDOWS,
+  RUNNER_ENVIRONMENT: "self-hosted",
   RUNNER_TEMP: LT,
   GITHUB_WORKSPACE: "/home/runner/_work/ReverseEngineer/ReverseEngineer",
   HEARTH_DATA_DIR: `${LT}/hearth-data`,
@@ -265,7 +266,7 @@ describe("the CI guard", () => {
     one(win({ RUNNER_TEMP: undefined }), "RUNNER_TEMP isn't set");
   });
 
-  it("runs on Linux only in a container that can't reach the PC's drives or Docker", () => {
+  it("runs on the PC's Linux runner only in a container that can't reach the PC or Docker", () => {
     one(linux({}, { "/.dockerenv": -1 }), "Not inside a container");
     one(linux({}, { "/var/run/docker.sock": 0 }), "must not reach Docker");
     const drive = "600 584 0:120 / /data rw,noatime - 9p C:\\134 rw,dirsync,aname=drvfs;path=D:\\";
@@ -275,6 +276,46 @@ describe("the CI guard", () => {
     );
     const desktop = "601 584 0:121 /run/desktop/mnt/host/d/Hearth /live rw - fakeowner grpcfuse rw";
     one(linux({}, {}, `${MOUNTS}\n${desktop}`), "(/live)");
+    // A runner that doesn't say it's GitHub's is held to the container's rules.
+    one(linux({ RUNNER_ENVIRONMENT: undefined }, { "/.dockerenv": -1 }), "Not inside a container");
+  });
+
+  it("runs on GitHub's own Linux machine, outside a container and beside Docker", () => {
+    const HT = "/home/runner/work/_temp";
+    const hosted: NodeJS.ProcessEnv = {
+      ...LINUX,
+      RUNNER_ENVIRONMENT: "github-hosted",
+      RUNNER_TEMP: HT,
+      GITHUB_WORKSPACE: "/home/runner/work/ReverseEngineer/ReverseEngineer",
+      HEARTH_DATA_DIR: `${HT}/hearth-data`,
+      HEARTH_BACKUP_DIR: `${HT}/hearth-data/backups`,
+      RESTIC_CACHE_DIR: `${HT}/restic-cache`,
+      RCLONE_CONFIG: `${HT}/rclone-empty.conf`,
+    };
+    const vm = host(
+      "linux",
+      { "/.dockerenv": -1, "/var/run/docker.sock": 0, [`${HT}/rclone-empty.conf`]: 0 },
+      "29 1 8:1 / / rw,relatime shared:1 - ext4 /dev/root rw,discard",
+    );
+    expect(check(hosted, vm)).toEqual([]);
+    // The chrome-launch step, with Playwright's Chromium where it goes by default there.
+    const chromium = "/home/runner/.cache/ms-playwright/chromium-1200/chrome-linux/chrome";
+    expect(
+      check(
+        {
+          ...hosted,
+          HEARTH_CHROME_LAUNCH: "direct",
+          HEARTH_CHROME_PATH: chromium,
+          HEARTH_CHROME_ARGS: `--headless=new --no-sandbox --user-data-dir=${HT}/chrome-profile.x1`,
+        },
+        vm,
+      ),
+    ).toEqual([]);
+    // Every other rule still holds there.
+    one(check({ ...hosted, HEARTH_PORT: "4400" }, vm), "HEARTH_PORT is 4400");
+    one(check({ ...hosted, PGPORT: "5432" }, vm), "PGPORT must be 5499");
+    one(check({ ...hosted, HEARTH_DATA_DIR: "/home/runner/hearth" }, vm), "outside RUNNER_TEMP");
+    one(check({ ...hosted, HEARTH_CHROME_LAUNCH: undefined }, vm), "HEARTH_CHROME_LAUNCH");
   });
 
   it("prints every problem and fails, without the restic password; or says what it checked", () => {
