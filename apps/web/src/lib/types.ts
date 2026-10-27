@@ -349,6 +349,10 @@ export interface CalEvent {
   kind: string;
   /** Its calendar's colour in Google ("#9fe1e7"), where calendar.events lists it. */
   calendarColor?: string | null;
+  /** Pip put it on your calendar by itself, so Calendar marks it. Not sent by Hearth yet. */
+  madeByPip?: boolean;
+  /** You can change it: it's on a calendar you can write to. Not sent by Hearth yet. */
+  canWrite?: boolean;
 }
 
 /** One thing Jarvis made (jarvis.did): read from the record itself, never from what it said. */
