@@ -5,11 +5,15 @@
 // writes to none: each write goes to nook-restore's seam in its read-only mode and is refused.
 // It runs only while the panel is open or the owner's observing switch is on, which starts off.
 // P1's bar along the top of DISPLAY1 has a switch of its own, also off, and observes while it is
-// on. Otherwise Nook installs no hook, registers no hotkey, creates no window and starts no
-// thread, except to finish a restore that an earlier run left owing. That restore is
-// nook-restore's, the same one the --nook-restore-windows CLI, nook-guard.exe and the installer
-// run.
+// on. The agent dock, a strip of status dots for Pip and Hearth's services on the left edge, has a
+// switch that starts on; it is one window that reads Windows every few seconds, with no hook and
+// no observer of its own. Otherwise Nook installs no hook, registers no hotkey, creates no window
+// and starts no thread, except to finish a restore that an earlier run left owing. That restore
+// is nook-restore's, the same one the --nook-restore-windows CLI, nook-guard.exe and the
+// installer run.
 
+#[cfg(windows)]
+mod agents;
 #[cfg(windows)]
 mod bar;
 #[cfg(windows)]
@@ -19,6 +23,10 @@ pub mod chrome;
 mod coalesce;
 #[cfg(windows)]
 mod diag;
+#[cfg(windows)]
+mod dock;
+#[cfg(windows)]
+mod dockwin;
 #[cfg(windows)]
 mod eligibility;
 #[cfg(all(test, windows))]
@@ -149,7 +157,7 @@ pub fn destroyed(app: &AppHandle, label: &str) {
     ui::destroyed(app, label);
 }
 
-/// The bar and popover don't close or hide when asked; their switch decides.
+/// The bar, popover and agent dock don't close or hide when asked; their switches decide.
 pub fn stays(label: &str) -> bool {
     ui::stays(label)
 }
@@ -266,6 +274,7 @@ fn nooks_pages_may_call_nook_ui_and_nothing_else() {
         "nook_panel",
         "nook_bar_1",
         "nook_popover",
+        "nook_dock",
         "nook_palette",
         "nook_later",
     ] {

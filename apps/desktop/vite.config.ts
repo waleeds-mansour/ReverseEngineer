@@ -36,6 +36,7 @@ export default defineConfig(async () => ({
         nook_panel: resolve(__dirname, "src/nook/panel.html"),
         nook_bar: resolve(__dirname, "src/nook/bar.html"),
         nook_popover: resolve(__dirname, "src/nook/popover.html"),
+        nook_dock: resolve(__dirname, "src/nook/dock.html"),
         // src/nook/preview/ is for the dev server only and is never built.
       },
     },

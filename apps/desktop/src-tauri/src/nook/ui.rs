@@ -3,40 +3,55 @@
 // gives Nook's windows nothing but listening for events. nook_ui answers only Nook's own windows,
 // by label and by a local address, and every argument it takes is an enum. State goes the other
 // way as 'nook://state', the full state to the panel and the state without the window list to
-// every other Nook window, where the bar and the popover listen, and as 'nook://chrome', the
-// theme, services and Pip. A bar or popover that is asleep is sent nothing until it wakes.
+// every other Nook window, where the bar, the popover and the agent dock listen, and as
+// 'nook://chrome', the theme, services, Pip and the dock's dots. A bar, popover or dock that is
+// asleep is sent nothing until it wakes.
 
 use super::bar::{BAR_LABEL, POPOVER_LABEL};
 use super::chrome::{ChromeView, CHROME_EVENT};
+use super::dock::DOCK_LABEL;
 use super::host::{self, Shared};
 use super::view::{NookState, UiCmd, UiReply, STATE_EVENT};
 use super::wm::Cmd;
-use super::{barwin, look, observe, settings};
+use super::{barwin, dockwin, look, observe, settings};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, Url, WebviewUrl, WebviewWindowBuilder};
 
 pub const PANEL: &str = "nook_panel";
 const PANEL_PAGE: &str = "src/nook/panel.html";
 
-/// The labels of Nook's windows: the panel, the bar and its popover, and the palette later.
+/// The labels of Nook's windows: the panel, the bar and its popover, the agent dock, and the
+/// palette later.
 pub fn is_nook_label(label: &str) -> bool {
-    matches!(label, PANEL | POPOVER_LABEL | "nook_palette") || label.starts_with("nook_bar_")
+    matches!(label, PANEL | POPOVER_LABEL | DOCK_LABEL | "nook_palette")
+        || label.starts_with("nook_bar_")
 }
 
-/// What each of Nook's pages may ask: the panel its switches and files, the bar and popover
-/// only what they draw.
+/// What each of Nook's pages may ask: the panel its switches and files, the bar, popover and
+/// dock only what they draw and open.
 fn allowed(label: &str, cmd: &UiCmd) -> bool {
-    let chrome = matches!(label, BAR_LABEL | POPOVER_LABEL);
+    let chrome = matches!(label, BAR_LABEL | POPOVER_LABEL | DOCK_LABEL);
     match cmd {
         UiCmd::Ready => true,
         // Refresh judges every window again, which only the panel's list needs.
         UiCmd::Refresh
         | UiCmd::SetObserve { .. }
         | UiCmd::SetBar { .. }
+        | UiCmd::SetDock { .. }
         | UiCmd::SaveFixtures
         | UiCmd::ExportDiag => label == PANEL,
         UiCmd::Drawn | UiCmd::OpenToday | UiCmd::Popover { .. } => chrome,
+        UiCmd::DockHover { .. } => label == DOCK_LABEL,
     }
+}
+
+/// Whether a page should be sent events now: a bar, popover or dock that is asleep would only be
+/// woken by them, and gets the latest when it wakes.
+fn awake(shared: Option<&Arc<Shared>>, label: &str) -> bool {
+    shared.is_none_or(|s| match label {
+        DOCK_LABEL => s.dock().receives(),
+        _ => s.bar().receives(label),
+    })
 }
 
 /// A page bundled with Hearth, or, while developing, Vite's dev server.
@@ -64,11 +79,11 @@ pub fn emit(app: &AppHandle, state: &NookState) {
     let shared = host::shared(app);
     if let Some(s) = &shared {
         barwin::on_state(s, state);
+        dockwin::on_state(s, state);
     }
-    let awake = |label: &str| shared.as_ref().is_none_or(|s| s.bar().receives(label));
     let mut short: Option<NookState> = None;
     for label in app.webview_windows().into_keys() {
-        if !is_nook_label(&label) || !awake(&label) {
+        if !is_nook_label(&label) || !awake(shared.as_ref(), &label) {
             continue;
         }
         let sent = if label == PANEL {
@@ -86,9 +101,8 @@ pub fn emit(app: &AppHandle, state: &NookState) {
 /// Sends a new chrome view to every open Nook window that is awake.
 pub fn emit_chrome(app: &AppHandle, view: &ChromeView) {
     let shared = host::shared(app);
-    let awake = |label: &str| shared.as_ref().is_none_or(|s| s.bar().receives(label));
     for label in app.webview_windows().into_keys() {
-        if is_nook_label(&label) && awake(&label) {
+        if is_nook_label(&label) && awake(shared.as_ref(), &label) {
             if let Err(e) = app.emit_to(label.as_str(), CHROME_EVENT, view) {
                 log::debug!("Couldn't send Nook's chrome to {label}: {e}");
             }
@@ -96,7 +110,7 @@ pub fn emit_chrome(app: &AppHandle, view: &ChromeView) {
     }
 }
 
-/// A bar or popover that just woke gets what it missed while asleep.
+/// A bar, popover or dock that just woke gets what it missed while asleep.
 pub fn send_latest(shared: &Shared, label: &str) {
     let state = shared
         .snapshot
@@ -153,9 +167,9 @@ pub fn closes(label: &str) -> bool {
     label == PANEL
 }
 
-/// The bar and popover neither close nor hide when asked: their switch decides.
+/// The bar, popover and dock neither close nor hide when asked: their switches decide.
 pub fn stays(label: &str) -> bool {
-    matches!(label, BAR_LABEL | POPOVER_LABEL)
+    matches!(label, BAR_LABEL | POPOVER_LABEL | DOCK_LABEL)
 }
 
 pub fn destroyed(app: &AppHandle, label: &str) {
@@ -211,8 +225,22 @@ fn handle(shared: &Arc<Shared>, label: &str, cmd: UiCmd) -> Result<UiReply, Stri
             barwin::sync(shared);
             None
         }
+        UiCmd::SetDock { on } => {
+            settings::save_dock(&shared.app, on)?;
+            shared.dock().setting = on;
+            dockwin::sync(shared);
+            None
+        }
+        UiCmd::Drawn if label == DOCK_LABEL => {
+            dockwin::drawn(shared);
+            None
+        }
         UiCmd::Drawn => {
             barwin::drawn(shared, label);
+            None
+        }
+        UiCmd::DockHover { open } => {
+            dockwin::hover(shared, open);
             None
         }
         UiCmd::Popover { open } => {
@@ -253,7 +281,13 @@ mod tests {
 
     #[test]
     fn only_nooks_labels_pass() {
-        for ok in ["nook_panel", "nook_popover", "nook_palette", "nook_bar_1"] {
+        for ok in [
+            "nook_panel",
+            "nook_popover",
+            "nook_palette",
+            "nook_bar_1",
+            "nook_dock",
+        ] {
             assert!(is_nook_label(ok), "{ok}");
         }
         for no in [
@@ -278,15 +312,33 @@ mod tests {
             UiCmd::Refresh,
             UiCmd::SetObserve { on: true },
             UiCmd::SetBar { on: false },
+            UiCmd::SetDock { on: false },
             UiCmd::SaveFixtures,
             UiCmd::ExportDiag,
         ] {
             assert!(!allowed(BAR_LABEL, &cmd), "{cmd:?}");
             assert!(!allowed(POPOVER_LABEL, &cmd), "{cmd:?}");
+            assert!(!allowed(DOCK_LABEL, &cmd), "{cmd:?}");
             assert!(allowed(PANEL, &cmd), "{cmd:?}");
         }
         assert!(allowed(POPOVER_LABEL, &UiCmd::OpenToday));
         assert!(!allowed(PANEL, &UiCmd::Drawn));
         assert!(stays(BAR_LABEL) && stays(POPOVER_LABEL) && !stays(PANEL));
+    }
+
+    #[test]
+    fn the_dock_may_ask_what_it_draws_and_opens_and_nothing_else() {
+        let hover = UiCmd::DockHover { open: true };
+        for cmd in [
+            UiCmd::Ready,
+            UiCmd::Drawn,
+            UiCmd::OpenToday,
+            UiCmd::Popover { open: true },
+            hover.clone(),
+        ] {
+            assert!(allowed(DOCK_LABEL, &cmd), "{cmd:?}");
+        }
+        assert!(!allowed(BAR_LABEL, &hover) && !allowed(PANEL, &hover));
+        assert!(stays(DOCK_LABEL));
     }
 }

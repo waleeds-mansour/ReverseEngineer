@@ -1,14 +1,15 @@
 // What Nook's chrome shows besides the windows, put together (chrome.rs has the shapes): the
 // theme Hearth's window chose, what Windows says about transparency, high contrast and
-// animation, Hearth's services as the tray reads them, Pip, and the bar's switch. A new view goes
-// to Nook's pages only when something in it changed, and nothing here runs while the bar is off
-// except remembering a theme, which is a store write.
+// animation, Hearth's services as the tray reads them, Pip, the bar's switch, and the agent dock's
+// dots (agents.rs) and switch. A new view goes to Nook's pages only when something in it changed,
+// and nothing here runs while the bar and the dock are both off except remembering a theme, which
+// is a store write.
 
 use super::chrome::{key_caps, ChromeView, Health, PipMood, ServicesView, ThemeId};
 use super::host::{self, Shared};
 use super::pip::Pip;
 use super::surface::{self, Readings};
-use super::{barwin, settings, ui};
+use super::{agents, barwin, dockwin, settings, ui};
 use crate::hearth::status::{Mark, Status};
 use std::sync::Arc;
 use tauri::AppHandle;
@@ -69,22 +70,26 @@ fn stop_key(app: &AppHandle) -> Vec<String> {
     key_caps(binding)
 }
 
-/// The view as it is now, with a new seq when anything in it changed. The bar's own lock is
-/// taken and let go before Chrome's, so the two are never held together.
+/// The view as it is now, with a new seq when anything in it changed. The bar's and the dock's
+/// own locks are taken and let go before Chrome's, so none is held with it.
 fn view(shared: &Shared) -> (ChromeView, bool) {
     let bar = shared.bar().view();
+    let dock = shared.dock().view();
     let services = services(crate::hearth::status::current().as_ref());
     let stop = stop_key(&shared.app);
     let mut c = shared.chrome();
     let r = c.readings;
+    let pip = c.pip.view(stop);
     let mut next = ChromeView {
         seq: c.seq,
         theme: ThemeId::resolve(c.chosen, r.dark, r.high_contrast),
         glass: r.transparency && !r.high_contrast,
         reduced_motion: r.reduced_motion,
+        agents: agents::dots(&pip, &services),
         services,
-        pip: c.pip.view(stop),
+        pip,
         bar,
+        dock,
     };
     let changed = c.last.as_ref().is_none_or(|last| {
         let mut was = last.clone();
@@ -99,10 +104,12 @@ fn view(shared: &Shared) -> (ChromeView, bool) {
     (next, changed)
 }
 
-/// The view as it is now, for a reply. When it changed, every Nook page hears of it too.
+/// The view as it is now, for a reply. When it changed, every Nook page hears of it too, and the
+/// dock makes room for its dots.
 pub fn fresh(shared: &Shared) -> ChromeView {
     let (view, changed) = view(shared);
     if changed {
+        dockwin::dots(shared, view.agents.len());
         ui::emit_chrome(&shared.app, &view);
     }
     view
@@ -132,14 +139,14 @@ pub fn read_system(shared: &Shared) {
 
 pub fn system_changed(app: &AppHandle) {
     if let Some(shared) = host::shared(app) {
-        if shared.bar().made {
+        if shared.chrome_shown() {
             read_system(&shared);
         }
     }
 }
 
 /// hearth://theme/<id> from one of Hearth's windows. It is kept whether or not the bar is on, so
-/// the bar starts in the theme Hearth's window shows.
+/// the bar and the dock start in the theme Hearth's window shows.
 pub fn theme(app: &AppHandle, id: ThemeId) {
     let Some(shared) = host::shared(app) else {
         return;
@@ -156,7 +163,7 @@ pub fn theme(app: &AppHandle, id: ThemeId) {
     if let Err(e) = settings::save_theme(app, id) {
         log::warn!("Couldn't keep Nook's theme: {e}");
     }
-    if shared.bar().made {
+    if shared.chrome_shown() {
         emit(&shared);
     }
 }
@@ -164,7 +171,7 @@ pub fn theme(app: &AppHandle, id: ThemeId) {
 /// The tray's status changed.
 pub fn services_changed(app: &AppHandle) {
     if let Some(shared) = host::shared(app) {
-        if shared.bar().made {
+        if shared.chrome_shown() {
             emit(&shared);
         }
     }
@@ -175,7 +182,7 @@ pub fn pip(app: &AppHandle, f: impl FnOnce(&mut Pip) -> (bool, Option<super::pip
     let Some(shared) = host::shared(app) else {
         return;
     };
-    if !shared.bar().made {
+    if !shared.chrome_shown() {
         return;
     }
     let (changed, age) = f(&mut shared.chrome().pip);

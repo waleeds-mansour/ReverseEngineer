@@ -1,10 +1,14 @@
 // The dev-only preview's stand-in for Nook (never built: vite.config.ts lists only the real
-// pages). It answers the bar and popover with a fixture state and chrome taken from the address:
-//   ?theme=dusk&mood=thinking&waiting=2&services=down&glass=0&reduced=1&popover=1&quiet=1&app=Figma
+// pages). It answers the bar, popover and dock with a fixture state and chrome taken from the
+// address:
+//   ?theme=dusk&mood=thinking&waiting=2&services=down&glass=0&reduced=1&popover=1&quiet=1&app=Figma&edge=right
 // and keeps every command it was asked in window.__nookAsked, for the screenshot script.
 
 import type {
+  AgentDot,
+  AgentState,
   ChromeView,
+  Edge,
   NookState,
   PipMood,
   ServicesView,
@@ -61,6 +65,44 @@ export const state: NookState = {
   problems: [],
 };
 
+const mood = (q.get("mood") ?? "idle") as PipMood;
+const waiting = Number(q.get("waiting") ?? 0);
+const services = q.get("services") ?? "ok";
+
+/** The dock's dots, roughly as agents.rs picks them. */
+function fixtureAgents(): AgentDot[] {
+  const pip = (state: AgentState, line: string): AgentDot => ({
+    id: "pip",
+    label: "Pip",
+    kind: "pip",
+    state,
+    line,
+  });
+  const service = (id: string, label: string, line: string): AgentDot => ({
+    id,
+    label,
+    kind: "service",
+    state: "needs_you",
+    line,
+  });
+  const all = [
+    mood === "listening" || mood === "thinking"
+      ? pip("working", "Thinking")
+      : waiting > 0
+        ? pip("needs_you", `${waiting} things wait for you`)
+        : mood === "happy"
+          ? pip("done", "Answered")
+          : pip("idle", "Resting"),
+  ];
+  if (services === "down") {
+    all.push(service("server", "Nook's server", "Not answering"));
+  }
+  if (services === "warn") {
+    all.push(service("worker", "Background work", "Having trouble"));
+  }
+  return all;
+}
+
 export const chrome: ChromeView = {
   seq: 1,
   theme: (q.get("theme") ?? "light") as ThemeId,
@@ -74,12 +116,12 @@ export const chrome: ChromeView = {
     pip: "ok",
     pip_paused: false,
     other_failing: false,
-    ...SERVICES[q.get("services") ?? "ok"],
+    ...SERVICES[services],
   },
   pip: {
-    mood: (q.get("mood") ?? "idle") as PipMood,
+    mood,
     changed: 1,
-    waiting: Number(q.get("waiting") ?? 0),
+    waiting,
     stop_key: ["Esc"],
   },
   bar: {
@@ -88,6 +130,14 @@ export const chrome: ChromeView = {
     why_not: null,
     popover: flag("popover"),
     quiet: flag("quiet"),
+  },
+  agents: fixtureAgents(),
+  dock: {
+    on: true,
+    shown: true,
+    why_not: null,
+    open: false,
+    edge: (q.get("edge") ?? "left") as Edge,
   },
 };
 

@@ -2,17 +2,19 @@
 // file there, or switches on that this version can't act on, starting Hearth decides on no start
 // check and no observer, and so starts no thread, and deciding installs no WinEvent hook and
 // creates no window. The observer (P1) runs only for its own switch, the bar's or the open panel,
-// and the bar only for its own switch; the disabled file stops both.
+// and the bar only for its own switch; the disabled file stops both. The agent dock, whose switch
+// starts on, is a window of Nook's own that needs neither a hook nor the observer; the disabled
+// file keeps it off too (dock_tests.rs).
 // The decision runs on a thread joined to a private desktop of the test's own, made with
 // CreateDesktopW and never switched to, so the before and after readings see nothing of the
 // owner's. Registering a hotkey to probe for Nook's is left out on purpose: the probe itself
 // would take the owner's keys.
 
-use super::bar;
 use super::host::plan;
 use super::observe::{wanted, Observer};
 use super::settings::NookSettings;
 use super::start::Status;
+use super::{bar, dock};
 use nook_restore::journal::{Journal, State, Store};
 use windows::core::{BOOL, PCWSTR};
 use windows::Win32::Foundation::{GENERIC_ALL, HWND, LPARAM};
@@ -118,6 +120,11 @@ fn nook_off_installs_no_hook_creates_no_window_and_starts_no_check() {
             let mut observer = Observer::new(settings.observe);
             observer.bar = bar::wanted(settings.bar, plan.status, false).is_ok();
             assert!(!observer.bar, "{case}: no bar");
+            assert_eq!(
+                dock::wanted(settings.dock, plan.status).is_ok(),
+                case != "disabled",
+                "{case}: the dock, which observes nothing"
+            );
             assert!(
                 wanted(&observer, plan.status).is_err(),
                 "{case}: no observer"

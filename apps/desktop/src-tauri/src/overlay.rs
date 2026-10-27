@@ -1,3 +1,4 @@
+use crate::hearth::overlay_ready::{handshake, Due, Resend, ANSWER_WITHIN, RELOAD_AFTER};
 use crate::input;
 use crate::settings;
 use crate::settings::{OverlayPosition, OverlayStyle};
@@ -243,6 +244,7 @@ fn is_mouse_within_monitor(
 /// converts PhysicalPosition using the scale factor of the monitor the window
 /// is *currently* on, which is wrong when moving cross-monitor. Windows uses
 /// `place_windows_overlay` instead (no single logical space across mixed DPI).
+#[cfg(not(target_os = "windows"))]
 fn calculate_overlay_position(
     app_handle: &AppHandle,
     width: f64,
@@ -388,16 +390,9 @@ fn place_windows_overlay(
 /// Creates the recording overlay window and keeps it hidden by default
 #[cfg(not(target_os = "macos"))]
 pub fn create_recording_overlay(app_handle: &AppHandle) {
-    // On Linux (Wayland), monitor detection often fails, but we don't need exact coordinates
-    // for Layer Shell as we use anchors. On other platforms, we require a monitor.
-    #[cfg(not(target_os = "linux"))]
-    {
-        let position = calculate_overlay_position(app_handle, OVERLAY_WIDTH, OVERLAY_HEIGHT);
-        if position.is_none() {
-            debug!("Failed to determine overlay position, not creating overlay window");
-            return;
-        }
-    }
+    // Hearth: the window is made whether or not a monitor can be found yet (as at sign-in, before
+    // the displays are up). It is placed before every show, so it needs none now; returning here
+    // left Hearth with no overlay until it restarted.
 
     // Position starts unset — update_overlay_position() sets the correct
     // LogicalPosition before the overlay is shown.
@@ -420,7 +415,13 @@ pub fn create_recording_overlay(app_handle: &AppHandle) {
     .transparent(true)
     .focusable(false)
     .focused(false)
-    .visible(false);
+    .visible(false)
+    // Hearth: a page that loads, or loads again, gets the show on screen (overlay_ready.rs).
+    .on_page_load(|window, load| {
+        if load.event() == tauri::webview::PageLoadEvent::Finished {
+            page_loaded(window.app_handle());
+        }
+    });
 
     if let Some(data_dir) = crate::portable::data_dir() {
         builder = builder.data_directory(data_dir.join("webview"));
@@ -450,7 +451,11 @@ pub fn create_recording_overlay(app_handle: &AppHandle) {
 /// Creates the recording overlay panel and keeps it hidden by default (macOS)
 #[cfg(target_os = "macos")]
 pub fn create_recording_overlay(app_handle: &AppHandle) {
-    if let Some((x, y)) = calculate_overlay_position(app_handle, OVERLAY_WIDTH, OVERLAY_HEIGHT) {
+    // Hearth: with no monitor found yet the panel is still made, at the origin; it is placed
+    // again before every show.
+    let (x, y) =
+        calculate_overlay_position(app_handle, OVERLAY_WIDTH, OVERLAY_HEIGHT).unwrap_or((0.0, 0.0));
+    {
         // PanelBuilder creates a Tauri window then converts it to NSPanel.
         // The window remains registered, so get_webview_window() still works.
         match PanelBuilder::<_, RecordingOverlayPanel>::new(app_handle, "recording_overlay")
@@ -504,6 +509,19 @@ fn show_overlay_state(app_handle: &AppHandle, state: &str) {
     // inline when already on the main thread, so this never deadlocks.
     let handle = app_handle.clone();
     let state = state.to_string();
+
+    // Hearth: an overlay that wasn't made at start is made now. Building a webview on the main
+    // thread can deadlock, so it is made on a worker and shown from there.
+    #[cfg(not(target_os = "macos"))]
+    if app_handle.get_webview_window("recording_overlay").is_none() {
+        tauri::async_runtime::spawn_blocking(move || {
+            create_recording_overlay(&handle);
+            let shown = handle.clone();
+            let _ = handle.run_on_main_thread(move || show_overlay_state_on_main(&shown, &state));
+        });
+        return;
+    }
+
     let _ = app_handle.run_on_main_thread(move || show_overlay_state_on_main(&handle, &state));
 }
 
@@ -589,7 +607,71 @@ fn show_overlay_state_on_main(app_handle: &AppHandle, state: &str) {
             );
         }
 
-        let _ = overlay_window.emit("show-overlay", state);
+        // Hearth: numbered and kept, so a page that wasn't listening yet still gets it
+        // (overlay_ready.rs).
+        let show = handshake().show(state);
+        let seq = show.seq;
+        let _ = app_handle.emit_to("recording_overlay", "show-overlay", show);
+        answer_due(app_handle, seq);
+    }
+}
+
+/// Sends a show the page hasn't drawn again, and `recording-ready` after it when the microphone
+/// had already delivered.
+fn resend(app_handle: &AppHandle, again: Resend) {
+    let _ = app_handle.emit_to("recording_overlay", "show-overlay", again.show);
+    if again.capture_ready {
+        let _ = app_handle.emit_to("recording_overlay", "recording-ready", ());
+    }
+}
+
+/// The overlay's page finished loading, the first time or again.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+fn page_loaded(app_handle: &AppHandle) {
+    let again = handshake().loaded();
+    if let Some(again) = again {
+        resend(app_handle, again);
+    }
+}
+
+/// After a show, checks that the page drew it: sent again after a moment, and the page loaded
+/// again a little later if it still hasn't answered (once per show).
+fn answer_due(app_handle: &AppHandle, seq: u64) {
+    let handle = app_handle.clone();
+    std::thread::spawn(move || {
+        for (wait, last) in [(ANSWER_WITHIN, false), (RELOAD_AFTER, true)] {
+            std::thread::sleep(wait);
+            let due = handshake().due(seq, last);
+            match due {
+                Due::Nothing => return,
+                Due::Resend(again) => resend(&handle, again),
+                Due::Reload => {
+                    log::warn!("The recording overlay didn't draw show {seq}; loading it again");
+                    if let Some(w) = handle.get_webview_window("recording_overlay") {
+                        if let Err(e) = w.reload() {
+                            log::warn!("Couldn't load the recording overlay again: {e}");
+                        }
+                    }
+                }
+                Due::GiveUp => {
+                    log::warn!("The recording overlay still didn't draw show {seq}");
+                }
+            }
+        }
+    });
+}
+
+/// The overlay's page answers: with no show when it starts listening, which sends it the show on
+/// screen, and with each show it draws.
+#[tauri::command]
+#[specta::specta]
+pub fn overlay_ready(webview: tauri::Webview, drawn: Option<u64>) {
+    if webview.label() != "recording_overlay" {
+        return;
+    }
+    let again = handshake().answered(drawn);
+    if let Some(again) = again {
+        resend(webview.app_handle(), again);
     }
 }
 
@@ -606,6 +688,8 @@ pub fn emit_recording_ready(app_handle: &AppHandle) {
     // and then get reset back to the arming state by the frontend.
     let handle = app_handle.clone();
     let _ = app_handle.run_on_main_thread(move || {
+        // Hearth: kept with the show, so a show sent again is followed by this again.
+        handshake().capture_ready();
         let _ = handle.emit_to("recording_overlay", "recording-ready", ());
     });
 }
@@ -695,6 +779,8 @@ pub fn hide_recording_overlay(app_handle: &AppHandle) {
         // Snapshot before doing anything observable, so any show that lands
         // after this point invalidates the delayed hide below.
         let scheduled_at = OVERLAY_SHOW_GENERATION.load(Ordering::SeqCst);
+        // Hearth: nothing on screen to send again.
+        handshake().hide();
         // Emit event to trigger fade-out animation
         let _ = overlay_window.emit("hide-overlay", ());
         // Hide the window after a short delay to allow animation to complete,

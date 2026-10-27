@@ -59,9 +59,9 @@ fn sync_now(shared: &Arc<Shared>) {
                 {
                     let mut run = shared.bar();
                     run.made = true;
-                    run.ours = ours.clone();
+                    run.ours = ours;
                 }
-                chrome(shared, ours);
+                tell_own(shared);
                 must_draw(shared, MAKES.fetch_add(1, Ordering::SeqCst) + 1);
                 diag::write(
                     &shared.dir,
@@ -92,7 +92,7 @@ fn sync_now(shared: &Arc<Shared>) {
                     ..bar::BarRun::default()
                 };
             }
-            chrome(shared, Vec::new());
+            tell_own(shared);
             diag::write(&shared.dir, &Event::Bar { on: false, why });
             observer(shared, false);
         }
@@ -133,7 +133,7 @@ fn undrawn(shared: &Arc<Shared>, made: u64) {
         diag::write(&shared.dir, &Event::Bar { on: false, why });
         if again {
             destroy(&shared.app);
-            chrome(shared, Vec::new());
+            tell_own(shared);
         }
         again
     };
@@ -144,9 +144,11 @@ fn undrawn(shared: &Arc<Shared>, made: u64) {
     }
 }
 
-/// Tells a running nook-wm which windows are the bar's own, never to be taken for the window in
-/// front. One that starts later reads them itself. Never call it holding the bar's lock.
-fn chrome(shared: &Shared, ours: Vec<Hwnd>) {
+/// Tells a running nook-wm which windows are Nook's own (the bar's and the dock's), never to be
+/// taken for the window in front. One that starts later reads them itself. Never call it holding
+/// the bar's or the dock's lock.
+pub(super) fn tell_own(shared: &Shared) {
+    let ours = shared.own_windows();
     if let Some(link) = shared.observer().link() {
         link.send(Cmd::Chrome(ours));
     }
@@ -213,7 +215,7 @@ fn make(shared: &Shared) -> Result<Vec<Hwnd>, String> {
     Ok(ours)
 }
 
-fn builder<'a>(
+pub(super) fn builder<'a>(
     app: &'a AppHandle,
     label: &str,
     page: &str,
@@ -356,15 +358,17 @@ pub fn focused(app: &AppHandle, label: &str) {
     let Some(shared) = host::shared(app) else {
         return;
     };
-    let (made, ours, before) = {
+    let (made, before) = {
         let run = shared.bar();
-        (run.made, run.ours.clone(), run.before)
+        (run.made, run.before)
     };
-    if !made {
+    let ours = shared.own_windows();
+    // The dock shows the Pip chip's count too, so Hearth's window clears it with the bar off.
+    if !shared.chrome_shown() {
         return;
     }
     match label {
-        BAR_LABEL | POPOVER_LABEL => {
+        BAR_LABEL | POPOVER_LABEL | super::dock::DOCK_LABEL if made => {
             let decided = focus::decide(focus::foreground(), &ours, before.as_ref(), focus::live);
             let landed = decided.is_ok_and(focus::hand_back);
             let first = shared

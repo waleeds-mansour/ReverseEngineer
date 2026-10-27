@@ -766,6 +766,7 @@ pub fn run(cli_args: CliArgs) {
             show_main_window_command,
             nook::prepare_update,
             nook::nook_ui,
+            overlay::overlay_ready,
             commands::cancel_operation,
             commands::is_portable,
             commands::is_update_checks_locked,

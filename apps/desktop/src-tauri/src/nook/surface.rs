@@ -19,10 +19,10 @@ use windows::Win32::Graphics::Dwm::{
 use windows::Win32::UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW};
 use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowLongPtrW, SendMessageW, SetWindowLongPtrW, SetWindowPos, ShowWindow,
-    SystemParametersInfoW, GWL_EXSTYLE, HWND_TOP, SPI_GETCLIENTAREAANIMATION, SPI_GETHIGHCONTRAST,
-    SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE,
-    SW_SHOWNOACTIVATE, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WM_NCACTIVATE, WS_EX_NOACTIVATE,
-    WS_EX_TOOLWINDOW,
+    SystemParametersInfoW, GWL_EXSTYLE, HWND_TOP, HWND_TOPMOST, SPI_GETCLIENTAREAANIMATION,
+    SPI_GETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
+    SW_HIDE, SW_SHOWNOACTIVATE, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WM_NCACTIVATE,
+    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
 };
 
 fn hwnd<R: Runtime>(w: &WebviewWindow<R>) -> Option<HWND> {
@@ -78,6 +78,17 @@ pub fn show<R: Runtime>(w: &WebviewWindow<R>) {
             let _ = ShowWindow(h, SW_SHOWNOACTIVATE);
             let flags = SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE;
             let _ = SetWindowPos(h, Some(HWND_TOP), 0, 0, 0, 0, flags);
+        }
+    }
+}
+
+/// Shown without taking the foreground, above every window that isn't topmost: the agent dock.
+pub fn show_topmost<R: Runtime>(w: &WebviewWindow<R>) {
+    if let Some(h) = hwnd(w) {
+        unsafe {
+            let _ = ShowWindow(h, SW_SHOWNOACTIVATE);
+            let flags = SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE;
+            let _ = SetWindowPos(h, Some(HWND_TOPMOST), 0, 0, 0, 0, flags);
         }
     }
 }

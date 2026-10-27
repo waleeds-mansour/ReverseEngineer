@@ -176,6 +176,10 @@ pub enum UiCmd {
     Popover { open: bool },
     /// The popover's Open Hearth: Hearth's window, on Today.
     OpenToday,
+    /// The agent dock's switch.
+    SetDock { on: bool },
+    /// The pointer came over the agent dock, or left it: its card opens or closes.
+    DockHover { open: bool },
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Type)]
@@ -205,6 +209,14 @@ mod tests {
             UiCmd::Popover { open: false }
         );
         assert_eq!(read(r#"{"kind":"drawn"}"#), UiCmd::Drawn);
+        assert_eq!(
+            read(r#"{"kind":"set_dock","on":false}"#),
+            UiCmd::SetDock { on: false }
+        );
+        assert_eq!(
+            read(r#"{"kind":"dock_hover","open":true}"#),
+            UiCmd::DockHover { open: true }
+        );
         assert!(serde_json::from_str::<UiCmd>(r#"{"kind":"theme","id":"dark"}"#).is_err());
     }
 
