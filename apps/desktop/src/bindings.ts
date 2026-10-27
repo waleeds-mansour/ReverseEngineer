@@ -571,6 +571,13 @@ async nookUi(cmd: UiCmd) : Promise<Result<UiReply, string>> {
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * The overlay's page answers: with no show when it starts listening, which sends it the show on
+ * screen, and with each show it draws.
+ */
+async overlayReady(drawn: number | null) : Promise<void> {
+    await TAURI_INVOKE("overlay_ready", { drawn });
+},
 async cancelOperation() : Promise<void> {
     await TAURI_INVOKE("cancel_operation");
 },
@@ -987,6 +994,42 @@ streamTextEvent: "stream-text-event"
 /** user-defined types **/
 
 /**
+ * One dot on the agent dock.
+ */
+export type AgentDot = {
+/**
+ * Stays the same while the agent is there, so the page keeps its dot.
+ */
+id: string; label: string; kind: AgentKind; state: AgentState;
+/**
+ * Its last line, shown with the label when the dot is hovered.
+ */
+line: string }
+/**
+ * What kind of agent a dot on the dock stands for.
+ */
+export type AgentKind =
+/**
+ * Pip, as far as this PC's own calls to it go.
+ */
+"pip" |
+/**
+ * One of Hearth's services, shown while it needs the owner.
+ */
+"service"
+/**
+ * What a dot on the dock says its agent is doing.
+ */
+export type AgentState = "working" |
+/**
+ * Something waits for the owner, or the agent isn't answering.
+ */
+"needs_you" |
+/**
+ * It just finished.
+ */
+"done" | "idle"
+/**
  * The container-level `serde(default)` (backed by the `Default` impl below)
  * guarantees every field — including ones added in the future — falls back to
  * its `get_default_settings()` value when missing from a stored settings
@@ -1108,9 +1151,34 @@ glass: boolean;
 /**
  * Windows' animation effects are off: nothing moves.
  */
-reduced_motion: boolean; services: ServicesView; pip: PipView; bar: BarView }
+reduced_motion: boolean; services: ServicesView; pip: PipView; bar: BarView;
+/**
+ * The agent dock's dots, Pip first.
+ */
+agents: AgentDot[]; dock: DockView }
 export type ClipboardHandling = "dont_modify" | "copy_to_clipboard"
 export type CustomSounds = { start: boolean; stop: boolean }
+export type DockView = {
+/**
+ * The owner's switch.
+ */
+on: boolean;
+/**
+ * The dock is on the screen now.
+ */
+shown: boolean;
+/**
+ * Why there is no dock although the switch is on.
+ */
+why_not: string | null;
+/**
+ * The pointer is over the dock, and its card has room to open.
+ */
+open: boolean; edge: Edge }
+/**
+ * The screen edge one of Nook's strips sits along: the bar the top, the agent dock a side.
+ */
+export type Edge = "top" | "left" | "right"
 export type EngineType = 
 /**
  * Any GGML/GGUF model loaded through transcribe-cpp (Whisper, Parakeet,
@@ -1395,7 +1463,15 @@ export type UiCmd =
 /**
  * The popover's Open Hearth: Hearth's window, on Today.
  */
-{ kind: "open_today" }
+{ kind: "open_today" } |
+/**
+ * The agent dock's switch.
+ */
+{ kind: "set_dock"; on: boolean } |
+/**
+ * The pointer came over the agent dock, or left it: its card opens or closes.
+ */
+{ kind: "dock_hover"; open: boolean }
 export type UiReply = { state: NookState; 
 /**
  * Where a saved file went.

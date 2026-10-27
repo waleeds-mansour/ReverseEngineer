@@ -1,5 +1,6 @@
 // What Nook's chrome shows besides the windows (docs/nook-wm.md, "DATA FOR THE BAR" and "THEME"):
-// the theme, whether the glass can be glass, Hearth's services, Pip, and the bar's own switch.
+// the theme, whether the glass can be glass, Hearth's services, Pip, the bar's own switch, and the
+// agent dock's dots and switch.
 // It goes to Nook's pages as 'nook://chrome' whenever one of them changes, and with every nook_ui
 // reply. Rust holds the last of each, so a page draws what it was last told even while Hearth's
 // server is restarting.
@@ -134,6 +135,64 @@ pub struct BarView {
     pub quiet: bool,
 }
 
+/// The screen edge one of Nook's strips sits along: the bar the top, the agent dock a side.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum Edge {
+    Top,
+    #[default]
+    Left,
+    Right,
+}
+
+/// What kind of agent a dot on the dock stands for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentKind {
+    /// Pip, as far as this PC's own calls to it go.
+    Pip,
+    /// One of Hearth's services, shown while it needs the owner.
+    Service,
+}
+
+/// What a dot on the dock says its agent is doing.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentState {
+    Working,
+    /// Something waits for the owner, or the agent isn't answering.
+    NeedsYou,
+    /// It just finished.
+    Done,
+    #[default]
+    Idle,
+}
+
+/// One dot on the agent dock.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Type)]
+pub struct AgentDot {
+    /// Stays the same while the agent is there, so the page keeps its dot.
+    pub id: String,
+    pub label: String,
+    pub kind: AgentKind,
+    pub state: AgentState,
+    /// Its last line, shown with the label when the dot is hovered.
+    pub line: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Type)]
+pub struct DockView {
+    /// The owner's switch.
+    pub on: bool,
+    /// The dock is on the screen now.
+    pub shown: bool,
+    /// Why there is no dock although the switch is on.
+    pub why_not: Option<String>,
+    /// The pointer is over the dock, and its card has room to open.
+    pub open: bool,
+    pub edge: Edge,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Type)]
 pub struct ChromeView {
     /// Goes up with every new view, so a page can drop one that arrives late.
@@ -146,6 +205,9 @@ pub struct ChromeView {
     pub services: ServicesView,
     pub pip: PipView,
     pub bar: BarView,
+    /// The agent dock's dots, Pip first.
+    pub agents: Vec<AgentDot>,
+    pub dock: DockView,
 }
 
 /// Hearth's key names as key caps: "ctrl+shift+escape" reads ["Ctrl", "Shift", "Esc"].
@@ -225,6 +287,17 @@ mod tests {
         assert_eq!(json["pip"]["mood"], "thinking");
         assert_eq!(json["services"]["server"], "unknown");
         assert_eq!(json["bar"]["why_not"], serde_json::Value::Null);
+        assert_eq!(json["dock"]["edge"], "left");
+        let dot = AgentDot {
+            id: "pip".into(),
+            label: "Pip".into(),
+            kind: AgentKind::Pip,
+            state: AgentState::NeedsYou,
+            line: "1 thing waits for you".into(),
+        };
+        let json = serde_json::to_value(&dot).unwrap();
+        assert_eq!(json["kind"], "pip");
+        assert_eq!(json["state"], "needs_you");
     }
 
     #[test]

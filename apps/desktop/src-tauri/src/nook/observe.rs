@@ -155,8 +155,8 @@ fn start(shared: &Arc<Shared>, o: &mut Observer) -> bool {
         observe: o.setting,
         panel_open: o.panel_open,
         follow_foreground: o.bar,
-        // The observer's lock may be held while the bar's is taken.
-        chrome: shared.bar().ours.clone(),
+        // The observer's lock may be held while the bar's and the dock's are taken.
+        chrome: shared.own_windows(),
         export_event: match sync::own_event(&perf::export_event_name(&session_tag())) {
             Ok(e) => Some(e),
             Err(e) => {

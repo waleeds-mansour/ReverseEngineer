@@ -264,6 +264,20 @@ function Panel() {
           </label>
           <p className="muted">{chrome?.bar.why_not ?? copy.barHint}</p>
         </section>
+        <section className="card">
+          <label className="switch">
+            <input
+              type="checkbox"
+              checked={chrome?.dock.on ?? false}
+              disabled={busy || chrome === null}
+              onChange={(e) =>
+                void run({ kind: "set_dock", on: e.target.checked })
+              }
+            />
+            <span>{copy.dockLabel}</span>
+          </label>
+          <p className="muted">{chrome?.dock.why_not ?? copy.dockHint}</p>
+        </section>
         {state.gates.length > 0 && (
           <section className="card" aria-labelledby="gates-title">
             <h2 id="gates-title">{copy.gatesTitle}</h2>

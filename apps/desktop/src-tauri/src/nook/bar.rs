@@ -7,7 +7,7 @@
 // made with the bar and kept hidden and suspended until the bar asks for it. Turning the bar off
 // destroys both, and the observer it kept running stops unless the panel or its own switch wants it.
 
-use super::chrome::BarView;
+use super::chrome::{BarView, Edge};
 use super::probe::{Hwnd, Rect};
 use super::start::Status;
 use super::view::{FrontWindow, ModeName, NookState, RectView};
@@ -54,32 +54,78 @@ fn scaled(px: i32, dpi: u32) -> i32 {
     (f64::from(px) * f64::from(dpi.max(1)) / 96.0).round() as i32
 }
 
+/// A strip `deep` logical px deep along `edge` of the monitor, `inset` px in from it: the whole
+/// edge when `long` is None, otherwise `long` px centred along it and kept on the monitor. The bar
+/// is the top edge's whole length; the agent dock is a short strip on a side.
+pub fn strip_rect(at: &Place, edge: Edge, deep: i32, long: Option<i32>, inset: i32) -> Rect {
+    let m = at.rect;
+    let (deep, inset) = (scaled(deep, at.dpi), scaled(inset, at.dpi));
+    let span = |from: i32, to: i32| match long {
+        None => (from, to),
+        Some(long) => {
+            let long = scaled(long, at.dpi).min(to - from);
+            let start = from + (to - from - long) / 2;
+            (start, start + long)
+        }
+    };
+    match edge {
+        Edge::Top => {
+            let (left, right) = span(m.left, m.right);
+            let top = m.top + inset;
+            Rect {
+                left,
+                top,
+                right,
+                bottom: top + deep,
+            }
+        }
+        Edge::Left | Edge::Right => {
+            let (top, bottom) = span(m.top, m.bottom);
+            let left = if edge == Edge::Left {
+                m.left + inset
+            } else {
+                m.right - inset - deep
+            };
+            Rect {
+                left,
+                top,
+                right: left + deep,
+                bottom,
+            }
+        }
+    }
+}
+
 /// The bar: the monitor's full width, bar-height times its scale, at its top-left corner.
 pub fn bar_rect(at: &Place) -> Rect {
+    strip_rect(at, Edge::Top, BAR_HEIGHT, None, 0)
+}
+
+/// A window of `size` logical px beside a strip along `edge`, on the monitor's side of it and
+/// kept on the monitor: under the top bar near the right edge, and beside a side strip, level
+/// with its top.
+pub fn beside_rect(at: &Place, edge: Edge, strip: &Rect, size: (i32, i32)) -> Rect {
     let m = at.rect;
+    let (w, h) = (scaled(size.0, at.dpi), scaled(size.1, at.dpi));
+    let (left, top, right) = match edge {
+        Edge::Top => {
+            let right = m.right - scaled(POPOVER_EDGE, at.dpi);
+            ((right - w).max(m.left), strip.bottom, right)
+        }
+        Edge::Left => (strip.right, strip.top, (strip.right + w).min(m.right)),
+        Edge::Right => ((strip.left - w).max(m.left), strip.top, strip.left),
+    };
     Rect {
-        left: m.left,
-        top: m.top,
-        right: m.right,
-        bottom: m.top + scaled(BAR_HEIGHT, at.dpi),
+        left,
+        top,
+        right,
+        bottom: (top + h).min(m.bottom),
     }
 }
 
 /// The popover: under the bar, near the right edge, where the services and Pip sit.
 pub fn popover_rect(at: &Place) -> Rect {
-    let m = at.rect;
-    let (w, h) = (
-        scaled(POPOVER_SIZE.0, at.dpi),
-        scaled(POPOVER_SIZE.1, at.dpi),
-    );
-    let right = m.right - scaled(POPOVER_EDGE, at.dpi);
-    let top = bar_rect(at).bottom;
-    Rect {
-        left: (right - w).max(m.left),
-        top,
-        right,
-        bottom: (top + h).min(m.bottom),
-    }
+    beside_rect(at, Edge::Top, &bar_rect(at), POPOVER_SIZE)
 }
 
 fn rect_of(r: &RectView) -> Rect {
@@ -97,6 +143,45 @@ fn covers(window: &Rect, monitor: &Rect) -> bool {
         && window.top <= monitor.top
         && window.right >= monitor.right
         && window.bottom >= monitor.bottom
+}
+
+/// What a state from nook-wm says about the primary monitor and what is in front of it, leaving
+/// out Nook's own windows in `ours`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct InFront {
+    pub monitor: Option<Place>,
+    /// The game guard tripped, for a window on any monitor.
+    pub game_anywhere: bool,
+    /// It tripped for a window on the primary monitor, or one Nook can't place.
+    pub game_here: bool,
+    /// The window in front covers the whole primary monitor, fullscreen or not.
+    pub covered: bool,
+}
+
+pub fn in_front(state: &NookState, ours: &[Hwnd]) -> InFront {
+    let primary = state.monitors.iter().find(|m| m.primary);
+    let monitor = primary.map(|m| Place {
+        rect: rect_of(&m.rect),
+        dpi: m.dpi,
+    });
+    let game_anywhere = state.gates.iter().any(|g| g.name == "game_guard")
+        || state.focused.as_ref().is_some_and(|f| f.game);
+    // The guard judges the window in front; only one on another monitor leaves the primary alone.
+    let elsewhere = match (state.front.and_then(|f| f.monitor), primary) {
+        (Some(on), Some(m)) => on != m.rect,
+        _ => false,
+    };
+    let front = state.front.filter(|f| !ours.contains(&f.hwnd));
+    let covered = match (front, monitor) {
+        (Some(FrontWindow { rect: Some(r), .. }), Some(at)) => covers(&rect_of(&r), &at.rect),
+        _ => false,
+    };
+    InFront {
+        monitor,
+        game_anywhere,
+        game_here: game_anywhere && !elsewhere,
+        covered,
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -185,25 +270,13 @@ impl BarRun {
     /// long enough for Nook to stop arranging it still gets its bar back when it returns.
     pub fn take(&mut self, state: &NookState) {
         self.observing = state.mode == ModeName::Observing;
-        let primary = state.monitors.iter().find(|m| m.primary);
-        self.monitor = primary.map(|m| Place {
-            rect: rect_of(&m.rect),
-            dpi: m.dpi,
-        });
-        self.game_anywhere = state.gates.iter().any(|g| g.name == "game_guard")
-            || state.focused.as_ref().is_some_and(|f| f.game);
-        // The guard judges the window in front; only one on another monitor leaves the bar up.
-        let elsewhere = match (state.front.and_then(|f| f.monitor), primary) {
-            (Some(on), Some(m)) => on != m.rect,
-            _ => false,
-        };
-        self.game_here = self.game_anywhere && !elsewhere;
-        let front = state.front.filter(|f| !self.ours.contains(&f.hwnd));
-        self.covered = match (front, self.monitor) {
-            (Some(FrontWindow { rect: Some(r), .. }), Some(at)) => covers(&rect_of(&r), &at.rect),
-            _ => false,
-        };
-        if let Some(front) = front {
+        let seen = in_front(state, &self.ours);
+        self.monitor = seen.monitor;
+        self.game_anywhere = seen.game_anywhere;
+        // Only a game on another monitor leaves the bar up.
+        self.game_here = seen.game_here;
+        self.covered = seen.covered;
+        if let Some(front) = state.front.filter(|f| !self.ours.contains(&f.hwnd)) {
             if self.before.is_some_and(|b| b.hwnd != front.hwnd) {
                 self.popover_wanted = false;
             }

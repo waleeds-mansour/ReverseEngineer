@@ -13,6 +13,13 @@ import i18n, { syncLanguageFromSettings } from "@/i18n";
 import { getLanguageDirection } from "@/lib/utils/rtl";
 
 type OverlayState = "recording" | "streaming" | "transcribing" | "processing";
+/** What `show-overlay` carries: the state, numbered so a show Rust sends again is drawn once. */
+type OverlayShow = { state: OverlayState; seq: number };
+
+/** Hearth's overlay ready handshake: tells Rust the page listens (no show) or drew `seq`. */
+const answer = (seq: number | null) => {
+  commands.overlayReady(seq).catch(() => {});
+};
 
 // Number of reactive bars in the waveform (the simple, smoothed style shared by
 // every overlay form). Mic levels arrive as 16 FFT buckets; we take the first N.
@@ -50,12 +57,22 @@ const RecordingOverlay: React.FC = () => {
   // until they scroll back down.
   const capRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true);
+  // The show this page started drawing, and the last one it finished.
+  const startedSeqRef = useRef(0);
+  const drawnSeqRef = useRef(0);
   const direction = getLanguageDirection(i18n.language);
 
   useEffect(() => {
     const setupEventListeners = async () => {
       const unlistenShow = await listen("show-overlay", async (event) => {
-        const overlayState = event.payload as OverlayState;
+        const { state: overlayState, seq } = event.payload as OverlayShow;
+        // Rust sends a show again until the page answers it: drawn already, answer again;
+        // still being drawn, the first one answers when it is done.
+        if (seq <= startedSeqRef.current) {
+          if (seq <= drawnSeqRef.current) answer(seq);
+          return;
+        }
+        startedSeqRef.current = seq;
         // Reset synchronously before settings I/O. A fast microphone can emit
         // recording-ready while the awaits below are in flight; resetting after
         // them would overwrite that event and leave the overlay stuck arming.
@@ -87,6 +104,8 @@ const RecordingOverlay: React.FC = () => {
           setSession((s) => s + 1); // remount the card fresh for this session
         }
         setIsVisible(true);
+        drawnSeqRef.current = seq;
+        answer(seq);
       });
 
       const unlistenHide = await listen("hide-overlay", () => {
@@ -120,6 +139,9 @@ const RecordingOverlay: React.FC = () => {
         setPhase(payload.phase);
         if (payload.kind) setWorkKind(payload.kind);
       });
+
+      // Listening now: Rust sends the show on screen, which may have gone out before.
+      answer(null);
 
       return () => {
         unlistenShow();

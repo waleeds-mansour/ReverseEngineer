@@ -20,6 +20,7 @@ pub mod links;
 pub mod meeting;
 pub mod notify;
 pub mod offline;
+pub mod overlay_ready;
 pub mod relay;
 pub mod selection;
 pub mod services;

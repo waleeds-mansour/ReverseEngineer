@@ -2,17 +2,20 @@
 // an update, its threads, the observer that the panel, the observing switch or the bar starts,
 // and the bar's state. Every restore here is nook-restore's restore_all on the real desktop,
 // which is tested in that crate against FakeDesktop and on private desktops; the tests here cover
-// only what this file decides on its own. Locks: the observer's may be held while the bar's is
-// taken, never the other way round, and Chrome's is never held while another is taken.
+// only what this file decides on its own. Locks: the observer's may be held while the bar's or
+// the dock's is taken, never the other way round; the bar's and the dock's are never held
+// together, and Chrome's is never held while another is taken.
 
 use super::bar::BarRun;
 use super::diag::{self, By, Event};
+use super::dock::DockRun;
 use super::focus::Tally;
 use super::look::Chrome;
 use super::observe::{self, Observer};
+use super::probe::Hwnd;
 use super::start::{self, Status};
 use super::view::NookState;
-use super::{barwin, settings, unwind};
+use super::{barwin, dockwin, settings, unwind};
 use nook_restore::journal::Loaded;
 use nook_restore::objects::session::{session_tag, SessionObjects};
 use nook_restore::objects::Unshared;
@@ -45,8 +48,9 @@ pub(super) struct Shared {
     pub(super) snapshot: Arc<Mutex<NookState>>,
     pub(super) observer: Mutex<Observer>,
     bar: Mutex<BarRun>,
+    dock: Mutex<DockRun>,
     chrome: Mutex<Chrome>,
-    /// One bar sync at a time, so making and destroying its windows never interleave.
+    /// One bar or dock sync at a time, so making and destroying their windows never interleave.
     pub(super) bar_sync: Mutex<()>,
     /// The bar's hand-backs of the foreground, for diag.json.
     pub(super) focus: Arc<Mutex<Tally>>,
@@ -67,8 +71,25 @@ impl Shared {
         self.bar.lock().unwrap_or_else(|p| p.into_inner())
     }
 
+    pub(super) fn dock(&self) -> MutexGuard<'_, DockRun> {
+        self.dock.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
     pub(super) fn chrome(&self) -> MutexGuard<'_, Chrome> {
         self.chrome.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// Whether the bar's or the dock's window exists, so Nook's chrome has a page to go to.
+    pub(super) fn chrome_shown(&self) -> bool {
+        self.bar().made || self.dock().made
+    }
+
+    /// The bar's, the popover's and the dock's own windows, never to be taken for the window in
+    /// front. Takes the bar's lock and then the dock's, one after the other.
+    pub(super) fn own_windows(&self) -> Vec<Hwnd> {
+        let mut ours = self.bar().ours.clone();
+        ours.extend(self.dock().ours.iter().copied());
+        ours
     }
 
     /// Reads the switches, the disabled file and the journal's unclean ends again.
@@ -133,6 +154,7 @@ pub fn init(app: &AppHandle) {
             setting: settings.bar,
             ..BarRun::default()
         }),
+        dock: Mutex::new(DockRun::new(settings.dock)),
         chrome: Mutex::new(Chrome::new(settings::load_theme(app))),
         bar_sync: Mutex::new(()),
         focus: Arc::default(),
@@ -144,9 +166,10 @@ pub fn init(app: &AppHandle) {
         let s = shared.clone();
         spawn(&shared, "start", move || check_at_start(&s));
     }
-    // With the switches off, as they start, these start nothing.
+    // With the switches off, as they start, these start nothing. The dock's starts on.
     observe::sync_with(&shared, &mut shared.observer());
     barwin::sync(&shared);
+    dockwin::sync(&shared);
 }
 
 pub(super) fn shared(app: &AppHandle) -> Option<Arc<Shared>> {
@@ -242,6 +265,7 @@ fn check_at_start(shared: &Arc<Shared>) {
     if shared.status() != was {
         observe::sync_with(shared, &mut shared.observer());
         barwin::sync(shared);
+        dockwin::sync(shared);
     }
 }
 

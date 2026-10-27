@@ -1,0 +1,170 @@
+/* Nook's agent dock: a short glass-strong strip of status dots floating by the screen's left edge,
+   and, while the pointer is over it, a card beside it with the hovered dot's label and last line.
+   The window is exactly the strip until Nook widens it for the card, so the strip has a hairline
+   edge and no outer shadow. The sizes match dock.rs (DOCK_DEEP, DOCK_PAD, DOT_ROW, CARD_SIZE).
+   A working dot breathes; nothing moves when Windows or the page asks for less motion
+   (nook.css), or while the page is hidden. */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  font: 500 12px/16px var(--font-sans);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+:root {
+  --dock-width: 28px;
+  --dock-pad: 6px;
+  --dot-row: 24px;
+  --card-gap: 6px;
+  --card-w: 236px;
+  --card-h: 60px;
+}
+
+.nd {
+  position: relative;
+  height: 100%;
+}
+
+.nd-strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  width: var(--dock-width);
+  padding: var(--dock-pad) 0;
+  border: 0.5px solid var(--hairline);
+  border-radius: calc(var(--dock-width) / 2);
+  background: var(--glass-strong);
+  box-shadow: inset 0 1px 0 var(--glass-edge);
+}
+
+:root[data-edge="right"] .nd-strip {
+  left: auto;
+  right: 0;
+}
+
+.nd-dot {
+  display: grid;
+  place-items: center;
+  align-self: center;
+  width: var(--dot-row);
+  height: var(--dot-row);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.nd-dot:hover {
+  background: var(--surface-3);
+}
+
+.nd-dot i {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  transition:
+    background-color var(--dur-base) var(--ease-standard),
+    transform var(--dur-base) var(--ease-standard);
+}
+
+.nd-dot[data-kind="pip"] i {
+  width: 10px;
+  height: 10px;
+}
+
+.nd-dot[data-state="working"] i {
+  background: var(--accent);
+  animation: nd-breathe 1.6s ease-in-out infinite;
+}
+
+.nd-dot[data-state="needs_you"] i {
+  background: var(--warning);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 22%, transparent);
+}
+
+.nd-dot[data-state="done"] i {
+  background: var(--positive);
+}
+
+:root[data-hidden] .nd-dot i {
+  animation: none;
+}
+
+@keyframes nd-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+}
+
+.nd-card {
+  position: absolute;
+  left: calc(var(--dock-width) + var(--card-gap));
+  top: clamp(
+    0px,
+    calc(
+      var(--dock-pad) + var(--row, 0) * var(--dot-row) + var(--dot-row) / 2 -
+        var(--card-h) / 2
+    ),
+    calc(100vh - var(--card-h))
+  );
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  width: var(--card-w);
+  height: var(--card-h);
+  padding: var(--space-2) var(--space-3);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  background: var(--glass-strong);
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge),
+    var(--shadow-1);
+}
+
+:root[data-edge="right"] .nd-card {
+  left: auto;
+  right: calc(var(--dock-width) + var(--card-gap));
+}
+
+:root[data-open] .nd-card {
+  display: flex;
+}
+
+.nd-label {
+  font: 650 12px/16px var(--font-sans);
+}
+
+.nd-line {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font: 500 11px/14px var(--font-sans);
+  color: var(--ink-muted);
+}

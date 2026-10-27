@@ -1,9 +1,11 @@
 // Nook's switches (docs/nook-wm.md, "Principles" and "OPT-IN FLOW"). They live in the app's
 // settings store next to Handy's settings, under a key of their own, so a value this version
-// can't read turns Nook off without touching the rest. Every switch starts off. This version can't
-// arrange anything yet, so the arranging switches only decide what Nook's status says; the ones it
-// acts on are `observe`, which watches windows and writes nothing, and `bar`, the strip along the
-// top of DISPLAY1 that observes too. The theme Hearth's window last showed is kept beside them.
+// can't read turns Nook off without touching the rest. Every switch starts off but the agent
+// dock's. This version can't arrange anything yet, so the arranging switches only decide what
+// Nook's status says; the ones it acts on are `observe`, which watches windows and writes nothing,
+// `bar`, the strip along the top of DISPLAY1 that observes too, and `dock`, the strip of status
+// dots on the left edge, which observes nothing and starts on. The theme Hearth's window last
+// showed is kept beside them.
 
 use super::chrome::ThemeId;
 use log::warn;
@@ -16,7 +18,7 @@ pub const STORE_KEY: &str = "nook";
 /// The theme Hearth's window last showed, as one of the six ids.
 pub const THEME_KEY: &str = "nook_theme";
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct NookSettings {
     /// The window manager itself, in Manual mode: it arranges only when asked.
@@ -41,9 +43,40 @@ pub struct NookSettings {
     pub safe_start_cleared_at: u64,
     /// Observing without the panel open (P1): hooks, verdicts and gates, with every write refused.
     pub observe: bool,
+    /// The agent dock: Pip's and the services' status dots on the left edge, topmost. It needs no
+    /// hook and writes nothing, so it starts on.
+    pub dock: bool,
+}
+
+impl Default for NookSettings {
+    fn default() -> NookSettings {
+        NookSettings {
+            dock: true,
+            ..NookSettings::off()
+        }
+    }
 }
 
 impl NookSettings {
+    /// Every switch off, the dock's too: what a store Nook can't read stands for.
+    pub fn off() -> NookSettings {
+        NookSettings {
+            enabled: false,
+            arrange: false,
+            auto_manage: false,
+            workspaces: false,
+            bar: false,
+            ring: false,
+            keymap: false,
+            reserve: false,
+            cloak: false,
+            display2: false,
+            safe_start_cleared_at: 0,
+            observe: false,
+            dock: false,
+        }
+    }
+
     /// Whether any capability is switched on.
     pub fn any_on(&self) -> bool {
         // Spelled out field by field, so a switch added later can't be left out of this.
@@ -58,9 +91,11 @@ impl NookSettings {
             cloak,
             display2,
             safe_start_cleared_at: _,
-            // Observing changes no window, and the bar only observes, so neither is arranging.
+            // Observing changes no window, the bar only observes and the dock only shows, so none
+            // of them is arranging.
             observe: _,
             bar: _,
+            dock: _,
         } = self;
         [
             enabled,
@@ -86,7 +121,7 @@ pub fn load(app: &AppHandle) -> NookSettings {
         Ok(store) => from_value(store.get(STORE_KEY)),
         Err(e) => {
             warn!("Couldn't open the settings store for Nook, so Nook stays off: {e}");
-            NookSettings::default()
+            NookSettings::off()
         }
     }
 }
@@ -113,6 +148,13 @@ pub fn save_bar(app: &AppHandle, on: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// Turns the agent dock on or off, the same way.
+pub fn save_dock(app: &AppHandle, on: bool) -> Result<(), String> {
+    let store = store(app)?;
+    store.set(STORE_KEY, with_switch(store.get(STORE_KEY), "dock", on));
+    Ok(())
+}
+
 pub fn with_switch(value: Option<serde_json::Value>, key: &str, on: bool) -> serde_json::Value {
     let mut map = match value {
         Some(serde_json::Value::Object(map)) => map,
@@ -133,14 +175,15 @@ pub fn save_theme(app: &AppHandle, theme: ThemeId) -> Result<(), String> {
     Ok(())
 }
 
-/// A stored value this version can't read counts as everything off: Nook fails closed.
+/// No stored value is the defaults; one this version can't read counts as everything off, the
+/// dock too: Nook fails closed.
 pub fn from_value(value: Option<serde_json::Value>) -> NookSettings {
     let Some(value) = value else {
         return NookSettings::default();
     };
     serde_json::from_value(value).unwrap_or_else(|e| {
         warn!("Nook's stored settings don't read ({e}), so every capability stays off");
-        NookSettings::default()
+        NookSettings::off()
     })
 }
 
@@ -150,10 +193,21 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn everything_starts_off() {
+    fn everything_starts_off_but_the_dock() {
         let settings = NookSettings::default();
         assert!(!settings.any_on());
+        assert!(!settings.observe && !settings.bar);
+        assert!(settings.dock, "the agent dock starts on");
         assert_eq!(from_value(None), settings);
+        // A store from before the dock keeps its switches and gets the dock on.
+        let older = from_value(Some(json!({ "bar": true })));
+        assert!(older.bar && older.dock);
+        let off = from_value(Some(json!({ "dock": false })));
+        assert!(!off.dock);
+        assert_eq!(
+            with_switch(Some(json!({ "bar": true })), "dock", false),
+            json!({ "bar": true, "dock": false })
+        );
     }
 
     #[test]
@@ -167,8 +221,9 @@ mod tests {
     #[test]
     fn a_value_that_does_not_read_turns_everything_off() {
         let settings = from_value(Some(json!({ "enabled": "yes", "bar": true })));
-        assert_eq!(settings, NookSettings::default());
-        assert_eq!(from_value(Some(json!("on"))), NookSettings::default());
+        assert_eq!(settings, NookSettings::off());
+        assert!(!settings.dock);
+        assert_eq!(from_value(Some(json!("on"))), NookSettings::off());
     }
 
     #[test]

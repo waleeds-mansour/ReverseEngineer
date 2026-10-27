@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "nook",
-  "description": "Nook's own windows (the panel, the bar, the popover and later the palette): they may listen for nook://state and nook://chrome and nothing more. Their one command, nook_ui, checks the window's label and that its page is Hearth's own.",
+  "description": "Nook's own windows (the panel, the bar, the popover, the agent dock nook_dock and later the palette): they may listen for nook://state and nook://chrome and nothing more. Their one command, nook_ui, checks the window's label and that its page is Hearth's own.",
   "platforms": ["windows"],
   "windows": ["nook_*"],
   "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]

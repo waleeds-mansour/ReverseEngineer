@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <!-- Nook's agent dock: nothing loads from anywhere but Hearth's bundle, and it talks only to
+         Tauri's IPC. Vite's dev server drops this tag (vite.config.ts). -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nook dock</title>
+  </head>
+  <body>
+    <nav id="dock" class="nd" aria-label="Agents"></nav>
+    <script type="module" src="/src/nook/dock.ts"></script>
+  </body>
+</html>
