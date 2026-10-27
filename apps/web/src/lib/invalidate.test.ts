@@ -88,6 +88,26 @@ describe("what a change you make refreshes", () => {
   it("refreshes everything after trashing a record, whose type it can't see", () => {
     expect(affectedByChange("entity.trash")).toBeNull();
   });
+
+  it("refreshes every Undo of Pip's where it shows, but not the timeline for mail", () => {
+    // Pressing one can put back any record.
+    expect(affectedByChange("activity.undo")).toBeNull();
+    for (const kind of ["activity.undone", "task.status_changed", "memory.changed"])
+      expect(hits(affectedBy({ kind }), "activity.timeline")).toBe(true);
+    const task = affectedBy({ kind: "entity.deleted", payload: { type: "task" } });
+    for (const name of ["activity.undos", "activity.timeline", "jarvis.did"])
+      expect(hits(task, name)).toBe(true);
+    expect(hits(affectedBy({ kind: "notification.created" }), "activity.undos")).toBe(true);
+    // A conversation Pip trashed comes back by its Undo; an event you moved greys the calendar's.
+    const talk = affectedBy({ kind: "entity.deleted", payload: { type: "conversation" } });
+    expect(hits(talk, "activity.undos")).toBe(true);
+    const moved = affectedBy({ kind: "calendar.event_changed" });
+    expect(hits(moved, "activity.undos")).toBe(true);
+    expect(hits(moved, "activity.timeline")).toBe(false);
+    const thread = affectedBy({ kind: "entity.created", payload: { type: "email_thread" } });
+    expect(hits(thread, "activity.undos")).toBe(false);
+    expect(hits(thread, "activity.timeline")).toBe(false);
+  });
 });
 
 describe("rules", () => {

@@ -1,35 +1,29 @@
 // Today's "What I did": what Pip did since yesterday, in its own words, each with a way to take it
 // back. What it made (a task, a note, the brief) is read from the records themselves (jarvis.did),
-// so a line is never Pip's own claim about what it did, and its Undo moves it to the trash (the
-// toast brings it back). What it changed on your calendar on its own has its own exact Undo (D71,
-// D72). A drafted reply has none: it's in Ready to send, to send or change. Each line opens what it's
-// about, and one written after reading outside content says so (D58). Runs that stopped before they
-// finished are counted under them, so a failure never goes quiet.
+// so a line is never Pip's own claim about what it did. Everything else it did without asking
+// that Undo can put back (what it trashed, a task or memory it changed, your calendar) comes from
+// activity.undos, the same list What Pip did shows on its cards: the same Undo, greyed the same
+// way once it can't. A line with none says where to change it instead: a drafted reply is in Ready
+// to send, and an event Pip added (or its prep) is changed in Calendar for now. Each line
+// opens what it's about, and one written after reading outside content says so (D58). Runs that
+// stopped before they finished are counted under them, so a failure never goes quiet.
 
-import { createSignal, For, Show } from "solid-js";
+import { For, Show } from "solid-js";
 import { Icon, type IconName } from "../../components/icons.tsx";
 import { OutsideMark } from "../../components/OutsideMark.tsx";
 import type { QueryRead } from "../../components/QueryView.tsx";
-import { Button } from "../../components/ui.tsx";
 import { day, plural, time } from "../../lib/format.ts";
 import type { PaneRoute } from "../../lib/panes.ts";
 import { routeFor } from "../../lib/panes.ts";
 import type { PipDid as Item } from "../../lib/pipFeed.ts";
-import { moveToTrash, named } from "../../lib/trash.ts";
 import type { Did } from "../../lib/types.ts";
-import { UndoButton } from "../inbox/UndoButton.tsx";
+import { UndoAct } from "../activity/UndoAct.tsx";
 import { CardEmpty, CardWaiting, type Go, TodayCard, TodayRow } from "./parts.tsx";
 
 /** How many the card shows; the rest are in What Pip did. */
 const SHOWN = 6;
 
-/** What it made, without what kind it is: "Call the plumber" from "Made a task: Call the plumber". */
-const titleOf = (d: Did) => {
-  const at = d.text.indexOf(": ");
-  return at > 0 ? d.text.slice(at + 2) : d.text;
-};
-
-/** Each kind of thing Pip makes, by the icon of where it lives. */
+/** Each kind of thing Pip makes or changes, by the icon of where it lives. */
 const KIND: Record<string, IconName> = {
   email_draft: "mail",
   task: "tasks",
@@ -38,6 +32,18 @@ const KIND: Record<string, IconName> = {
   brief: "today",
   journal: "docs",
   note: "docs",
+  canvas: "board",
+  person: "people",
+  company: "people",
+  memory_note: "memory",
+  page_watch: "browser",
+};
+
+/** Where to change what Pip made that has no Undo here. */
+const ELSEWHERE: Record<string, string> = {
+  email_draft: "In Ready to send",
+  event: "Change it in Calendar",
+  prep: "Change it in Calendar",
 };
 
 export function PipDid(props: {
@@ -50,71 +56,59 @@ export function PipDid(props: {
   /** Where a made thing opens: a drafted reply in its conversation, anything else as itself. */
   routeOf: (d: Did) => PaneRoute;
 }) {
-  // What you took back here, so its line says so rather than offering Undo again.
-  const [undone, setUndone] = createSignal<ReadonlySet<string>>(new Set());
-  const [undoing, setUndoing] = createSignal<string | null>(null);
-  const takeBack = async (d: Did) => {
-    setUndoing(d.entityId);
-    if (await moveToTrash(d.entityId)) setUndone((s) => new Set(s).add(d.entityId));
-    setUndoing(null);
-  };
   const when = (iso: string) => {
     const d = new Date(iso);
     const on = day(d, props.now);
     return on === "today" ? time(d) : on === "yesterday" ? "Yesterday" : on;
   };
+  const meta = (at: string, outside: boolean | undefined) => (
+    <>
+      {when(at)}
+      <Show when={outside}>
+        {" · "}
+        <OutsideMark>Read outside content</OutsideMark>
+      </Show>
+    </>
+  );
 
   const made = (item: Extract<Item, { kind: "made" }>) => {
     const d = item.did;
-    const gone = () => undone().has(d.entityId);
     return (
       <TodayRow
-        quiet={gone()}
+        quiet={item.undo?.undone}
         lead={<Icon name={KIND[d.entityType] ?? "docs"} class="text-muted" />}
         title={<span class="line-clamp-2">{d.text}</span>}
-        meta={
-          <>
-            {gone() ? "Moved to the trash · " : ""}
-            {when(d.at)}
-            <Show when={d.outside}>
-              {" · "}
-              <OutsideMark>Read outside content</OutsideMark>
-            </Show>
-          </>
-        }
+        meta={meta(d.at, d.outside)}
         end={
-          <Show when={item.undo && !gone()}>
-            <span onClick={(e) => e.stopPropagation()}>
-              <Button
-                size="sm"
-                icon="undo-2"
-                label={`Undo: move ${named(titleOf(d))} to the trash`}
-                disabled={undoing() === d.entityId}
-                onClick={() => void takeBack(d)}
-              >
-                Undo
-              </Button>
-            </span>
+          <Show
+            when={item.undo}
+            fallback={
+              <Show when={ELSEWHERE[d.entityType]}>
+                {(w) => <span class="shrink-0 text-meta text-faint">{w()}</span>}
+              </Show>
+            }
+          >
+            {(u) => <UndoAct undo={u()} />}
           </Show>
         }
-        onOpen={gone() ? undefined : (beside) => props.go(props.routeOf(d), beside)}
+        onOpen={(beside) => props.go(props.routeOf(d), beside)}
       />
     );
   };
 
   const changed = (item: Extract<Item, { kind: "changed" }>) => {
-    const r = item.row;
+    const u = item.undo;
     const open = (beside: boolean) => {
-      if (r.notification.entityId && r.entityType)
-        props.go(routeFor(r.entityType, r.notification.entityId), beside);
-      else props.go({ view: "inbox" }, beside);
+      if (u.entityId && u.entityType) props.go(routeFor(u.entityType, u.entityId), beside);
+      else props.go({ view: "activity" }, beside);
     };
     return (
       <TodayRow
-        lead={<Icon name="calendar" class="text-muted" />}
-        title={<span class="line-clamp-2">{r.notification.title}</span>}
-        meta={when(item.at)}
-        below={<UndoButton row={r} />}
+        quiet={u.undone}
+        lead={<Icon name={KIND[u.entityType ?? ""] ?? "activity"} class="text-muted" />}
+        title={<span class="line-clamp-2">{u.did}</span>}
+        meta={meta(u.at, u.outside)}
+        end={<UndoAct undo={u} />}
         onOpen={open}
       />
     );

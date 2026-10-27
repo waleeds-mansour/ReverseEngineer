@@ -1,8 +1,9 @@
 // Today as Pip's feed: Pip's line says the day in sentences and leaves out what it doesn't know
 // yet, the day is called light or full only when it is, what's new from Pip leaves out what has a
-// place of its own, and only what can go to the trash (or has its own Undo) offers to be undone.
+// place of its own, and what Pip did comes with the Undo What Pip did shows for it.
 import { describe, expect, it } from "vitest";
 import { dayLooks, newFromPip, pipDid, pipLine } from "./pipFeed.ts";
+import type { UndoView } from "./pipUndo.ts";
 import type { Did, InboxRow, Notification } from "./types.ts";
 
 const NOW = new Date(2026, 9, 23, 9, 40);
@@ -126,22 +127,41 @@ describe("what Pip did", () => {
     entityId,
     entityType,
   });
-  const trashable = new Set(["task", "note", "brief"]);
-  const since = new Date(2026, 9, 22);
+  const undo = (
+    id: string,
+    how: UndoView["how"],
+    hour: number,
+    entityId: string | null = id,
+  ): UndoView => ({
+    ref: { kind: "event", id },
+    groupId: "turn",
+    at: at(hour),
+    how,
+    did: `Did ${id}`,
+    label: `Undo ${id}`,
+    tells: null,
+    blocked: null,
+    undone: false,
+    entityId,
+    entityType: "task",
+    outside: false,
+  });
 
-  it("puts what it made and what it changed together, newest first, each with its undo", () => {
+  it("puts what it made and what else it did together, newest first, each with its own Undo", () => {
+    const madeTask = undo("t1", "made", 7);
     const items = pipDid(
       [did("t1", "task", 7), did("d1", "email_draft", 9)],
-      [
-        note("moved", { undo: UNDO, createdAt: at(8) }),
-        note("plain", { createdAt: at(8, 30) }),
-        note("old", { undo: UNDO, createdAt: new Date(2026, 9, 20).toISOString() }),
-      ],
-      trashable,
-      since,
+      [madeTask, undo("moved", "changed", 8), undo("trashed", "trashed", 6, "n1")],
     );
     expect(
-      items.map((i) => (i.kind === "made" ? `${i.did.entityId}:${i.undo}` : i.row.notification.id)),
-    ).toEqual(["d1:false", "moved", "t1:true"]);
+      items.map((i) =>
+        i.kind === "made" ? `${i.did.entityId}:${i.undo?.ref.id ?? "none"}` : i.undo.ref.id,
+      ),
+    ).toEqual(["d1:none", "moved", "t1:t1", "trashed"]);
+  });
+
+  it("keeps what Undo sent to the trash, said as undone, after it's left what Pip made", () => {
+    const gone = { ...undo("t1", "made", 7), blocked: "Undone", undone: true };
+    expect(pipDid([], [gone])).toEqual([{ kind: "changed", at: gone.at, undo: gone }]);
   });
 });

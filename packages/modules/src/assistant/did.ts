@@ -7,8 +7,11 @@ import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { isoDateTime } from "../shared.ts";
 
-/** The kinds of record that count as something done, and how each is said. */
-const SAID: Record<string, (title: string) => string> = {
+/**
+ * The kinds of record that count as something done, and how each is said. Undo says the same
+ * (activity/undo-words.ts), so Today's line and its Undo agree.
+ */
+export const SAID: Record<string, (title: string) => string> = {
   email_draft: (t) => `Drafted a reply: ${t}`,
   task: (t) => `Made a task: ${t}`,
   event: (t) => `Added to your calendar: ${t}`,

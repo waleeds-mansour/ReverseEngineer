@@ -3,7 +3,8 @@
 // touched and its reply (activity.timeline, activity/TimelineCard.tsx). Above them, what it's
 // watching for you, what's waiting for its next check, and what it noted for your next brief. The
 // Slack filter shows only what Slack started, and Pip's conversations there (D62); a job's shows
-// only what that job of Pip's did (Spec 3), and each card says which job its turn ran for.
+// only what that job of Pip's did (Spec 3), and each card says which job its turn ran for. What
+// Pip did without asking has its Undo on its card, and an Undo you pressed is a card of its own.
 
 import { createMemo, createSignal, For, Show } from "solid-js";
 import { NoRows } from "../components/QueryView.tsx";
@@ -15,6 +16,7 @@ import { act, useAction } from "../lib/query.ts";
 import type { RoleList } from "../lib/roles.ts";
 import type { Observation, Watch } from "../lib/types.ts";
 import { TimelineCard } from "./activity/TimelineCard.tsx";
+import { UndidCard } from "./activity/UndoAct.tsx";
 import { SlackConversations } from "./SlackConversations.tsx";
 
 /** Turns per page, and the most the timeline reads at once. */
@@ -164,12 +166,19 @@ export function Activity() {
             <ul class="border-t border-line">
               <For each={shown()}>
                 {(g) => (
-                  <TimelineCard
-                    group={g}
-                    go={go}
-                    answer={answer}
-                    job={g.turn?.roleId ? jobName().get(g.turn.roleId) : undefined}
-                  />
+                  <Show
+                    when={g.undid}
+                    fallback={
+                      <TimelineCard
+                        group={g}
+                        go={go}
+                        answer={answer}
+                        job={g.turn?.roleId ? jobName().get(g.turn.roleId) : undefined}
+                      />
+                    }
+                  >
+                    {(undid) => <UndidCard undid={undid()} at={g.at} />}
+                  </Show>
                 )}
               </For>
             </ul>

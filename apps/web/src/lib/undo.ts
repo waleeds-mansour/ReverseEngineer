@@ -1,6 +1,6 @@
 // The Undo on Jarvis's note about something it did to your calendar on its own (D71, D72). Its
 // words say exactly what pressing it does, from the same closed shape the server maps to one
-// change.
+// change, as What Pip did says it (activity/undo-words.ts).
 
 import type { InboxRow } from "./types.ts";
 
@@ -19,7 +19,8 @@ export function undoLabel(row: Pick<InboxRow, "notification" | "entityTitle">): 
   const title = row.entityTitle === null ? "the event" : quoted(row.entityTitle);
   switch (u.kind) {
     case "unaccept":
-      return `Undo: take back the yes to ${u.before.scope === "all" ? "every " : ""}${title}`;
+      // It changes your answer at Google, which the organizer sees: the button says so.
+      return `Undo: take back the yes to ${u.before.scope === "all" ? "every " : ""}${title}; its organizer will see`;
     case "unmove":
       return `Undo: move ${title} back to ${u.before.when}`;
     case "unremove":

@@ -3,6 +3,7 @@
 // it can take back. Apart from how it looks, so each is tested on its own (pipFeed.test.ts).
 
 import { time } from "./format.ts";
+import type { UndoView } from "./pipUndo.ts";
 import type { CalEvent, Did, InboxRow } from "./types.ts";
 
 /** A sentence of Pip's line, and the section of Today it's about. */
@@ -105,38 +106,45 @@ export function newFromPip(inbox: readonly InboxRow[] | undefined, shown = 3) {
   return { rows: rows.slice(0, shown), more: Math.max(0, rows.length - shown) };
 }
 
-/** A thing Pip did: a record it made, or a change it made to your calendar on its own. */
+/** A thing Pip did: a record it made, or something else it did without asking. */
 export type PipDid =
   | {
       kind: "made";
       at: string;
       did: Did;
-      /** It can go to the trash from here (and come back from the toast's Undo). */
-      undo: boolean;
+      /** Its Undo (to the trash), when it has one: the one on its card in What Pip did. */
+      undo: UndoView | null;
     }
-  /** A change with its own exact Undo (D71, D72): taking back a yes, moving an event back. */
-  | { kind: "changed"; at: string; row: InboxRow };
+  /** What it trashed, a task or memory it changed, a change to your calendar: each with Undo. */
+  | { kind: "changed"; at: string; undo: UndoView };
 
 /**
- * What Pip did since `since`, newest first: what it made (jarvis.did) and the changes it made on
- * its own that it can put back. A record it made can be taken back when it's a kind you can move
- * to the trash yourself (`trashable`, lib/trash.ts): a task, a note, a brief. A draft can't: it's
- * in Ready to send, to send or change.
+ * What Pip did since the same time, newest first: what it made (jarvis.did), each with its Undo
+ * when it has one, and everything else it did without asking that Undo can put back
+ * (activity.undos). Every Undo is the one What Pip did shows on its card, in the same state. A
+ * drafted reply has none: it's in Ready to send, to send or change. What Undo moved to the trash
+ * stays, said as undone.
  */
 export function pipDid(
   made: readonly Did[] | undefined,
-  inbox: readonly InboxRow[] | undefined,
-  trashable: ReadonlySet<string>,
-  since: Date,
+  undos: readonly UndoView[] | undefined,
 ): PipDid[] {
-  const from = since.getTime();
+  const madeUndo = new Map(
+    (undos ?? []).flatMap((u) => (u.how === "made" && u.entityId ? [[u.entityId, u]] : [])),
+  );
+  const listed = new Set((made ?? []).map((d) => d.entityId));
   const items: PipDid[] = [
     ...(made ?? []).map(
-      (did): PipDid => ({ kind: "made", at: did.at, did, undo: trashable.has(did.entityType) }),
+      (did): PipDid => ({
+        kind: "made",
+        at: did.at,
+        did,
+        undo: madeUndo.get(did.entityId) ?? null,
+      }),
     ),
-    ...(inbox ?? [])
-      .filter((r) => r.notification.undo && Date.parse(r.notification.createdAt) >= from)
-      .map((row): PipDid => ({ kind: "changed", at: row.notification.createdAt, row })),
+    ...(undos ?? [])
+      .filter((u) => !(u.how === "made" && u.entityId && listed.has(u.entityId)))
+      .map((undo): PipDid => ({ kind: "changed", at: undo.at, undo })),
   ];
   return items.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
 }

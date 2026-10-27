@@ -1,6 +1,7 @@
 // What Pip did, one card per thing that set it off (activity.timeline): the shapes it comes in,
 // and how a card says what started it, what it ran and how each went, in plain words.
 
+import type { Undid, UndoView } from "./pipUndo.ts";
 import { isSlackTurn } from "./slack.ts";
 import type { Tone } from "./status.ts";
 import { toolSentence } from "./toolNames.ts";
@@ -81,6 +82,10 @@ export interface TimelineGroup {
   approvals: TimelineApproval[];
   touched: TimelineTouched[];
   setAside: SetAside[];
+  /** What it did without asking, each with its Undo or why not. */
+  undos: UndoView[];
+  /** A card of its own for an Undo you pressed. */
+  undid: Undid | null;
 }
 
 export interface Timeline {
