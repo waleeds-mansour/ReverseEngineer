@@ -10,7 +10,7 @@ import { ago, TYPE_LABEL, who } from "../lib/format.ts";
 import { layout, routeFor } from "../lib/panes.ts";
 import { useAction } from "../lib/query.ts";
 import type { Entity } from "../lib/types.ts";
-import { EventPanel } from "./Calendar.tsx";
+import { EventPanel } from "./calendar/EventPanel.tsx";
 import { MeetingPanel } from "./Meeting.tsx";
 import { MemoryPanel } from "./Memory.tsx";
 import { PageWatchPanel } from "./PageWatch.tsx";

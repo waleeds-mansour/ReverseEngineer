@@ -1,330 +1,189 @@
-// Your calendar as a list: the next week, day by day, with focus blocks, answers and "Prep ready"
-// marked. An event's page opens with its prep, when Jarvis has written one. The box at the top
-// adds an event to your own calendar from a line like "Dentist Fri 3pm 1h"; one with guests still
-// goes through Jarvis, who asks first.
+// Your calendar: this week as a column a day under the hours (or one day, or a month's six weeks),
+// its weeks starting on the day they do where you are, with focus blocks, unanswered invites and
+// "Prep ready" marked. An event opens a popover with its details, your answer and its notes; on a
+// phone the days are a list instead. The box at the top adds an event to your own calendar from a
+// line like "Dentist Fri 3pm 1h"; one with guests still goes through Pip, who asks first. Keys,
+// while Calendar's pane has focus: t today, ← and → earlier and later, d, w and m for day, week
+// and month.
 
-import { createMemo, createSignal, For, Show } from "solid-js";
-import { Body } from "../components/Body.tsx";
-import { InviteAnswers } from "../components/InviteAnswers.tsx";
-import { Icon } from "../components/icons.tsx";
-import { OutsideMark } from "../components/OutsideMark.tsx";
+import { batch, createMemo, createSignal, Match, Show, Switch } from "solid-js";
 import { QueryView } from "../components/QueryView.tsx";
-import { Badge, Button, Empty, PaneHeader, TextButton } from "../components/ui.tsx";
+import { Empty, Failed, PaneHeader } from "../components/ui.tsx";
 import { createToday } from "../lib/clock.ts";
-import { emptyWeek, notKept, pastKept } from "../lib/emptyWeek.ts";
-import { hours, plural, span, time } from "../lib/format.ts";
-import { toast } from "../lib/live.ts";
-import { layout, routeFor } from "../lib/panes.ts";
-import { act, useAction } from "../lib/query.ts";
-import { quickAdd } from "../lib/quickadd.ts";
-import { isPlan, unanswered } from "../lib/today.ts";
-import type { CalEvent, CalendarSetup, Entity } from "../lib/types.ts";
-import { byDay, createWeekStart, syncedUntil, weeksOn } from "../lib/week.ts";
-import { type EventDraft, readEvent } from "../lib/when.ts";
-import { takeNotes } from "./Meeting.tsx";
-
-const dayLabel = (d: Date) =>
-  d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
-/** "Wednesday, Oct 7, 4 to 4:30 p.m.", or both days for an event that runs past midnight. */
-const when = (start: Date, end: Date) =>
-  start.toDateString() === end.toDateString()
-    ? `${dayLabel(start)}, ${hours(start, end)}`
-    : span(start, end);
-/** The tick or cross after the name of someone who has answered an invitation. */
-const ANSWERED = "ml-0.5 inline align-[-2px]";
-/** When a typed event is, before it's added: "Friday, Oct 9, 3 to 4 p.m." */
-const planned = (ev: EventDraft) =>
-  ev.allDay
-    ? `${dayLabel(new Date(`${ev.start}T00:00`))}, all day`
-    : when(new Date(ev.start), new Date(ev.end));
-
-/** A calendar's colour as Google gives it, or none if it isn't one ("#9fe1e7"). */
-const colour = (c: string | null | undefined) => (c && /^#[0-9a-f]{3,8}$/i.test(c) ? c : undefined);
+import { useHotkeys } from "../lib/hotkeys.ts";
+import { narrow } from "../lib/narrow.ts";
+import { layout } from "../lib/panes.ts";
+import { useAction } from "../lib/query.ts";
+import { isPlan } from "../lib/today.ts";
+import type { CalEvent } from "../lib/types.ts";
+import {
+  type CalView,
+  createShown,
+  emptyNoteFrom,
+  focusOf,
+  offsetFor,
+  rangeLabel,
+  type Shown,
+  syncedFrom,
+  syncedUntil,
+} from "../lib/week.ts";
+import { Agenda } from "./calendar/Agenda.tsx";
+import { EventPopover } from "./calendar/EventPopover.tsx";
+import { MonthGrid } from "./calendar/MonthGrid.tsx";
+import { NewEvent, NoEvents, NotKept } from "./calendar/QuickAdd.tsx";
+import { TimeGrid } from "./calendar/TimeGrid.tsx";
+import { Toolbar } from "./calendar/Toolbar.tsx";
 
 /**
- * A week with nothing on, in words that don't call it free when Hearth wouldn't know: loading, or
- * Try again, till it knows what's connected.
+ * What the agenda lists of what a view shows (the day, the week, or the month without its edges),
+ * and what it says when that's empty though the days read around it aren't.
  */
-function NoEvents(props: { from: Date; today: Date }) {
-  const setup = useAction<CalendarSetup>("calendar.calendars");
-  const out = () => notKept(props.from, props.today);
-  return (
-    <Show when={!out()} fallback={<Empty>{out()}</Empty>}>
-      <QueryView query={setup} what="your calendars">
-        {(s) => <Empty>{emptyWeek(props.from, props.today, s())}</Empty>}
-      </QueryView>
-    </Show>
-  );
-}
-
-/** The box that adds an event from a line of text. */
-function NewEvent() {
-  const [text, setText] = createSignal("");
-  const read = createMemo(() => readEvent(text().trim()));
-  const add = async () => {
-    if (!text().trim()) return;
-    // Read again as it's added, so "in 20 min" counts from now.
-    const ev = readEvent(text().trim());
-    if (!ev) return toast.show("Say when, like “Dentist Fri 3pm 1h”.");
-    const made = await quickAdd({ get: text, set: setText }, () =>
-      act("calendar.create_event", { title: ev.title, start: ev.start, end: ev.end }),
-    );
-    if (made) toast.show(`Added ${ev.title}: ${planned(ev)}.`);
-  };
-  return (
-    <form
-      class="flex items-center gap-2 border-b border-line px-4 py-2"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void add();
-      }}
-    >
-      <input
-        class="min-w-0 flex-1 bg-transparent py-1 placeholder:text-faint"
-        aria-label="New event"
-        placeholder="New event… “Dentist Fri 3pm 1h”"
-        value={text()}
-        onInput={(e) => setText(e.currentTarget.value)}
-      />
-      <Show when={read()}>
-        {(ev) => (
-          <Badge tone="accent" icon="calendar">
-            {planned(ev())}
-          </Badge>
-        )}
-      </Show>
-    </form>
-  );
-}
-
-/** One event in the week: when, its calendar's colour, what, where, and Join for a video call. */
-function Row(props: { event: CalEvent; pane: number }) {
-  const e = () => props.event;
-  const guests = () => e().attendees.filter((a) => !a.self).length;
-  return (
-    <li
-      class="flex cursor-pointer flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line px-4 py-2"
-      onClick={() =>
-        layout.open({ view: "record", id: e().id }, { beside: true, pane: props.pane })
-      }
-    >
-      <span class="w-20 shrink-0 text-xs text-muted tabular-nums">
-        {e().allDay ? "all day" : time(new Date(e().startsAt))}
-      </span>
-      <span
-        class="size-2 shrink-0 self-center rounded-full bg-line"
-        style={{ "background-color": colour(e().calendarColor) }}
-        aria-hidden="true"
-      />
-      <span class="min-w-0 flex-1">
-        <span
-          class={`block truncate ${e().selfResponse === "declined" ? "line-through opacity-60" : ""}`}
-        >
-          {e().title}
-        </span>
-        <span class="block truncate text-xs text-faint">
-          {[e().allDay ? null : `until ${time(new Date(e().endsAt))}`, e().location]
-            .filter(Boolean)
-            .join(" · ")}
-        </span>
-      </span>
-      <Show when={e().taskId}>
-        <Badge>focus</Badge>
-      </Show>
-      <Show when={e().prepId}>
-        <Badge tone="positive">Prep ready</Badge>
-      </Show>
-      <Show when={guests() > 0}>
-        <span class="text-xs text-faint">{plural(guests(), "guest")}</span>
-      </Show>
-      <Show when={e().meetUrl}>
-        {(url) => (
-          <TextButton
-            alone
-            class="text-xs"
-            href={url()}
-            target="_blank"
-            onClick={(ev) => ev.stopPropagation()}
-          >
-            Join
-          </TextButton>
-        )}
-      </Show>
-      {/* Not answered yet: answered right here, under its name on a phone. */}
-      <Show when={unanswered(e())}>
-        <InviteAnswers
-          eventId={e().id}
-          response={e().selfResponse}
-          recurring={e().recurringEventId !== null}
-          class="w-full pl-23 md:w-auto md:pl-0"
-        />
-      </Show>
-    </li>
-  );
+function listed(view: CalView, s: Shown) {
+  if (view === "day")
+    return { from: s.from, to: s.end, quiet: "Nothing on your calendar that day." };
+  if (!s.month) return { from: s.from, to: s.end, quiet: "Nothing on your calendar that week." };
+  const name = s.month.toLocaleDateString("en-US", { month: "long" });
+  const to = new Date(s.month.getFullYear(), s.month.getMonth() + 1, 1);
+  return { from: s.month, to, quiet: `Nothing on your calendar in ${name}.` };
 }
 
 export function Calendar(props: { pane: number }) {
+  const [view, setView] = createSignal<CalView>("week");
   const [offset, setOffset] = createSignal(0);
-  // Starts on the day, and a day's section is kept by its date (lib/week.ts): the minute moving
-  // on draws nothing again, so an invite's "This time only" stays chosen.
-  const from = createWeekStart(offset);
-  const events = useAction<CalEvent[]>("calendar.events", () => ({
-    from: from().toISOString(),
-    to: weeksOn(from(), 1).toISOString(),
-  }));
-  const week = byDay(() => events.data, from);
+  const [open, setOpen] = createSignal<{ id: string; at: DOMRect; from: HTMLElement }>();
+  // The day turns at midnight, not each minute, so what's drawn by day isn't drawn again till then.
   const today = createToday();
-  const until = createMemo(() => syncedUntil(new Date(today())));
+  const day = () => new Date(today());
+  const shown = createShown(view, offset);
+  const events = useAction<CalEvent[]>("calendar.events", () => ({
+    from: shown().from.toISOString(),
+    to: shown().to.toISOString(),
+  }));
+  const plans = createMemo(() => (events.data ?? []).filter(isPlan));
+  const list = createMemo(() => listed(view(), shown()));
+  const kept = (d: Date) => d >= syncedFrom(day()) && d < syncedUntil(day());
+
+  const go = (by: number | null) => {
+    setOpen();
+    setOffset(by === null ? 0 : offset() + by);
+  };
+  /** Shows `next`, about the day this view is about, or about `on`. */
+  const show = (next: CalView, on?: Date) => {
+    const at = on ?? focusOf(view(), day(), offset());
+    batch(() => {
+      setOpen();
+      setView(next);
+      setOffset(offsetFor(next, day(), at));
+    });
+  };
+  const focused = () => layout.focused() === props.pane;
+  useHotkeys([
+    { keys: "t", run: () => go(null), when: focused, label: "Calendar: today" },
+    { keys: "arrowleft", run: () => go(-1), when: focused, label: "Calendar: earlier" },
+    { keys: "arrowright", run: () => go(1), when: focused, label: "Calendar: later" },
+    { keys: "d", run: () => show("day"), when: focused, label: "Calendar: day" },
+    { keys: "w", run: () => show("week"), when: focused, label: "Calendar: week" },
+    { keys: "m", run: () => show("month"), when: focused, label: "Calendar: month" },
+  ]);
+
+  // The open event as last read, so its answers and guests stay current while it's open.
+  const popover = createMemo(() => {
+    const o = open();
+    const event = o && plans().find((e) => e.id === o.id);
+    return o && event ? { event, at: o.at } : undefined;
+  });
+  const onOpen = (e: CalEvent, el: HTMLElement) =>
+    setOpen({ id: e.id, at: el.getBoundingClientRect(), from: el });
+  const close = (refocus: boolean) => {
+    const from = open()?.from;
+    setOpen();
+    if (refocus && from?.isConnected) from.focus();
+  };
+
+  // Nothing on in all that was read: say why, never calling it free when Nook can't know.
+  const nothing = () => events.data !== undefined && plans().length === 0;
+  const noEvents = (strip: boolean) => (
+    <NoEvents from={emptyNoteFrom(shown(), day())} today={day()} strip={strip} />
+  );
+  const notKept = () => <NotKept from={shown().from} to={shown().end} today={day()} />;
+
   return (
-    <div class="flex h-full flex-col">
-      <PaneHeader title="Calendar">
-        <div class="flex gap-1">
-          <Button size="sm" onClick={() => setOffset(offset() - 1)}>
-            Earlier
-          </Button>
-          <Button size="sm" onClick={() => setOffset(0)}>
-            This week
-          </Button>
-          <Button size="sm" onClick={() => setOffset(offset() + 1)}>
-            Later
-          </Button>
-        </div>
+    <div class="flex h-full flex-col" data-product="calendar">
+      <PaneHeader
+        title="Calendar"
+        sub={<span aria-live="polite">{rangeLabel(view(), shown())}</span>}
+      >
+        <Toolbar view={view()} onView={show} onStep={go} onToday={() => go(null)} />
       </PaneHeader>
       <NewEvent />
-      <div class="flex-1 overflow-auto">
-        <QueryView
-          query={events}
-          what="your calendar"
-          isEmpty={(list) => !list.some(isPlan)}
-          empty={<NoEvents from={from()} today={new Date(today())} />}
-        >
-          {() => (
-            <>
-              <For each={week.days()}>
-                {(day) => (
-                  <section>
-                    <h2 class="sticky top-0 bg-panel px-4 pt-3 pb-1 text-xs font-semibold text-muted uppercase">
-                      {dayLabel(new Date(day))}
-                    </h2>
-                    <ul>
-                      <For each={week.on(day)}>{(e) => <Row event={e} pane={props.pane} />}</For>
-                    </ul>
-                  </section>
-                )}
-              </For>
-              {/* A week that runs past the last day Hearth keeps says so under what it has. */}
-              <Show when={weeksOn(from(), 1) > until()}>
-                <p class="px-4 py-3 text-sm text-muted">{pastKept(until())}</p>
-              </Show>
-            </>
-          )}
-        </QueryView>
-      </div>
-    </div>
-  );
-}
-
-/** An event's own part of its record: its prep first, then when, where, who, and Google's link. */
-export function EventPanel(props: { id: string }) {
-  const ev = useAction<CalEvent | null>("calendar.get", () => ({ id: props.id }));
-  return (
-    <Show when={ev.data}>
-      {(e) => (
-        <>
-          <Show when={e().prepId}>{(id) => <Prep id={id()} />}</Show>
-          <div class="space-y-1 rounded-md bg-sunk px-3 py-3 text-sm">
-            <p class="font-medium">
-              {e().allDay
-                ? `${dayLabel(new Date(e().startsAt))}, all day`
-                : when(new Date(e().startsAt), new Date(e().endsAt))}
-              {e().status === "cancelled" ? " (cancelled)" : ""}
-            </p>
-            <Show when={e().location}>
-              <p class="text-muted">{e().location}</p>
-            </Show>
-            <Show when={e().attendees.filter((a) => !a.self).length > 0}>
-              <p class="text-muted">
-                With{" "}
-                <For each={e().attendees.filter((a) => !a.self)}>
-                  {(a, i) => (
-                    <>
-                      {i() > 0 ? ", " : ""}
-                      {a.name ?? a.email}
-                      <Show when={a.response === "accepted"}>
-                        <Icon
-                          name="check"
-                          size={14}
-                          label="(going)"
-                          class={`${ANSWERED} text-ok`}
-                        />
-                      </Show>
-                      <Show when={a.response === "declined"}>
-                        <Icon
-                          name="x"
-                          size={14}
-                          label="(not going)"
-                          class={`${ANSWERED} text-bad`}
-                        />
-                      </Show>
-                    </>
-                  )}
-                </For>
+      <Show
+        when={!narrow()}
+        fallback={
+          <div class="min-h-0 flex-1 overflow-auto">
+            <QueryView query={events} what="your calendar">
+              {() => (
+                <>
+                  <Agenda
+                    events={plans()}
+                    from={list().from}
+                    to={list().to}
+                    pane={props.pane}
+                    empty={nothing() ? noEvents(false) : <Empty>{list().quiet}</Empty>}
+                  />
+                  <Show when={!nothing()}>{notKept()}</Show>
+                </>
+              )}
+            </QueryView>
+          </div>
+        }
+      >
+        {/* The grid stays while a week loads, so going week to week doesn't flash; it says so. */}
+        <Show when={events.data === undefined}>
+          <Show
+            when={events.isError}
+            fallback={
+              <p role="status" class="sr-only">
+                Loading…
               </p>
-            </Show>
-            <p class="flex gap-3 pt-1">
-              <TextButton alone onClick={(ev) => void takeNotes(e().id, ev.shiftKey)}>
-                Meeting notes
-              </TextButton>
-              <Show when={e().meetUrl}>
-                {(url) => (
-                  <TextButton alone href={url()} target="_blank">
-                    Join video call
-                  </TextButton>
-                )}
-              </Show>
-              <Show when={e().htmlLink}>
-                {(url) => (
-                  <TextButton alone href={url()} target="_blank">
-                    Open in Google Calendar
-                  </TextButton>
-                )}
-              </Show>
-            </p>
-          </div>
-        </>
-      )}
-    </Show>
-  );
-}
-
-/**
- * What Jarvis gathered for the meeting, at the top of its page, and a way to the packet itself.
- * A packet that quotes what other people wrote says so (D25).
- */
-function Prep(props: { id: string }) {
-  const rec = useAction<Entity>("entity.get", () => ({ id: props.id }));
-  return (
-    <Show when={rec.data}>
-      {(p) => (
-        <section aria-labelledby={`prep-${p().id}`} class="rounded-lg bg-raised p-4 shadow-1">
-          <div class="mb-2 flex flex-wrap items-center gap-2">
-            <h2 id={`prep-${p().id}`} class="text-heading">
-              Prep
-            </h2>
-            <Show when={p().outside}>
-              <OutsideMark>Quotes outside content</OutsideMark>
-            </Show>
-            <span class="flex-1" />
-            <Button
-              size="sm"
-              onClick={(ev) => layout.open(routeFor(p().type, p().id), { beside: ev.shiftKey })}
-            >
-              Open
-            </Button>
-          </div>
-          <Body text={p().body} />
-        </section>
-      )}
-    </Show>
+            }
+          >
+            <Failed error={events.error} retry={events.refetch} what="your calendar" />
+          </Show>
+        </Show>
+        <Show when={nothing()} fallback={notKept()}>
+          {noEvents(true)}
+        </Show>
+        <div class="min-h-0 flex-1 overflow-auto" aria-busy={events.data === undefined}>
+          <Switch>
+            <Match when={shown().month}>
+              {(month) => (
+                <MonthGrid
+                  days={shown().days}
+                  month={month()}
+                  events={plans()}
+                  today={today()}
+                  kept={kept}
+                  onOpen={onOpen}
+                  onDay={(d) => show("day", d)}
+                />
+              )}
+            </Match>
+            <Match when={!shown().month}>
+              <TimeGrid
+                days={shown().days}
+                events={plans()}
+                today={today()}
+                kept={kept}
+                onOpen={onOpen}
+                onDay={(d) => show("day", d)}
+              />
+            </Match>
+          </Switch>
+        </div>
+      </Show>
+      <Show when={popover()}>
+        {(p) => <EventPopover event={p().event} at={p().at} pane={props.pane} onClose={close} />}
+      </Show>
+    </div>
   );
 }
