@@ -5,8 +5,33 @@ import { z } from "zod";
 
 export const SHEET_ROWS = 500;
 export const SHEET_COLUMNS = 52;
-const MAX_SHEETS = 20;
-const MAX_CELL = 2000;
+/**
+ * How much a workbook holds: what's written is checked against these, and what's read is kept
+ * within them.
+ */
+export const SHEET_LIMITS = {
+  sheets: 20,
+  name: 31,
+  cellText: 2000,
+  width: { min: 30, max: 800 },
+  frozenRows: 20,
+  frozenCols: 10,
+} as const;
+
+/**
+ * Text that can be kept: cut to `max` (UTF-16 units) but never between an emoji's two halves, and
+ * a half on its own (from a clipboard, say) made U+FFFD. The database refuses a lone half, and
+ * with it every save of the workbook.
+ */
+export function keepableText(text: string, max: number = SHEET_LIMITS.cellText): string {
+  const whole = text.replace(
+    /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,
+    "�",
+  );
+  const cut = whole.slice(0, max);
+  const last = cut.charCodeAt(cut.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
+}
 
 /** "A1" … "AZ500". */
 export const CELL_REF = /^([A-Z]{1,2})([1-9][0-9]{0,3})$/;
@@ -41,7 +66,10 @@ export function parseCell(ref: string): { row: number; col: number } | null {
 
 export const cellName = (row: number, col: number) => `${columnName(col)}${row}`;
 
-const cellKey = z.string().refine((k) => parseCell(k) !== null, "not a cell like A1");
+/** A cell as written: its own name, "B3", never "b3" or " B3". */
+const cellKey = z
+  .string()
+  .refine((k) => CELL_REF.test(k) && parseCell(k) !== null, "not a cell like A1");
 
 /** Fills by name: each theme draws its own shade of one, so a fill reads in light and dark alike. */
 export const SHEET_FILLS = ["red", "orange", "yellow", "green", "blue", "purple", "gray"] as const;
@@ -56,17 +84,14 @@ export const NUMBER_FORMATS = {
 } as const;
 export type NumberFormat = keyof typeof NUMBER_FORMATS;
 
-// Each part of a format stands alone: one that doesn't read is dropped, never the cell's other
-// parts, its sheet or the workbook (a workbook that doesn't read loads as an empty one, and the
-// next save would write that over the real one).
-const part = <T extends z.ZodType>(s: T) => s.optional().catch(undefined);
-
+// As written: a part that isn't one of these is refused, with what it should be. Reading one back
+// (readWorkbook) drops a part that doesn't read on its own instead.
 export const CellFormatSchema = z.object({
-  bold: part(z.boolean()),
-  italic: part(z.boolean()),
-  align: part(z.enum(["left", "center", "right"])),
-  fill: part(z.enum(SHEET_FILLS)),
-  number: part(z.enum(Object.keys(NUMBER_FORMATS) as [NumberFormat, ...NumberFormat[]])),
+  bold: z.boolean().optional(),
+  italic: z.boolean().optional(),
+  align: z.enum(["left", "center", "right"]).optional(),
+  fill: z.enum(SHEET_FILLS).optional(),
+  number: z.enum(Object.keys(NUMBER_FORMATS) as [NumberFormat, ...NumberFormat[]]).optional(),
 });
 export type CellFormat = z.infer<typeof CellFormatSchema>;
 
@@ -78,21 +103,6 @@ export function tidyFormat(f: CellFormat): CellFormat | null {
   return Object.keys(out).length ? (out as CellFormat) : null;
 }
 
-/** Formats by cell. An entry that doesn't read, or says nothing, is dropped on its own. */
-const formatsSchema = z
-  .record(z.string(), CellFormatSchema.catch({}))
-  .catch({})
-  .transform((all) => {
-    const out: Record<string, CellFormat> = {};
-    for (const [ref, f] of Object.entries(all)) {
-      const at = parseCell(ref);
-      const kept = tidyFormat(f);
-      if (at && kept) out[cellName(at.row, at.col)] = kept;
-    }
-    return out;
-  })
-  .default({});
-
 /** Rows at the top and columns at the left that stay put while the rest scrolls. */
 export const NO_FREEZE: Readonly<{ rows: number; cols: number }> = Object.freeze({
   rows: 0,
@@ -100,31 +110,38 @@ export const NO_FREEZE: Readonly<{ rows: number; cols: number }> = Object.freeze
 });
 const freezeSchema = z
   .object({
-    rows: z.number().int().min(0).max(20).catch(0),
-    cols: z.number().int().min(0).max(10).catch(0),
+    rows: z.number().int().min(0).max(SHEET_LIMITS.frozenRows).default(0),
+    cols: z.number().int().min(0).max(SHEET_LIMITS.frozenCols).default(0),
   })
-  .catch(() => ({ ...NO_FREEZE }))
   .default(() => ({ ...NO_FREEZE }));
 
+// What's written: Pip's sheet.save and sheet.set, and every save from a screen. Anything that
+// doesn't fit is refused with what's wrong. What's kept is read back with readWorkbook, which
+// drops or clamps a part that doesn't fit and keeps the rest.
 export const WorksheetSchema = z.object({
   id: z.string().min(1).max(40),
   name: z
     .string()
     .trim()
     .min(1)
-    .max(31)
+    .max(SHEET_LIMITS.name)
     // biome-ignore lint/complexity/noUselessEscapeInRegex: the model API's regex engine reads a bare "[" in a class as a nested class and rejects every Jarvis turn.
     .regex(/^[^\[\]:*?/\\']+$/, "sheet names can't use [ ] : * ? / \\ or '"),
-  cells: z.record(cellKey, z.string().max(MAX_CELL)).default({}),
+  cells: z.record(cellKey, z.string().max(SHEET_LIMITS.cellText)).default({}),
   /** Column widths in pixels, by column letter. */
-  widths: z.record(z.string().regex(/^[A-Z]{1,2}$/), z.number().min(30).max(800)).default({}),
+  widths: z
+    .record(
+      z.string().regex(/^[A-Z]{1,2}$/),
+      z.number().min(SHEET_LIMITS.width.min).max(SHEET_LIMITS.width.max),
+    )
+    .default({}),
   /** Bold, italic, alignment, fill and number format, by cell; a cell without one has none. */
-  formats: formatsSchema,
+  formats: z.record(cellKey, CellFormatSchema).default({}),
   freeze: freezeSchema,
 });
 
 export const WorkbookSchema = z
-  .object({ sheets: z.array(WorksheetSchema).min(1).max(MAX_SHEETS) })
+  .object({ sheets: z.array(WorksheetSchema).min(1).max(SHEET_LIMITS.sheets) })
   .refine((b) => new Set(b.sheets.map((s) => s.name.toLowerCase())).size === b.sheets.length, {
     message: "two sheets have the same name",
   });
@@ -144,19 +161,6 @@ export const blankSheet = (id: string, name: string): Worksheet => ({
 
 export const emptyWorkbook = (): Workbook => ({ sheets: [blankSheet("s1", "Sheet1")] });
 
-/**
- * A workbook as this version reads it, from wherever it was kept: a copy kept on a device before
- * sheets had formats has none, rather than none to read.
- */
-export const filledWorkbook = (b: Workbook): Workbook => ({
-  sheets: b.sheets.map((s) => ({
-    ...s,
-    widths: s.widths ?? {},
-    formats: s.formats ?? {},
-    freeze: s.freeze ?? { ...NO_FREEZE },
-  })),
-});
-
 /** The part of IronCalc's Model that working out a workbook needs. */
 export interface CalcModel {
   newSheet(): void;
@@ -169,37 +173,44 @@ export interface CalcModel {
   ): void;
   evaluate(): void;
   getFormattedCellValue(sheet: number, row: number, column: number): string;
+  /** 1 a number, 2 text, 4 TRUE or FALSE, 16 an error. */
+  getCellType(sheet: number, row: number, column: number): number;
   free(): void;
 }
 
 /** Each sheet's results, by cell, for the cells that hold something. */
 export type Results = Record<string, string>[];
 
+/** Puts the workbook into an empty model, and works it out. */
+function work(book: Workbook, m: CalcModel) {
+  book.sheets.forEach((s, i) => {
+    if (i > 0) m.newSheet();
+    m.renameSheet(i, s.name);
+  });
+  book.sheets.forEach((s, i) => {
+    for (const [ref, input] of Object.entries(s.cells)) {
+      const at = parseCell(ref);
+      if (at && input !== "") m.setUserInput(i, at.row, at.col, input);
+    }
+    // After the input, which sets a format of its own when you type "$1,200" or "15%".
+    for (const [ref, f] of Object.entries(s.formats ?? {})) {
+      const at = parseCell(ref);
+      if (at && f.number && s.cells[ref])
+        m.updateRangeStyle(
+          { sheet: i, row: at.row, column: at.col, width: 1, height: 1 },
+          "num_fmt",
+          NUMBER_FORMATS[f.number],
+        );
+    }
+  });
+  m.evaluate();
+}
+
 /** Works out every formula in the workbook. `model` makes an empty IronCalc model. */
 export function calculate(book: Workbook, model: () => CalcModel): Results {
   const m = model();
   try {
-    book.sheets.forEach((s, i) => {
-      if (i > 0) m.newSheet();
-      m.renameSheet(i, s.name);
-    });
-    book.sheets.forEach((s, i) => {
-      for (const [ref, input] of Object.entries(s.cells)) {
-        const at = parseCell(ref);
-        if (at && input !== "") m.setUserInput(i, at.row, at.col, input);
-      }
-      // After the input, which sets a format of its own when you type "$1,200" or "15%".
-      for (const [ref, f] of Object.entries(s.formats ?? {})) {
-        const at = parseCell(ref);
-        if (at && f.number && s.cells[ref])
-          m.updateRangeStyle(
-            { sheet: i, row: at.row, column: at.col, width: 1, height: 1 },
-            "num_fmt",
-            NUMBER_FORMATS[f.number],
-          );
-      }
-    });
-    m.evaluate();
+    work(book, m);
     return book.sheets.map((s, i) => {
       const out: Record<string, string> = {};
       for (const ref of Object.keys(s.cells)) {
@@ -208,6 +219,60 @@ export function calculate(book: Workbook, model: () => CalcModel): Results {
       }
       return out;
     });
+  } finally {
+    m.free();
+  }
+}
+
+/** Typed first, it makes the rest text, whatever it looks like: '=x is the text "=x". */
+export const AS_TEXT = "'";
+
+/**
+ * Each formula's value among `refs` on one sheet, as what to type for that value alone (Paste
+ * values only): a number unformatted, to the 15 digits a spreadsheet keeps ("5%" is 0.0525 and
+ * "$33.33" 33.3333333333333); text as itself, after AS_TEXT when typing it would make something
+ * else (a formula, a number, TRUE); TRUE, FALSE and errors as they read.
+ */
+export function formulaValues(
+  book: Workbook,
+  sheet: number,
+  refs: string[],
+  model: () => CalcModel,
+): Record<string, string> {
+  const s = book.sheets[sheet];
+  const formulas = refs.flatMap((ref) => {
+    const at = s?.cells[ref]?.startsWith("=") ? parseCell(ref) : null;
+    return at ? [{ ref, ...at }] : [];
+  });
+  if (!formulas.length) return {};
+  const m = model();
+  try {
+    work(book, m);
+    const out: Record<string, string> = {};
+    const texts: typeof formulas = [];
+    for (const f of formulas) {
+      const type = m.getCellType(sheet, f.row, f.col);
+      out[f.ref] = m.getFormattedCellValue(sheet, f.row, f.col);
+      if (type === 2) texts.push(f);
+      if (type !== 1) continue;
+      // Every digit IronCalc keeps, then written as short as it reads: 3.33333333333333E+01 is
+      // 33.3333333333333.
+      const at = { sheet, row: f.row, column: f.col, width: 1, height: 1 };
+      m.updateRangeStyle(at, "num_fmt", "0.##############E+00");
+      const n = Number(m.getFormattedCellValue(sheet, f.row, f.col));
+      if (Number.isFinite(n)) out[f.ref] = String(n).toUpperCase();
+    }
+    // Once every value is read, each text is typed back into its own cell: does it stay that text?
+    for (const f of texts) {
+      const text = out[f.ref]!;
+      if (!text.startsWith("=") && !text.startsWith(AS_TEXT)) {
+        m.setUserInput(sheet, f.row, f.col, text);
+        const still = m.getCellType(sheet, f.row, f.col) === 2;
+        if (still && m.getFormattedCellValue(sheet, f.row, f.col) === text) continue;
+      }
+      out[f.ref] = `${AS_TEXT}${text}`;
+    }
+    return out;
   } finally {
     m.free();
   }

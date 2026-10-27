@@ -9,6 +9,7 @@ export * from "./merge.ts";
 export * from "./schedule.ts";
 export * from "./security.ts";
 export * from "./sheet.ts";
+export * from "./sheetRead.ts";
 export * from "./tasks.ts";
 export * from "./time.ts";
 export * from "./turns.ts";

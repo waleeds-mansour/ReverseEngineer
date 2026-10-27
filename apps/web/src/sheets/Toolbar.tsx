@@ -1,6 +1,6 @@
 // A spreadsheet's formatting, beside the formula bar: bold, italic, which side, the number format,
-// a fill, and keeping the top row in place. Each acts on the cells selected, as one step to undo,
-// and shows what the cell the cursor is on has.
+// a fill, and keeping the top row and the first column in place. Each acts on the cells selected,
+// as one step to undo, and shows what the cell the cursor is on has.
 
 import { SHEET_FILLS, type SheetFill } from "@hearth/core";
 import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
@@ -55,6 +55,15 @@ export function Toolbar(props: {
   const paint = (fill: SheetFill | null) => {
     setPicking(false);
     apply({ fill });
+  };
+  // On, it keeps one row (or column) in place; off, none. The other one stays as it is.
+  const freeze = (part: "rows" | "cols") => {
+    const f = sheet()?.freeze;
+    if (f) {
+      const on = f[part] > 0 ? 0 : 1;
+      s.setFreeze(props.tab, part === "rows" ? on : f.rows, part === "cols" ? on : f.cols);
+    }
+    props.done();
   };
 
   return (
@@ -147,13 +156,18 @@ export function Toolbar(props: {
         title="Keep the top row in place while the rest scrolls"
         pressed={(sheet()?.freeze.rows ?? 0) > 0}
         disabled={off()}
-        onClick={() => {
-          const f = sheet()?.freeze;
-          if (f) s.setFreeze(props.tab, f.rows > 0 ? 0 : 1, f.cols);
-          props.done();
-        }}
+        onClick={() => freeze("rows")}
       >
         Freeze top row
+      </Button>
+      <Button
+        variant="quiet"
+        title="Keep the first column in place while the rest scrolls sideways"
+        pressed={(sheet()?.freeze.cols ?? 0) > 0}
+        disabled={off()}
+        onClick={() => freeze("cols")}
+      >
+        Freeze first column
       </Button>
     </div>
   );

@@ -5,6 +5,7 @@
 // holds a blank workbook, not Hearth's, and its cells have the same names as Hearth's.
 
 import {
+  type CellFormat,
   emptyWorkbook,
   filledWorkbook,
   mergeWorkbook,
@@ -17,8 +18,8 @@ import { createStore, reconcile, unwrap } from "solid-js/store";
 import { action } from "../lib/api.ts";
 import { reportError } from "../lib/live.ts";
 import { createSaver } from "../lib/wholeSave.ts";
-import { engine } from "./engine.ts";
-import { applyFormat, type FormatPatch } from "./format.ts";
+import { type Engine, engine } from "./engine.ts";
+import { applyFormat, type FormatPatch, sameFormat } from "./format.ts";
 
 const MAX_UNDO = 100;
 
@@ -35,21 +36,21 @@ export function createSheet(id: string) {
   const [title, setTitle] = createSignal("");
   const [loaded, setLoaded] = createSignal(false);
   const [served, setServed] = createSignal<Results>([]);
-  const [calc, setCalc] = createSignal<((b: Workbook) => Results) | null>(null);
+  const [calc, setCalc] = createSignal<Engine | null>(null);
   const undo: Workbook[] = [];
   const redo: Workbook[] = [];
 
   engine()
-    .then((fn) => setCalc(() => fn))
+    .then((e) => setCalc(() => e))
     .catch(reportError);
 
   // Worked out here once the engine has loaded; until then, what the server worked out.
   const results = createMemo<Results>(() => {
-    const fn = calc();
+    const e = calc();
     rev();
-    if (!fn) return served();
+    if (!e) return served();
     try {
-      return fn(copy(book));
+      return e.calc(copy(book));
     } catch (err) {
       reportError(err);
       return served();
@@ -104,6 +105,29 @@ export function createSheet(id: string) {
     saver.changed();
   };
 
+  const put = (
+    sheet: number,
+    cells: Record<string, string>,
+    formats: Record<string, CellFormat | null> = {},
+  ) => {
+    const s = book.sheets[sheet];
+    if (!s) return;
+    const sameCells = Object.entries(cells).every(([k, v]) => (s.cells[k] ?? "") === v);
+    const sameFormats = Object.entries(formats).every(([k, f]) => sameFormat(s.formats[k], f));
+    if (sameCells && sameFormats) return;
+    change((d) => {
+      const target = d.sheets[sheet]!;
+      for (const [k, v] of Object.entries(cells)) {
+        if (v === "") delete target.cells[k];
+        else target.cells[k] = v;
+      }
+      for (const [k, f] of Object.entries(formats)) {
+        if (f) target.formats[k] = { ...f };
+        else delete target.formats[k];
+      }
+    });
+  };
+
   const swap = (from: Workbook[], to: Workbook[]) => {
     const prev = from.pop();
     if (!prev) return;
@@ -127,21 +151,25 @@ export function createSheet(id: string) {
         : "There's nothing to show here until it's restored.";
     },
     results,
+    /**
+     * Each formula's value among `refs`, as what to type for it alone (Paste values only); none
+     * until the engine has loaded.
+     */
+    values(sheet: number, refs: string[]): Record<string, string> {
+      try {
+        return calc()?.values(copy(book), sheet, refs) ?? {};
+      } catch (err) {
+        reportError(err);
+        return {};
+      }
+    },
     /** Reads it from Hearth, keeping what's unsaved here on top. */
     load: saver.load,
     change,
     /** Sets cells on one sheet: "" clears. */
-    set(sheet: number, cells: Record<string, string>) {
-      const s = book.sheets[sheet];
-      if (!s || Object.entries(cells).every(([k, v]) => (s.cells[k] ?? "") === v)) return;
-      change((d) => {
-        const target = d.sheets[sheet]!;
-        for (const [k, v] of Object.entries(cells)) {
-          if (v === "") delete target.cells[k];
-          else target.cells[k] = v;
-        }
-      });
-    },
+    set: (sheet: number, cells: Record<string, string>) => put(sheet, cells),
+    /** Sets cells and their formats on one sheet, as one step to undo: "" or null clears. */
+    put,
     /** Formats cells on one sheet, as one step to undo: a part set to null comes off. */
     format(sheet: number, refs: string[], patch: FormatPatch) {
       const s = book.sheets[sheet];

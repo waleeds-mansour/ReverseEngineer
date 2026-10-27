@@ -3,7 +3,13 @@
 // the whole workbook after every cell, and a few thousand cells took seconds (D59).
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { type CalcModel, calculate, type Results, type Workbook } from "@hearth/core";
+import {
+  type CalcModel,
+  calculate,
+  formulaValues,
+  type Results,
+  type Workbook,
+} from "@hearth/core";
 import * as ironcalc from "@ironcalc/wasm";
 
 let ready = false;
@@ -28,6 +34,10 @@ function model(timeZone: string): CalcModel {
 /** Every formula's result, with NOW() and TODAY() in `timeZone` (the owner's). */
 export const results = (book: Workbook, timeZone = "UTC"): Results =>
   calculate(book, () => model(timeZone));
+
+/** Each formula's value among `refs` on one sheet, as what to type for it alone (formulaValues). */
+export const values = (book: Workbook, sheet: number, refs: string[], timeZone = "UTC") =>
+  formulaValues(book, sheet, refs, () => model(timeZone));
 
 /** Results that change with the clock or by chance can't be kept. */
 const VOLATILE = /\b(NOW|TODAY|RAND|RANDBETWEEN|RANDARRAY)\s*\(/i;

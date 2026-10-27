@@ -1,9 +1,16 @@
 // IronCalc in the browser: the same engine the server uses, loaded the first time a spreadsheet
 // opens (about 2 MB), so results update as you type. Evaluation is paused while the cells go in
 // (D59), and NOW() and TODAY() follow this device's clock and time zone.
-import { calculate, type Results, type Workbook } from "@hearth/core";
+import { calculate, formulaValues, type Results, type Workbook } from "@hearth/core";
 
-let ready: Promise<(book: Workbook) => Results> | null = null;
+export interface Engine {
+  /** Every formula's result, as shown. */
+  calc(book: Workbook): Results;
+  /** Each formula's value among `refs` on one sheet, as what to type for it alone. */
+  values(book: Workbook, sheet: number, refs: string[]): Record<string, string>;
+}
+
+let ready: Promise<Engine> | null = null;
 
 function timeZone() {
   try {
@@ -27,7 +34,11 @@ export function engine() {
       made.pauseEvaluation();
       return made;
     };
-    return (book: Workbook) => calculate(book, model);
+    return {
+      calc: (book: Workbook) => calculate(book, model),
+      values: (book: Workbook, sheet: number, refs: string[]) =>
+        formulaValues(book, sheet, refs, model),
+    };
   });
   return ready;
 }

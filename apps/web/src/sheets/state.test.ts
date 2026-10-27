@@ -214,6 +214,29 @@ describe("formatting", () => {
     await s.flush();
   });
 
+  it("pastes cells and their formats as one step to undo, and saves them", async () => {
+    const { createSheet } = await import("./state.ts");
+    const s = createSheet("x1");
+    await s.load();
+    const formats = () => s.book.sheets[0]!.formats;
+    s.format(0, ["C1"], { italic: true });
+    s.put(0, { C1: "Rent", D1: "1200" }, { C1: null, D1: { bold: true, number: "currency" } });
+    expect(cells(s.book)).toEqual({ A1: "Revenue", B2: "100", C1: "Rent", D1: "1200" });
+    expect(formats()).toEqual({ D1: { bold: true, number: "currency" } });
+    // The same again changes nothing, so there's nothing more to undo.
+    s.put(0, { C1: "Rent" }, { D1: { number: "currency", bold: true } });
+    s.undo();
+    expect(cells(s.book)).toEqual({ A1: "Revenue", B2: "100" });
+    expect(formats()).toEqual({ C1: { italic: true } });
+    s.redo();
+    await vi.advanceTimersByTimeAsync(700);
+    expect(server.book.sheets[0]).toMatchObject({
+      cells: { C1: "Rent", D1: "1200" },
+      formats: { D1: { bold: true, number: "currency" } },
+    });
+    await s.flush();
+  });
+
   it("reads a copy saved before sheets had formats as having none", async () => {
     const { cells: kept, ...old } = server.book.sheets[0]!;
     server.book = { sheets: [{ id: old.id, name: old.name, cells: kept } as never] };

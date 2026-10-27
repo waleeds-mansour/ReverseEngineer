@@ -12,7 +12,7 @@ import { createTestKernel, type TestKernel } from "@hearth/kernel/testing";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ALL_MODULES } from "../index.ts";
-import { results } from "./engine.ts";
+import { results, values } from "./engine.ts";
 
 let t: TestKernel;
 beforeEach(async () => {
@@ -179,6 +179,49 @@ describe("spreadsheets", () => {
     expect(s.results[0]!.A1).toBe("1200");
   });
 
+  it("loads a workbook with a bad width, cell or sheet name, dropping only what's bad", async () => {
+    const { id } = await ok<{ id: string }>("sheet.create", { title: "Old" });
+    // Each of these failed the whole workbook once: it loaded empty, and the next save wrote
+    // that over the real one.
+    const data = {
+      sheets: [
+        {
+          id: "s1",
+          name: "Costs",
+          cells: { A1: "1200", B1: "=A1*2", ZZ9: "off the sheet", b2: "typed lower" },
+          widths: { A: 5000, B: "wide", "1": 90 },
+        },
+        { id: "s2", name: "Plan: Q4?", cells: { A1: "=Costs!A1" } },
+      ],
+    };
+    await t.tdb.db.update(sheetBook).set({ data }).where(eq(sheetBook.entityId, id));
+    const s = await ok<Sheet & { book: Workbook }>("sheet.get", { id });
+    expect(s.book.sheets.map((x) => x.name)).toEqual(["Costs", "Plan Q4"]);
+    expect(s.book.sheets[0]).toMatchObject({
+      cells: { A1: "1200", B1: "=A1*2", B2: "typed lower" },
+      widths: { A: 800 },
+    });
+    expect(s.results[0]).toMatchObject({ A1: "1200", B1: "2400" });
+    expect(s.results[1]!.A1).toBe("1200");
+    // What it read saves again as it is: a change from Pip goes on top, nothing lost.
+    await ok("sheet.set", { id, cells: { A3: "x" } }, jarvisCaller("owner"));
+    const after = await ok<Sheet>("sheet.get", { id });
+    expect(after.book.sheets[0]!.cells).toEqual({
+      A1: "1200",
+      B1: "=A1*2",
+      B2: "typed lower",
+      A3: "x",
+    });
+    // Writes stay strict: a format Nook doesn't have is refused, saying which ones it has.
+    const bad = await t.kernel.execute(
+      "sheet.set",
+      { id, formats: { A1: { number: "accounting" } } },
+      jarvisCaller("owner"),
+    );
+    expect(bad).toMatchObject({ status: "error", code: "invalid_input" });
+    expect(bad.status === "error" && bad.message).toContain('"currency"');
+  });
+
   it("works out a 3,000-cell sheet in under 100 ms", async () => {
     // Nine formulas to a value, as the audit measured it: 2.7 s before evaluation was paused.
     const cells: Record<string, string> = {};
@@ -194,6 +237,73 @@ describe("spreadsheets", () => {
     // slowdown (200 ms); budget() gives slower machines more.
     const best = await fastest(() => results(book), { runs: 10, warmup: 3 });
     expect(best).toBeLessThan(budget(100));
+  });
+
+  it("gives each formula's value as what to type for it alone (Paste values only)", () => {
+    const cells = {
+      A1: "0.0525",
+      A2: "100",
+      B1: "=A1",
+      B2: "=A2/3",
+      B3: '="=x"',
+      B4: '=TEXT(5,"00")',
+      B5: '="Rent"',
+      B6: "=TRUE()",
+      B7: "=1/0",
+      B8: '="\'q"',
+      B9: "=1E-20",
+      B10: "=A1*0",
+    };
+    const book = {
+      sheets: [
+        {
+          ...blankSheet("s1", "S"),
+          cells,
+          formats: { B1: { number: "percent" as const }, B2: { number: "currency" as const } },
+        },
+      ],
+    };
+    expect(results(book)[0]).toMatchObject({ B1: "5%", B2: "$33.33" });
+    const refs = Object.keys(cells);
+    const got = values(book, 0, refs);
+    expect(got).toEqual({
+      B1: "0.0525",
+      B2: "33.3333333333333",
+      B3: "'=x",
+      B4: "'05",
+      B5: "Rent",
+      B6: "TRUE",
+      B7: "#DIV/0!",
+      B8: "''q",
+      B9: "1E-20",
+      B10: "0",
+    });
+    // Typed back in, each reads as the formula's value did: "=x" stays text, "05" stays "05".
+    const typed = { sheets: [{ ...blankSheet("s1", "S"), cells: got }] };
+    expect(results(typed)[0]).toMatchObject({
+      B1: "0.0525",
+      B3: "=x",
+      B4: "05",
+      B5: "Rent",
+      B6: "TRUE",
+      B8: "'q",
+      B10: "0",
+    });
+  });
+
+  it("takes cells with spaces around them, and names the sheet a set couldn't make", async () => {
+    const { id } = await ok<{ id: string }>("sheet.create", { title: "Spaces" });
+    const jarvis = jarvisCaller("owner");
+    await ok(
+      "sheet.set",
+      { id, cells: { "B2 ": "1", "Sheet1! C3": "2", " 'Sheet1' !D4": "3" } },
+      jarvis,
+    );
+    const s = await ok<Sheet>("sheet.get", { id });
+    expect(s.book.sheets[0]!.cells).toEqual({ B2: "1", C3: "2", D4: "3" });
+    const bad = await t.kernel.execute("sheet.set", { id, addSheet: "Q4: plan" }, jarvis);
+    expect(bad).toMatchObject({ status: "error", code: "invalid_input" });
+    expect(bad.status === "error" && bad.message).toMatch(/^Sheet "Q4: plan": sheet names can't/);
   });
 
   it("works out NOW() and TODAY() in the owner's time zone", async () => {

@@ -20,6 +20,13 @@ export const rangeOf = (a: Pos, b: Pos): Range => ({
 export const inRange = (r: Range, row: number, col: number) =>
   row >= r.top && row <= r.bottom && col >= r.left && col <= r.right;
 
+/** Where column `col` starts: `start` (past the row numbers), then the columns before it. */
+export function leftOf(col: number, width: (c: number) => number, start = 0) {
+  let left = start;
+  for (let c = 1; c < col; c++) left += width(c);
+  return left;
+}
+
 export function refsIn(r: Range): string[] {
   const out: string[] = [];
   for (let row = r.top; row <= r.bottom; row++)

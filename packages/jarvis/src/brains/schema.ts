@@ -34,8 +34,8 @@ function lighten(s: z.ZodType): z.ZodType {
     if (Object.keys(shape).some((k) => shape[k] !== s.shape[k]))
       next = s.clone({ ...def, shape } as never);
   } else if (s instanceof z.ZodPipe) {
-    // A transform (a sheet's formats, tidied as they're read) has no JSON Schema, and the SDK
-    // would fail to list every tool over one. The model writes the input, so it gets that side.
+    // A transform (a field tidied as it's read) has no JSON Schema, and the SDK would fail to
+    // list every tool over one. The model writes the input, so it gets that side.
     next = lighten(def.in as z.ZodType);
   }
   if (!next) return s;

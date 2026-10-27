@@ -1,6 +1,55 @@
 // Smoke steps for the canvas and spreadsheets (M7), run from smoke.ts.
 import type { Page } from "playwright";
 
+type Saved = {
+  title: string;
+  version: number;
+  book: {
+    sheets: {
+      cells: Record<string, string>;
+      formats: Record<string, Record<string, unknown>>;
+      freeze: { rows: number; cols: number };
+    }[];
+  };
+  results: Record<string, string>[];
+};
+
+/** The open spreadsheet as Nook has it saved, once `done` says it is (it saves a moment later). */
+async function savedSheet(p: Page, done: (s: Saved) => boolean) {
+  const id = new URL(p.url()).pathname.split("sheet/")[1]!.split("+")[0]!;
+  const read = () =>
+    p.evaluate(async (id) => {
+      const r = await fetch("/api/actions/sheet.get", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      return ((await r.json()) as { result: Saved }).result;
+    }, id);
+  // Later on a busy PC: read until it has.
+  let saved = await read();
+  for (let waited = 0; waited < 15_000 && !done(saved); waited += 250) {
+    await p.waitForTimeout(250);
+    saved = await read();
+  }
+  if (!done(saved)) throw new Error(`saved ${JSON.stringify(saved)}`);
+  return saved;
+}
+
+/**
+ * A copy or a paste on a cell as the browser sends one, through a clipboard of the page's own
+ * rather than the computer's. `valuesOnly` presses Ctrl+Shift+V first.
+ */
+const clip = (p: Page, ref: string, kind: "copy" | "paste", valuesOnly = false) =>
+  p.evaluate(`(() => {
+    const input = document.querySelector('input[aria-label="Cell ${ref}"]');
+    if ("${kind}" === "copy") window.__clip = new DataTransfer();
+    const shiftV = { key: "V", ctrlKey: true, shiftKey: true, bubbles: true };
+    if (${valuesOnly}) input.dispatchEvent(new KeyboardEvent("keydown", shiftV));
+    const sent = { clipboardData: window.__clip, bubbles: true, cancelable: true };
+    input.dispatchEvent(new ClipboardEvent("${kind}", sent));
+  })()`);
+
 interface Smoke {
   step: (name: string, fn: (p: Page) => Promise<void>) => Promise<void>;
   keys: (...k: string[]) => Promise<void>;
@@ -114,42 +163,16 @@ export async function boardSteps({ step, keys, base, tag }: Smoke) {
     await p.getByRole("menuitem", { name: /^Currency/ }).click();
     await p.getByRole("button", { name: "Freeze top row" }).click();
     await total.filter({ hasText: "$1,500.00" }).waitFor();
-    const id = new URL(p.url()).pathname.split("sheet/")[1]!.split("+")[0]!;
-    type Saved = {
-      title: string;
-      version: number;
-      book: {
-        sheets: {
-          cells: Record<string, string>;
-          formats: Record<string, Record<string, unknown>>;
-          freeze: { rows: number; cols: number };
-        }[];
-      };
-      results: Record<string, string>[];
-    };
-    const read = () =>
-      p.evaluate(async (id) => {
-        const r = await fetch("/api/actions/sheet.get", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ id }),
-        });
-        return ((await r.json()) as { result: Saved }).result;
-      }, id);
-    const done = (s: Saved) =>
-      s.title === `Budget ${tag}` &&
-      s.book.sheets[0]?.cells.A3 === "=SUM(A1:A2)" &&
-      s.results[0]?.A3 === "$1,500.00" &&
-      s.book.sheets[0]?.formats.A3?.bold === true &&
-      s.book.sheets[0]?.formats.A3?.number === "currency" &&
-      s.book.sheets[0]?.freeze.rows === 1;
-    // The sheet saves a moment after the last change, later on a busy PC: read until it has.
-    let saved = await read();
-    for (let waited = 0; waited < 15_000 && !done(saved); waited += 250) {
-      await p.waitForTimeout(250);
-      saved = await read();
-    }
-    if (!done(saved)) throw new Error(`saved ${JSON.stringify(saved)}`);
+    await savedSheet(
+      p,
+      (s) =>
+        s.title === `Budget ${tag}` &&
+        s.book.sheets[0]?.cells.A3 === "=SUM(A1:A2)" &&
+        s.results[0]?.A3 === "$1,500.00" &&
+        s.book.sheets[0]?.formats.A3?.bold === true &&
+        s.book.sheets[0]?.formats.A3?.number === "currency" &&
+        s.book.sheets[0]?.freeze.rows === 1,
+    );
     await p.reload();
     await total.filter({ hasText: "$1,500.00" }).waitFor();
     const weight = await total.evaluate(
@@ -169,5 +192,65 @@ export async function boardSteps({ step, keys, base, tag }: Smoke) {
     const below = (a1?.y ?? 0) - (box?.y ?? 0);
     if (scrolled < 100 || Math.abs(below - 24) > 2)
       throw new Error(`row 1 after scrolling ${scrolled} px is ${below} px down`);
+  });
+
+  await step("a sheet's first column stays put, and a copy pastes with its formats", async (p) => {
+    // The total copied and pasted two rows down brings its formula, bold and currency; pasted
+    // beside that with Ctrl+Shift+V, it's just the total's value, 1500.
+    const grid = p.locator("[data-sheet-grid]");
+    await grid.evaluate((el) => el.scrollTo({ top: 0, left: 0 }));
+    await p.locator('[data-cell="A3"]').click();
+    await clip(p, "A3", "copy");
+    await p.locator('[data-cell="A5"]').click();
+    await clip(p, "A5", "paste");
+    await p.locator('[data-cell="B5"]').click();
+    await clip(p, "B5", "paste", true);
+    await p.getByRole("button", { name: "Freeze first column" }).click();
+    await p.locator('[data-cell="A5"]').filter({ hasText: "$1,500.00" }).waitFor();
+    await savedSheet(p, (s) => {
+      const sheet = s.book.sheets[0];
+      return (
+        sheet?.cells.A5 === "=SUM(A1:A2)" &&
+        sheet.formats.A5?.bold === true &&
+        sheet.formats.A5?.number === "currency" &&
+        sheet.cells.B5 === "1500" &&
+        sheet.formats.B5 === undefined &&
+        sheet.freeze.rows === 1 &&
+        sheet.freeze.cols === 1
+      );
+    });
+    // Narrowed, so the sheet scrolls sideways: column A stays beside the row numbers, and A1, where
+    // the row and the column that stay put meet, stays over everything scrolling under it.
+    await p.setViewportSize({ width: 800, height: 900 });
+    const across = await grid.evaluate((el) => {
+      el.scrollTo({ left: el.scrollWidth, top: el.scrollHeight });
+      return el.scrollLeft as number;
+    });
+    const [box, a1] = await Promise.all([
+      grid.boundingBox(),
+      p.locator('[data-cell="A1"]').boundingBox(),
+    ]);
+    const left = (a1?.x ?? 0) - (box?.x ?? 0);
+    const onTop = await p.evaluate(`(() => {
+      const a1 = document.querySelector('[data-cell="A1"]').getBoundingClientRect();
+      const hit = document.elementFromPoint(a1.x + a1.width / 2, a1.y + a1.height / 2);
+      return hit?.closest("[data-cell]")?.dataset.cell ?? null;
+    })()`);
+    if (across < 100 || Math.abs(left - 40) > 2 || onTop !== "A1")
+      throw new Error(
+        `column A after scrolling ${across} px across is ${left} px in, under ${onTop}`,
+      );
+    // Arrowing back to the column beside A (B5, by way of C5) brings it out from under A.
+    await keys("ArrowRight", "ArrowLeft");
+    const b5Shows = `(() => {
+      const b5 = document.querySelector('[data-cell="B5"]').getBoundingClientRect();
+      const hit = document.elementFromPoint(b5.x + 4, b5.y + b5.height / 2);
+      return hit?.closest("[data-cell]")?.dataset.cell === "B5";
+    })()`;
+    await p.waitForFunction(b5Shows, undefined, { timeout: 5000 }).catch(async () => {
+      const b5 = await p.locator('[data-cell="B5"]').boundingBox();
+      throw new Error(`B5 is under column A: ${(b5?.x ?? 0) - (box?.x ?? 0)} px in`);
+    });
+    await p.setViewportSize({ width: 1440, height: 900 });
   });
 }
