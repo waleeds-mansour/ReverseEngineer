@@ -15,7 +15,6 @@ import {
   owed,
   sinceYesterday,
   splitDue,
-  summary,
   toolsSaid,
 } from "./today.ts";
 import type { CalEvent, MailDraft, MailThread, Task, Turn } from "./types.ts";
@@ -214,31 +213,9 @@ describe("the greeting", () => {
     expect(greeting(new Date(2026, 9, 5, 21))).toBe("Good evening");
     expect(greeting(new Date(2026, 9, 5, 2))).toBe("Good evening");
   });
-
-  it("sums up the day under it, each part counting what its section shows", () => {
-    const line = (n: Parameters<typeof summary>[0]) =>
-      summary(n)
-        .map((p) => `${p.text} > ${p.to}`)
-        .join(" · ");
-    expect(line({ approvals: 3, ready: 3, meetings: 2, due: 4 })).toBe(
-      "3 need your yes > today-needs · 3 ready to send > today-drafts · 2 meetings > today-day · 4 tasks due > today-due",
-    );
-    expect(line({ approvals: 1, ready: 0, meetings: 1, due: 0 })).toBe(
-      "1 needs your yes > today-needs · 1 meeting > today-day",
-    );
-    expect(line({ approvals: 0, ready: 2, meetings: 0, due: 1 })).toBe(
-      "2 ready to send > today-drafts · 1 task due > today-due",
-    );
-    expect(line({ approvals: 0, ready: 0, meetings: 2, due: 0 })).toBe(
-      "Nothing needs you > today-needs · 2 meetings > today-day",
-    );
-    // Not "Nothing needs you" while what needs you is still being read, or couldn't be.
-    expect(line({ approvals: null, ready: 0, meetings: 2, due: 0 })).toBe("2 meetings > today-day");
-    expect(line({ approvals: 0, ready: null, meetings: 0, due: 0 })).toBe("");
-  });
 });
 
-describe("The Ask box", () => {
+describe("Pip's bar, offering a task", () => {
   const now = new Date(2026, 9, 7, 9, 0); // a Wednesday morning
 
   it("offers a line that names a time as a task, without the words that said when", () => {

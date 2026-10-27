@@ -1,5 +1,7 @@
-// The app: sign-in gate, then the shell (sidebar, split panes, Jarvis, Cmd+K). A device that was
-// signed in last time gets the shell at once, while the server confirms it (lib/signedIn.ts).
+// The app: sign-in gate, then the shell: the tabs along the top (on a phone, a tab bar at the
+// bottom), split panes at the window's full width, Pip's bar at the bottom of every screen, and
+// Cmd+K. A device that was signed in last time gets the shell at once, while the server confirms
+// it (lib/signedIn.ts).
 
 import { QueryClientProvider } from "@tanstack/solid-query";
 import {
@@ -19,6 +21,8 @@ import { Login } from "../auth/Login.tsx";
 import { PaneContext } from "../components/ui.tsx";
 import { ChatView } from "../jarvis/Conversation.tsx";
 import { JarvisPane, jarvis } from "../jarvis/JarvisPane.tsx";
+import { focusPipBar } from "../jarvis/PipBar.tsx";
+import { PipDock } from "../jarvis/PipDock.tsx";
 import { getMe, setSignedOutHandler } from "../lib/api.ts";
 import { goLabel, PLACES } from "../lib/apps.ts";
 import { forgetAllDocs, sendKeptNotes } from "../lib/docStore.ts";
@@ -55,10 +59,11 @@ import {
   Voice,
 } from "./lazyViews.ts";
 import { MenuDrawer, Shortcuts } from "./Overlays.tsx";
-import { Sidebar, SidebarRail, sidebar, useWaiting } from "./Sidebar.tsx";
+import { useWaiting } from "./Sidebar.tsx";
 import { Crashed, Notices, PaneCrashed, Unreachable, useAutoRetry } from "./Status.tsx";
 import { TabBar } from "./TabBar.tsx";
 import { Toasts } from "./Toasts.tsx";
+import { TopBar } from "./TopBar.tsx";
 
 function PaneView(props: { route: PaneRoute; index: number }) {
   const id = () => ("id" in props.route ? props.route.id : "");
@@ -167,11 +172,15 @@ function Shell(props: { onSignOut: () => void; covered: boolean }) {
       inInputs: true,
       label: "Search, commands, ask Pip",
     },
-    { keys: "/", run: () => setPalette(true) },
-    { keys: "mod+j", run: () => jarvis.toggle(), inInputs: true, label: "Show or hide Pip" },
+    { keys: "/", run: focusPipBar, label: "Ask Pip" },
+    {
+      keys: "mod+j",
+      run: () => jarvis.toggle(),
+      inInputs: true,
+      label: "Open or put away your conversation with Pip",
+    },
     ...PLACES.map((p) => ({ keys: p.keys, run: go(p.view), label: goLabel(p) })),
     { keys: "mod+\\", run: () => layout.split(), inInputs: true, label: "Split pane" },
-    { keys: "mod+b", run: () => sidebar.toggle(), label: "Show or hide the sidebar" },
     { keys: "alt+w", run: () => layout.close(), inInputs: true, label: "Close pane" },
     { keys: "[", run: () => layout.focus(layout.focused() - 1), label: "Pane to the left" },
     { keys: "]", run: () => layout.focus(layout.focused() + 1), label: "Pane to the right" },
@@ -235,24 +244,20 @@ function Shell(props: { onSignOut: () => void; covered: boolean }) {
   return (
     // Covered while Hearth can't be reached: kept as it is, out of reach of clicks and typing.
     <div class="flex h-full flex-col" inert={props.covered}>
-      <div class="flex min-h-0 flex-1">
-        <Show
-          when={narrow()}
-          fallback={
-            <Show when={!sidebar.hidden()} fallback={<SidebarRail />}>
-              <Sidebar onPalette={() => setPalette(true)} onSignOut={props.onSignOut} />
-            </Show>
-          }
-        >
-          <Show when={menu()}>
-            <MenuDrawer
-              onClose={() => setMenu(false)}
-              onPalette={() => setPalette(true)}
-              onSignOut={props.onSignOut}
-            />
-          </Show>
+      <Show
+        when={narrow()}
+        fallback={<TopBar onPalette={() => setPalette(true)} onSignOut={props.onSignOut} />}
+      >
+        <Show when={menu()}>
+          <MenuDrawer
+            onClose={() => setMenu(false)}
+            onPalette={() => setPalette(true)}
+            onSignOut={props.onSignOut}
+          />
         </Show>
-        {/* On a phone Jarvis takes the place of the pane. */}
+      </Show>
+      <div class="flex min-h-0 flex-1">
+        {/* On a phone Pip's conversation takes the place of the pane. */}
         <main
           class="flex min-w-0 flex-1 pt-[env(safe-area-inset-top)] md:overflow-x-auto md:pt-0"
           classList={{ hidden: narrow() && jarvis.open() }}
@@ -264,10 +269,11 @@ function Shell(props: { onSignOut: () => void; covered: boolean }) {
             </Show>
           </Show>
         </main>
-        <Show when={jarvis.open()}>
-          <JarvisPane />
+        <Show when={narrow() && jarvis.open()}>
+          <JarvisPane onClose={() => jarvis.toggle(false)} />
         </Show>
       </div>
+      <PipDock />
       <Show when={narrow()}>
         <TabBar waiting={waiting()} onMenu={() => setMenu(true)} />
       </Show>

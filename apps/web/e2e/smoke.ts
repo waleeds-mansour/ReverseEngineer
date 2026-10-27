@@ -11,9 +11,10 @@
 
 import { chromium, type Page } from "playwright";
 import { boardSteps } from "./boards.ts";
-import { home } from "./home.ts";
+import { home, letGo } from "./home.ts";
 import { noteSteps } from "./notes.ts";
 import { titleSteps } from "./titles.ts";
+import { todaySteps } from "./today.ts";
 import { storedZip } from "./zip.ts";
 
 const base = process.env.HEARTH_E2E_URL ?? "http://localhost:4400";
@@ -77,6 +78,8 @@ try {
     await home(p).waitFor();
   });
 
+  await todaySteps({ step, keys });
+
   await step("tasks, one of them for Jarvis", async (p) => {
     await keys("g", "t");
     await p.getByRole("heading", { name: "Tasks" }).waitFor();
@@ -92,7 +95,7 @@ try {
 
   await step("a live note that @mentions a task", async (p) => {
     await keys("Escape");
-    await p.getByRole("navigation", { name: "Places" }).click({ position: { x: 100, y: 600 } });
+    await letGo(p);
     await keys("g", "n");
     await p.getByRole("button", { name: "New note" }).click();
     const title = p.locator("input[placeholder=Untitled]");
@@ -175,13 +178,17 @@ try {
   await boardSteps({ step, keys, base, tag });
 
   await step("a message to Jarvis", async (p) => {
+    await p.getByRole("form", { name: "Pip" }).getByRole("button", { name: "Open Pip" }).click();
     await p.locator("aside textarea").fill(`Hello ${tag}`);
     await p.locator("aside").getByRole("button", { name: "Send" }).click();
     await p.locator("aside .ml-8", { hasText: `Hello ${tag}` }).waitFor();
+    // Put away, it leaves the page as it was.
+    await p.getByRole("button", { name: "Put Pip away" }).click();
+    await p.locator("aside").waitFor({ state: "detached" });
   });
 
   await step("something for Jarvis to remember, changed and put back", async (p) => {
-    await p.getByRole("navigation", { name: "Places" }).click({ position: { x: 100, y: 600 } });
+    await letGo(p);
     await keys("g", "m");
     await p.getByRole("heading", { name: "Memory" }).waitFor();
     await p.getByPlaceholder("Add something for Pip to remember…").fill(`Coffee ${tag}`);
@@ -200,7 +207,7 @@ try {
   });
 
   await step("dictation cleaned with your dictionary, in the voice history", async (p) => {
-    await p.getByRole("navigation", { name: "Places" }).click({ position: { x: 100, y: 600 } });
+    await letGo(p);
     await keys("g", "v");
     await p.getByRole("heading", { name: "Dictation" }).waitFor();
     await p.getByRole("tab", { name: "Dictionary" }).click();
@@ -225,7 +232,7 @@ try {
   });
 
   await step("the calendar, mail, Google, Slack, GitHub and Notion in Settings", async (p) => {
-    await p.getByRole("navigation", { name: "Places" }).click({ position: { x: 100, y: 600 } });
+    await letGo(p);
     await keys("g", "c");
     await p.getByRole("heading", { name: "Calendar" }).waitFor();
     await keys("g", "e");
@@ -342,37 +349,40 @@ try {
     const resume = p.getByRole("button", { name: "Resume", exact: true });
     if (await resume.isVisible()) await resume.click();
     await pause.click();
-    await p.locator("aside").getByText("Paused").waitFor();
+    await p.getByRole("form", { name: "Pip" }).getByText("Paused").waitFor();
     await resume.click();
     await pause.waitFor();
   });
 
   await step(
-    "on a phone: one pane, a tab bar, Jarvis full screen, the phone settings",
+    "on a phone: one pane, a tab bar with Pip's bar over it, Pip full screen, the phone settings",
     async (p) => {
       await p.setViewportSize({ width: 390, height: 844 });
       const tabs = p.getByRole("navigation", { name: "Main" });
+      await tabs.getByRole("button", { name: "Calendar" }).click();
+      await p.getByRole("heading", { name: "Calendar" }).waitFor();
       await tabs.getByRole("button", { name: "Tasks" }).click();
       await p.getByRole("heading", { name: "Tasks" }).waitFor();
       await p.getByText(`Pack for the trip ${tag}`).first().click();
       // The task fills the screen; closing it goes back to the list.
       await p.getByTitle("Close pane (Alt+W)").click();
       await p.getByRole("heading", { name: "Tasks" }).waitFor();
-      const jarvisTab = tabs.getByRole("button", { name: "Pip", exact: true });
-      await jarvisTab.click();
-      await p.locator("aside").getByText("Pip", { exact: true }).waitFor();
-      // Talk from the tab bar: holding Jarvis's tab listens; a tap sends what the PC heard.
+      // Talk from Pip's bar: its mic opens Pip listening, and Stop sends what the PC heard.
       await p.route("**/api/voice/transcribe", (r) =>
         r.fulfill({ json: { text: `What is on today ${tag}` } }),
       );
-      await jarvisTab.hover();
-      await p.mouse.down();
-      await p.waitForTimeout(700);
-      await p.mouse.up();
+      await p
+        .getByRole("form", { name: "Pip" })
+        .getByRole("button", { name: "Talk to Pip" })
+        .click();
+      const pip = p.getByRole("complementary", { name: "Pip" });
+      await pip.getByText("Pip", { exact: true }).waitFor();
       await p.waitForTimeout(1500);
-      await tabs.getByRole("button", { name: "Stop and send" }).click();
-      await p.locator("aside").getByText(`What is on today ${tag}`).first().waitFor();
+      // Its Talk button, now saying Stop (Pip's own Stop, for a turn still running, is beside it).
+      await pip.getByTitle(/^Talk to Pip/).click();
+      await pip.getByText(`What is on today ${tag}`).first().waitFor();
       await p.unroute("**/api/voice/transcribe");
+      // The tab bar stays under Pip; a tab puts it away.
       await tabs.getByRole("button", { name: "More" }).click();
       await p.getByRole("button", { name: "Settings" }).click();
       await p.getByRole("heading", { name: "Phone" }).waitFor();

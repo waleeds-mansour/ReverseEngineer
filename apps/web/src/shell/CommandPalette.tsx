@@ -1,5 +1,5 @@
-// Cmd+K: jump to anything, run a command, or ask Jarvis. Enter opens, Shift+Enter opens beside,
-// Ctrl+Enter asks Jarvis.
+// Cmd+K: jump to anything, run a command, or ask Pip, whose answer opens over the page from its bar.
+// Enter opens, Shift+Enter opens beside, Ctrl+Enter asks Pip.
 
 import { createEffect, createSignal, For, on, onCleanup } from "solid-js";
 import { Kbd } from "../components/ui.tsx";
@@ -19,7 +19,6 @@ import type { SearchHit, SystemStatus } from "../lib/types.ts";
 import { reloadPage } from "../lib/version.ts";
 import { readWhen } from "../lib/when.ts";
 import { loadCode, ViewLoadError } from "./loadView.tsx";
-import { sidebar } from "./Sidebar.tsx";
 
 type Item = PaletteItem;
 
@@ -94,12 +93,6 @@ function commands(paused: boolean | undefined): Item[] {
       : { id: "jarvis:pause", label: "Pause Pip", hint: "Pip", run: () => setPaused(true) },
     { id: "pane:split", label: "Split pane", hint: "Layout", run: () => layout.split() },
     { id: "pane:close", label: "Close pane", hint: "Layout", run: () => layout.close() },
-    {
-      id: "sidebar",
-      label: "Show or hide the sidebar",
-      hint: "Layout",
-      run: () => sidebar.toggle(),
-    },
   ];
 }
 

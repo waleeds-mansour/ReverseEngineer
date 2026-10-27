@@ -41,6 +41,7 @@ export function Replies(props: {
       title="Replies you owe"
       count={props.total}
       more={{ run: props.all }}
+      jump="today-replies"
     >
       <Show
         when={props.query.data !== undefined}

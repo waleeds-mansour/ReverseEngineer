@@ -119,7 +119,6 @@ const RULES: Record<string, Rule> = {
     allowed: {
       "components/ApprovalCard.tsx": "an approval being carried out, until B1",
       "components/kit/Notice.tsx": "a notice's turning icon (Reconnecting…), until B1",
-      "shell/TabBar.tsx": "the phone's Pip tab while dictation is written out, until B1",
     },
   },
   "keys spelled by hand": {
@@ -161,7 +160,7 @@ const RULES: Record<string, Rule> = {
       "views/browser/Screen.tsx": "the live tab view draws an inset ring-focus when it takes keys",
       "components/Menu.tsx":
         "menu rows draw an inset ring-focus, until 1d gives them a solid accent",
-      "views/today/AskBar.tsx": "the box around the field draws focus-within:ring-2",
+      "jarvis/PipBar.tsx": "Pip's bar around the field draws focus-within:ring-2",
       "shell/CommandPalette.tsx":
         "the launcher's field holds focus the whole time it's open, so the open launcher is its ring",
       "components/DocEditor.tsx":

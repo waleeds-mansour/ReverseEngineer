@@ -219,7 +219,7 @@ try {
   });
 
   await step(
-    "Today's chips: tapped twice while slow, or double-clicked, they act once",
+    "Today's chips and Pip's bar: tapped twice while slow, or double-clicked, they act once",
     async (p) => {
       const sent: string[] = [];
       const count = (r: { url(): string }) => sent.push(r.url().split("/api/actions/")[1] ?? "");
@@ -230,9 +230,11 @@ try {
       const ask = p.getByRole("textbox", { name: "Ask Pip or add a task" });
       const plan = p.getByRole("button", { name: "Plan my day" });
       await plan.waitFor();
-      // Asking Jarvis to do something isn't offered as a task of yours.
+      // Asking Pip to do something isn't offered as a task of yours.
       await ask.fill("remind me to call Sam at 3pm");
-      if (!(await plan.isVisible())) throw new Error("asking for a reminder was offered as a task");
+      await p.waitForTimeout(300);
+      if (await p.getByRole("button", { name: /^Add task/ }).count())
+        throw new Error("asking for a reminder was offered as a task");
       // Two taps while it's on its way start one conversation (held, then refused, so none starts).
       let release: () => void = () => {};
       const held = new Promise<void>((r) => {

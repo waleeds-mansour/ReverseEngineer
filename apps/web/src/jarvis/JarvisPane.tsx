@@ -1,11 +1,12 @@
-// Jarvis on every screen: a chat pane on the right (Ctrl+J), with your recent conversations. What
-// you have open in the pane you were last in goes with what you ask (lib/looking.ts).
+// Pip on every screen: your conversation with it, grown up out of Pip's bar at the bottom (Ctrl+J,
+// PipDock.tsx), with your recent conversations. What you have open in the pane you were last in
+// goes with what you ask (lib/looking.ts). Esc or its x puts it away; it starts put away.
 
 import { createRoot, createSignal, For, Show } from "solid-js";
 import { Icon } from "../components/icons.tsx";
 import { JarvisGlyph, JarvisMark } from "../components/Mark.tsx";
 import { Overflow } from "../components/Menu.tsx";
-import { Badge, Button } from "../components/ui.tsx";
+import { Badge, Button, IconButton } from "../components/ui.tsx";
 import { debounced } from "../lib/debounce.ts";
 import { ago, day, time } from "../lib/format.ts";
 import { jarvisLiveness } from "../lib/jarvis-health.ts";
@@ -72,10 +73,8 @@ function remembered(): string | null {
 }
 
 function createJarvisState() {
-  // On a phone Jarvis covers the screen, so it starts closed there.
-  const [open, setOpen] = createSignal(
-    !narrow() && localStorage.getItem("hearth.jarvisOpen") !== "0",
-  );
+  // Put away until you use it, so every page opens at its full width.
+  const [open, setOpen] = createSignal(false);
   // The conversation you were in comes back after a reload.
   const [conversationId, setId] = createSignal<string | null>(remembered());
   const setConversationId = (id: string | null) => {
@@ -85,21 +84,28 @@ function createJarvisState() {
       else localStorage.removeItem(CONVERSATION_KEY);
     } catch {}
   };
+  // Where you were when you opened it, so putting it away takes you back there, not to its bar,
+  // where a key would type rather than do what it does on the page.
+  let opener: HTMLElement | null = null;
   return {
     open,
     conversationId,
     setConversationId,
     toggle(next = !open()) {
+      if (next && !open()) opener = document.activeElement as HTMLElement | null;
       setOpen(next);
-      // Opening Jarvis on purpose puts you in its text box; loading the page doesn't.
+      // Opening Pip puts you in its text box.
       if (next)
         queueMicrotask(() =>
           document.querySelector<HTMLTextAreaElement>("aside textarea")?.focus(),
         );
-      if (narrow()) return;
-      try {
-        localStorage.setItem("hearth.jarvisOpen", next ? "1" : "0");
-      } catch {}
+      else {
+        const back = opener;
+        opener = null;
+        queueMicrotask(() => {
+          if (back?.isConnected && back !== document.body) back.focus({ preventScroll: true });
+        });
+      }
     },
     newChat() {
       setConversationId(null);
@@ -115,7 +121,7 @@ async function trashConversation(id: string) {
   if ((await moveToTrash(id)) && jarvis.conversationId() === id) jarvis.setConversationId(null);
 }
 
-export function JarvisPane() {
+export function JarvisPane(props: { onClose: () => void }) {
   const [search, setSearch] = createSignal("");
   const query = debounced(search);
   const conversations = useAction<ConversationRow[]>("conversation.list", () => ({
@@ -144,11 +150,12 @@ export function JarvisPane() {
 
   return (
     <aside
-      class={
-        narrow()
-          ? "flex h-full min-w-0 flex-1 flex-col bg-panel pt-[env(safe-area-inset-top)]"
-          : "flex h-full w-[380px] shrink-0 flex-col border-l border-line bg-panel"
-      }
+      aria-label="Pip"
+      class={`flex h-full min-w-0 flex-1 flex-col bg-panel ${narrow() ? "pt-[env(safe-area-inset-top)]" : ""}`}
+      // Esc puts Pip away, unless what you're in used it (an open @ list in the box, say).
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && !e.defaultPrevented) props.onClose();
+      }}
     >
       <header class="flex min-h-12 items-center gap-2 border-b border-line px-3">
         <JarvisMark
@@ -194,9 +201,10 @@ export function JarvisPane() {
             size="sm"
             icon="open-beside"
             label="Open in a pane"
-            onClick={() =>
-              layout.open({ view: "chat", id: jarvis.conversationId()! }, { beside: true })
-            }
+            onClick={() => {
+              layout.open({ view: "chat", id: jarvis.conversationId()! }, { beside: true });
+              props.onClose();
+            }}
           />
         </Show>
         <Show when={current()}>
@@ -214,6 +222,12 @@ export function JarvisPane() {
             />
           )}
         </Show>
+        <IconButton
+          icon="x"
+          label="Put Pip away"
+          title="Put Pip away (Esc)"
+          onClick={props.onClose}
+        />
       </header>
       <Show
         when={liveness().downSince}
@@ -245,7 +259,12 @@ export function JarvisPane() {
             placeholder="Find a conversation…"
             value={search()}
             onInput={(e) => setSearch(e.currentTarget.value)}
-            onKeyDown={(e) => e.key === "Escape" && setPicking(false)}
+            onKeyDown={(e) => {
+              // Esc closes the list, not Pip.
+              if (e.key !== "Escape") return;
+              e.preventDefault();
+              setPicking(false);
+            }}
           />
           <ul class="max-h-72 overflow-auto py-1">
             <For

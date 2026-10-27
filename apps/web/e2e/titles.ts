@@ -6,6 +6,7 @@
 // must save it. On a slow PC the note's own "created" event brings the same read just as you
 // start typing its title.
 import type { Locator, Page } from "playwright";
+import { letGo } from "./home.ts";
 
 interface Smoke {
   step: (name: string, fn: (p: Page) => Promise<void>) => Promise<void>;
@@ -64,7 +65,7 @@ export async function titleSteps({ step, keys, tag }: Smoke) {
   });
 
   await step("a note's title you're typing stays while the note changes elsewhere", async (p) => {
-    await p.getByRole("navigation", { name: "Places" }).click({ position: { x: 100, y: 600 } });
+    await letGo(p);
     await keys("g", "n");
     await p.getByRole("button", { name: "New note" }).click();
     await p.waitForURL(/\/note\//);

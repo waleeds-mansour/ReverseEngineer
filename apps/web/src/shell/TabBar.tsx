@@ -1,19 +1,17 @@
-// The phone's bottom bar: Today, Mail, Jarvis in the middle, Tasks, and More for the rest.
+// The phone's bottom bar: Today, Mail, Calendar, Tasks, and More for the rest. Pip isn't a tab: its
+// bar sits just over these on every screen (jarvis/PipDock.tsx), and a tab puts its conversation
+// away.
 
-import { For, type JSX, Match, Show, Switch } from "solid-js";
+import { For, type JSX, Show } from "solid-js";
 import { Icon } from "../components/icons.tsx";
 import { Badge } from "../components/ui.tsx";
-import { JarvisStatusMark, jarvis } from "../jarvis/JarvisPane.tsx";
+import { jarvis } from "../jarvis/JarvisPane.tsx";
 import { type Place, phoneTabs, productOf } from "../lib/apps.ts";
 import { layout } from "../lib/panes.ts";
 import { useAction } from "../lib/query.ts";
-import { askToTalk, mic } from "../lib/speech.ts";
 
-/** Each tab is a sub-product's home, or Jarvis (lib/apps.ts). */
+/** Each tab is a sub-product's home (lib/apps.ts). */
 const TABS = phoneTabs();
-
-/** How long a press on Jarvis's tab lasts before it starts listening. */
-const HOLD_MS = 450;
 
 /**
  * A tab: its icon over its name. The one you're on is in ink and bold. Five share the screen's
@@ -24,73 +22,15 @@ const tab = (active: boolean) =>
 
 /**
  * A tab's icon. On the tab you're on it sits on a pill of its sub-product's colour and takes
- * that colour, so every tab, Jarvis's too, plainly shows whether it's the one you're on.
+ * that colour, so it plainly shows it's the one you're on.
  */
-function TabIcon(props: { active: boolean; red?: boolean; children: JSX.Element }) {
-  const on = () => (props.red ? "bg-bad/15 text-bad" : "bg-hue/15 text-hue");
+function TabIcon(props: { active: boolean; children: JSX.Element }) {
   return (
     <span
-      class={`flex h-8 w-full max-w-14 items-center justify-center rounded-full ${props.active ? on() : ""}`}
+      class={`flex h-8 w-full max-w-14 items-center justify-center rounded-full ${props.active ? "bg-hue/15 text-hue" : ""}`}
     >
       {props.children}
     </span>
-  );
-}
-
-/**
- * Jarvis's tab, in the middle. A tap opens or closes its pane, where Talk is. Holding it opens
- * the pane already listening, and while it listens a tap stops and sends.
- */
-function JarvisTab() {
-  let timer: number | undefined;
-  let held = false;
-  const listening = () => mic.state() === "listening";
-  const press = () => {
-    held = false;
-    if (mic.state() !== "idle") return;
-    timer = window.setTimeout(() => {
-      held = true;
-      jarvis.toggle(true);
-      askToTalk();
-    }, HOLD_MS);
-  };
-  const release = () => window.clearTimeout(timer);
-  return (
-    <button
-      type="button"
-      data-product="jarvis"
-      // A long press mustn't select the name or open the phone's own menu.
-      class={`${tab(jarvis.open() || mic.state() !== "idle")} touch-manipulation select-none [-webkit-touch-callout:none]`}
-      aria-current={jarvis.open() ? "page" : undefined}
-      aria-label={listening() ? "Stop and send" : undefined}
-      title="Pip (hold to talk)"
-      disabled={mic.state() === "working"}
-      onPointerDown={press}
-      onPointerUp={release}
-      onPointerLeave={release}
-      onPointerCancel={release}
-      onContextMenu={(e) => e.preventDefault()}
-      onClick={() => {
-        if (held) {
-          held = false;
-          return;
-        }
-        if (listening()) return mic.stop();
-        jarvis.toggle(!jarvis.open());
-      }}
-    >
-      <TabIcon active={jarvis.open() || mic.state() !== "idle"} red={listening()}>
-        <Switch fallback={<JarvisStatusMark size={24} glyph />}>
-          <Match when={listening()}>
-            <Icon name="square" size={24} filled />
-          </Match>
-          <Match when={mic.state() === "working"}>
-            <Icon name="loader-circle" size={24} class="animate-spin" />
-          </Match>
-        </Switch>
-      </TabIcon>
-      {listening() ? "Stop" : "Pip"}
-    </button>
   );
 }
 
@@ -108,35 +48,31 @@ export function TabBar(props: { waiting: number; onMenu: () => void }) {
       aria-label="Main"
     >
       <For each={TABS}>
-        {(t) =>
-          t === "jarvis" ? (
-            <JarvisTab />
-          ) : (
-            <button
-              type="button"
-              data-product={productOf(t.view)}
-              class={tab(current() === t.view)}
-              aria-current={current() === t.view ? "page" : undefined}
-              onClick={() => {
-                jarvis.toggle(false);
-                layout.reset({ view: t.view });
-              }}
-            >
-              <TabIcon active={current() === t.view}>
-                <Icon name={t.icon} size={24} />
-              </TabIcon>
-              {t.label}
-              {/* On the icon's corner, and read after the tab's name by a screen reader. The soft
-                  pill lets what's under it through, so it sits on the bar's own colour and the icon
-                  doesn't show through the number. */}
-              <Show when={count(t)}>
-                <span class="absolute top-0.5 left-1/2 ml-2 rounded-pill bg-panel ring-2 ring-panel">
-                  <Badge tone="accent" count={count(t)} countLabel={counted(t)} />
-                </span>
-              </Show>
-            </button>
-          )
-        }
+        {(t) => (
+          <button
+            type="button"
+            data-product={productOf(t.view)}
+            class={tab(current() === t.view)}
+            aria-current={current() === t.view ? "page" : undefined}
+            onClick={() => {
+              jarvis.toggle(false);
+              layout.reset({ view: t.view });
+            }}
+          >
+            <TabIcon active={current() === t.view}>
+              <Icon name={t.icon} size={24} />
+            </TabIcon>
+            {t.label}
+            {/* On the icon's corner, and read after the tab's name by a screen reader. The soft
+                pill lets what's under it through, so it sits on the bar's own colour and the icon
+                doesn't show through the number. */}
+            <Show when={count(t)}>
+              <span class="absolute top-0.5 left-1/2 ml-2 rounded-pill bg-panel ring-2 ring-panel">
+                <Badge tone="accent" count={count(t)} countLabel={counted(t)} />
+              </span>
+            </Show>
+          </button>
+        )}
       </For>
       <button type="button" class={tab(false)} onClick={props.onMenu}>
         <TabIcon active={false}>
