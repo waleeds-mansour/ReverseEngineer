@@ -1,17 +1,17 @@
-// The left rail: Hearth's seven places (Today and six sub-products), where you are, what's waiting
-// on you, and whether the live connection is up. Hearth's own menu is at the top (Trash, the
-// desktop app, signing out); Settings and Jarvis's chat sit at the bottom.
+// The phone's menu (More on its tab bar): Hearth's seven places (Today and six sub-products), where
+// you are, what's waiting on you, and whether the live connection is up. Hearth's own menu is at
+// the top (Trash, the desktop app, signing out); Settings sits at the bottom. On a
+// computer the same places are the tabs along the top (TopBar.tsx), which share its pieces here.
 
-import { createRoot, createSignal, For, type JSX, Show } from "solid-js";
+import { For, type JSX } from "solid-js";
 import { Icon } from "../components/icons.tsx";
 import { NookMark } from "../components/Mark.tsx";
-import { Overflow } from "../components/Menu.tsx";
-import { Badge, IconButton, Kbd } from "../components/ui.tsx";
+import { type MenuItem, Overflow } from "../components/Menu.tsx";
+import { Badge, Kbd } from "../components/ui.tsx";
 import { JarvisStatusMark, jarvis } from "../jarvis/JarvisPane.tsx";
 import { authPost } from "../lib/api.ts";
 import { APPS, type App, type AppId, appOf } from "../lib/apps.ts";
 import { okToSignOut } from "../lib/docStore.ts";
-import { keyLabel } from "../lib/keys.ts";
 import { live } from "../lib/live.ts";
 import { layout } from "../lib/panes.ts";
 import { useAction } from "../lib/query.ts";
@@ -19,35 +19,17 @@ import type { ListView } from "../lib/routes.ts";
 import { openSettings } from "../lib/settingsNav.ts";
 import { useWaiting } from "../lib/waiting.ts";
 
-/** Whether the sidebar is tucked away on a computer (it gives the panes room), remembered. */
-export const sidebar = createRoot(() => {
-  const read = () => {
-    try {
-      return localStorage.getItem("hearth.sidebarHidden") === "1";
-    } catch {
-      return false;
-    }
-  };
-  const [hidden, setHidden] = createSignal(read());
-  return {
-    hidden,
-    toggle(next = !hidden()) {
-      setHidden(next);
-      try {
-        localStorage.setItem("hearth.sidebarHidden", next ? "1" : "0");
-      } catch {}
-    },
-  };
-});
-
 /** What a place's count is of, said after the number to a screen reader. */
-const COUNTED: Partial<Record<AppId, string>> = { today: "waiting for you", mail: "to reply" };
+export const COUNTED: Partial<Record<AppId, string>> = {
+  today: "waiting for you",
+  mail: "to reply",
+};
 
 /** Whether the live connection is up, in a word. */
 const liveWord = () => (live.connected() ? "Live" : "Reconnecting…");
 
 /** Whether the live connection is up, as a dot: its colour, and its title for a pointer. */
-function LiveDot(props: { class?: string }) {
+export function LiveDot(props: { class?: string }) {
   return (
     <span
       aria-hidden="true"
@@ -61,32 +43,44 @@ function LiveDot(props: { class?: string }) {
  * The dot's word for a screen reader, so its colour isn't the only sign. It goes beside the dot,
  * never inside a button with a name of its own, which a screen reader says in its place.
  */
-const LiveWord = () => <span class="sr-only">{liveWord()}</span>;
+export const LiveWord = () => <span class="sr-only">{liveWord()}</span>;
 
-/** What shows when the sidebar is hidden: a button to bring it back. */
-export function SidebarRail() {
-  return (
-    <div class="flex shrink-0 flex-col items-center border-r border-line bg-sunk/50 px-1.5 py-3">
-      <IconButton
-        icon="panel-left-open"
-        label="Show the sidebar"
-        title={`Show the sidebar (${keyLabel("mod+b")})`}
-        onClick={() => sidebar.toggle(false)}
-      />
-      <LiveDot class="mt-3" />
-      <LiveWord />
-    </div>
-  );
-}
-
-/** What Today shows needing you, for its badge here and on the phone's tab bar. */
+/** What Today shows needing you, for its badge on the tabs and the phone's tab bar. */
 export { useWaiting } from "../lib/waiting.ts";
+
+/** Hearth's own menu: the desktop app and signing out, and the trash where it has no tab. */
+export function nookMenu(opts: {
+  onSignOut: () => void;
+  /** The trash is in the top's More on a computer, so only the phone's menu lists it here. */
+  trash?: () => void;
+  /** Called once something's picked (the phone's menu closes). */
+  onPicked?: (() => void) | undefined;
+}): MenuItem[] {
+  const signOut = async () => {
+    // Signing out deletes this device's copies, edits Hearth hasn't got included.
+    if (!(await okToSignOut())) return;
+    await authPost("logout").catch(() => {});
+    opts.onSignOut();
+  };
+  return [
+    ...(opts.trash ? [{ label: "Trash", icon: "trash-2" as const, run: opts.trash }] : []),
+    {
+      label: "Desktop app",
+      icon: "monitor",
+      run: () => {
+        openSettings("desktop");
+        opts.onPicked?.();
+      },
+    },
+    { label: "Sign out", icon: "log-out", run: () => void signOut() },
+  ];
+}
 
 export function Sidebar(props: {
   onPalette: () => void;
   onSignOut: () => void;
-  /** On a phone the menu is a drawer that closes once you pick something. */
-  onPicked?: () => void;
+  /** The menu is a drawer that closes once you pick something. */
+  onPicked: () => void;
 }) {
   const waiting = useWaiting();
   const mail = useAction<{ unread: number; toReply: number }>("mail.counts");
@@ -102,21 +96,11 @@ export function Sidebar(props: {
     return 0;
   };
 
-  /** Opens a place at its home, beside on shift-click; on a phone, in place of what's there. */
-  const go = (app: App, beside: boolean) => open(app.views[0]!, beside);
-  const open = (view: ListView, beside = false) => {
-    const route = { view };
-    if (props.onPicked) {
-      jarvis.toggle(false);
-      layout.reset(route);
-      props.onPicked();
-    } else layout.open(route, { beside });
-  };
-  const signOut = async () => {
-    // Signing out deletes this device's copies, edits Hearth hasn't got included.
-    if (!(await okToSignOut())) return;
-    await authPost("logout").catch(() => {});
-    props.onSignOut();
+  /** Opens a place at its home, in place of what's there, and the menu closes. */
+  const open = (view: ListView) => {
+    jarvis.toggle(false);
+    layout.reset({ view });
+    props.onPicked();
   };
 
   const row = (app: App): JSX.Element => (
@@ -124,9 +108,9 @@ export function Sidebar(props: {
       type="button"
       // Its icon takes its sub-product's colour while it's the place you're in.
       data-product={app.hue ? app.id : undefined}
-      class={`group flex min-h-11 w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm md:min-h-0 ${current() === app.id ? "bg-panel font-medium shadow-1" : "text-muted hover:text-ink"}`}
+      class={`group flex min-h-11 w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm ${current() === app.id ? "bg-panel font-medium shadow-1" : "text-muted hover:text-ink"}`}
       aria-current={current() === app.id ? "page" : undefined}
-      onClick={(e) => go(app, e.shiftKey)}
+      onClick={() => open(app.views[0]!)}
     >
       {app.icon === "mark" ? (
         <JarvisStatusMark />
@@ -150,19 +134,12 @@ export function Sidebar(props: {
         <Overflow
           label="Nook menu"
           start
-          class="flex min-h-11 min-w-0 items-center gap-2 rounded-md px-1.5 hover:bg-panel md:min-h-7"
-          items={[
-            { label: "Trash", icon: "trash-2", run: () => open("trash") },
-            {
-              label: "Desktop app",
-              icon: "monitor",
-              run: () => {
-                openSettings("desktop");
-                props.onPicked?.();
-              },
-            },
-            { label: "Sign out", icon: "log-out", run: () => void signOut() },
-          ]}
+          class="flex min-h-11 min-w-0 items-center gap-2 rounded-md px-1.5 hover:bg-panel"
+          items={nookMenu({
+            onSignOut: props.onSignOut,
+            trash: () => open("trash"),
+            onPicked: props.onPicked,
+          })}
         >
           <NookMark size={20} />
           <span class="font-semibold">Nook</span>
@@ -170,16 +147,6 @@ export function Sidebar(props: {
           <Icon name="chevron-down" size={14} class="text-faint" />
         </Overflow>
         <LiveWord />
-        <span class="flex-1" />
-        <Show when={!props.onPicked}>
-          <IconButton
-            icon="panel-left-close"
-            label="Hide the sidebar"
-            title={`Hide the sidebar (${keyLabel("mod+b")})`}
-            class="-mr-1"
-            onClick={() => sidebar.toggle(true)}
-          />
-        </Show>
       </div>
       <button
         type="button"
@@ -187,8 +154,6 @@ export function Sidebar(props: {
         onClick={props.onPalette}
       >
         <Icon name="search" />
-        {/* "Search or ask…" doesn't fit beside the caps at this width, and Ask Pip has its own row
-            below. Truncating keeps a longer label from pushing every row down. */}
         <span class="min-w-0 flex-1 truncate">Search…</span>
         <span class="hidden shrink-0 md:inline">
           <Kbd keys="mod+k" />
@@ -199,21 +164,6 @@ export function Sidebar(props: {
       </ul>
       <div class="flex-1" />
       <For each={APPS.filter((a) => a.utility)}>{(app) => <div class="mb-1">{row(app)}</div>}</For>
-      <button
-        type="button"
-        class={`mb-1 flex min-h-11 items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm md:min-h-0 ${jarvis.open() ? "text-ink" : "text-muted hover:text-ink"}`}
-        onClick={() => {
-          jarvis.toggle();
-          props.onPicked?.();
-        }}
-      >
-        {/* Jarvis's chat, at the side: the Jarvis row above is what it did and knows. */}
-        <Icon name="panel-right" class="text-faint" />
-        <span class="flex-1">{jarvis.open() ? "Hide Pip" : "Ask Pip"}</span>
-        <span class="hidden md:inline">
-          <Kbd keys="mod+j" />
-        </span>
-      </button>
     </nav>
   );
 }

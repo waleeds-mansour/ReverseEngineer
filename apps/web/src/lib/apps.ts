@@ -1,7 +1,7 @@
 // Hearth is Today plus six sub-products, with Settings as a utility (D65). This is the one list
-// of them, and of the places you go: the sidebar (one row a sub-product), the tabs along the top
-// of each, the phone's tab bar, Cmd+K, the g-keys and where a pane lands when its record goes to
-// the trash all read it from here.
+// of them, and of the places you go: the tabs along the top of the window and its More, the tabs
+// in each sub-product, the phone's tab bar and its menu, Cmd+K, the g-keys and where a pane lands
+// when its record goes to the trash all read it from here.
 
 import type { IconName } from "../components/icons.tsx";
 import type { ListView, RecordView } from "./routes.ts";
@@ -33,10 +33,7 @@ export interface App {
   records: readonly RecordView[];
   /** Settings: a utility, not a sub-product. */
   utility?: true;
-  /**
-   * Its slot on the phone's tab bar, counting from the left. Without one, it's behind More.
-   * Jarvis's tab opens its pane, whatever list is showing; the others open their home.
-   */
+  /** Its slot on the phone's tab bar, counting from the left: it opens its home. Else it's in More. */
   phoneTab?: number;
 }
 
@@ -66,6 +63,7 @@ export const APPS: readonly App[] = [
     hue: "--color-calendar",
     views: ["calendar"],
     records: [],
+    phoneTab: 3,
   },
   {
     id: "tasks",
@@ -101,7 +99,6 @@ export const APPS: readonly App[] = [
     hue: "--color-jarvis",
     views: ["activity", "memory", "browser"],
     records: ["chat"],
-    phoneTab: 3,
   },
   {
     id: "settings",
@@ -246,11 +243,31 @@ export function placeOf(view: ListView): Place {
 export const listFor = (type: string): ListView | undefined =>
   PLACES.find((p) => p.lists?.includes(type))?.view;
 
-/** A tab on the phone's bar: a sub-product's home, or Jarvis, whose tab opens its pane. */
-export type PhoneTab = Place | "jarvis";
-
-/** The phone's tabs, left to right. More, for everything else, follows them. */
-export const phoneTabs = (): PhoneTab[] =>
+/**
+ * The phone's tabs, left to right, each a sub-product's home. More, for everything else, follows
+ * them. Pip has no tab: its bar sits over them on every screen.
+ */
+export const phoneTabs = (): Place[] =>
   APPS.filter((a) => a.phoneTab !== undefined)
     .sort((a, b) => a.phoneTab! - b.phoneTab!)
-    .map((a) => (a.id === "jarvis" ? "jarvis" : placeOf(a.views[0]!)));
+    .map((a) => placeOf(a.views[0]!));
+
+/**
+ * The tabs along the top of the window on a computer: each sub-product's home but Pip's, which is
+ * the bar at the bottom of every screen. Settings has its own button beside them.
+ */
+export const topTabs = (): App[] => APPS.filter((a) => !a.utility && a.id !== "jarvis");
+
+/**
+ * What the top's More lists, in its order: Pip's own pages, then Updates (Today's other list, now
+ * that Today is Pip's feed), Dictation and the trash. Every other list is a tab's home, one of its
+ * tabs, or Settings.
+ */
+export const MORE: readonly ListView[] = [
+  "activity",
+  "memory",
+  "browser",
+  "inbox",
+  "voice",
+  "trash",
+];

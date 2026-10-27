@@ -6,11 +6,13 @@ import {
   appOf,
   goLabel,
   listFor,
+  MORE,
   PLACES,
   paletteLabel,
   phoneTabs,
   placeOf,
   productOf,
+  topTabs,
 } from "./apps.ts";
 import { decodePath, decodeRoute, LIST_VIEWS, RECORD_VIEWS } from "./routes.ts";
 
@@ -185,14 +187,42 @@ describe("places", () => {
 });
 
 describe("the phone's tab bar", () => {
-  it("shows Today, Mail, Jarvis in the middle and Tasks, each a sub-product's home", () => {
-    const names = phoneTabs().map((t) => (t === "jarvis" ? "Jarvis" : t.label));
-    expect(names).toEqual(["Today", "Mail", "Jarvis", "Tasks"]);
-    for (const tab of phoneTabs())
-      if (tab !== "jarvis") expect(appOf(tab.view).views[0]).toBe(tab.view);
-    // Calendar is behind More.
-    expect(APPS.find((a) => a.id === "calendar")?.phoneTab).toBeUndefined();
+  it("shows Today, Mail, Calendar and Tasks, each a sub-product's home", () => {
+    expect(phoneTabs().map((t) => t.label)).toEqual(["Today", "Mail", "Calendar", "Tasks"]);
+    for (const tab of phoneTabs()) expect(appOf(tab.view).views[0]).toBe(tab.view);
+    // Pip is the bar over the tabs, not a tab.
+    expect(APPS.find((a) => a.id === "jarvis")?.phoneTab).toBeUndefined();
     const slots = APPS.flatMap((a) => (a.phoneTab === undefined ? [] : [a.phoneTab]));
     expect(new Set(slots).size).toBe(slots.length);
+  });
+});
+
+describe("the top of the window", () => {
+  it("has a tab for each sub-product but Pip, whose bar is at the bottom", () => {
+    expect(topTabs().map((a) => a.label)).toEqual([
+      "Today",
+      "Mail",
+      "Calendar",
+      "Tasks",
+      "Docs",
+      "People",
+    ]);
+  });
+
+  it("reaches every list: a tab's home or its tabs, More, or Settings' button", () => {
+    // Today is Pip's feed, with no tabs of its own on it, so Updates is in More.
+    const tabbed = topTabs().flatMap((a) => (a.id === "today" ? [a.views[0]!] : a.views));
+    for (const view of LIST_VIEWS)
+      expect(tabbed.includes(view) || MORE.includes(view) || view === "settings", view).toBe(true);
+    // Nothing is in two places, so More never repeats a tab.
+    for (const view of MORE) expect(tabbed, view).not.toContain(view);
+    expect(MORE.map((v) => placeOf(v).label)).toEqual([
+      "What Pip did",
+      "Memory",
+      "Chrome",
+      "Updates",
+      "Dictation",
+      "Trash",
+    ]);
   });
 });

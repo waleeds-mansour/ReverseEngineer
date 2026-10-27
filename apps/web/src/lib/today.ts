@@ -1,7 +1,7 @@
-// Today's sums, apart from how it looks: the line under the greeting, the drafts it offers, what's
-// due, what's on today, and what Jarvis did since yesterday. What needs your yes is needsYou.ts.
+// Today's sums, apart from how it looks: the greeting, the drafts it offers, what's due, what's on
+// today, and what Jarvis did since yesterday. What needs your yes is needsYou.ts; Pip's line under
+// the greeting, and its feed, pipFeed.ts. What Pip's bar offers to add as a task is here too.
 
-import { plural } from "./format.ts";
 import { toolSentence } from "./toolNames.ts";
 import { unmark } from "./turns.ts";
 import type { CalEvent, MailAddress, MailDraft, MailThread, Task, Turn } from "./types.ts";
@@ -28,7 +28,7 @@ const FOR_JARVIS =
   /^(?:(?:hey\s+)?(?:pip|jarvis)\b|(?:please[,\s]+)?(?:(?:what|when|who|where|why|how|which|is|are|am|was|were|can|could|should|would|does|did)\b|remind me\b|(?:move|cancel|reschedule) my\b))/i;
 
 /**
- * What the Ask box offers to add as a task: a line that names a time ("dentist fri 3pm", "do taxes
+ * What Pip's bar offers to add as a task: a line that names a time ("dentist fri 3pm", "do taxes
  * by friday", "email Sam the deck by Friday"). A question is for Jarvis, even when it names a day
  * ("what's on friday?", "is Sam free at 3"), and so is "remind me to call Sam at 3", "move my 3pm"
  * or "Jarvis, …". Enter always asks Jarvis, so a chip offered wrongly is one you don't tap; one
@@ -76,38 +76,6 @@ export function briefHeadline(body: string): string {
     return line.split(SENTENCE_END)[0]!;
   }
   return "Your brief";
-}
-
-/** A part of the line under the greeting, and the section it takes you to. */
-export interface SummaryPart {
-  text: string;
-  /** The id of the section it's about. */
-  to: string;
-}
-
-/**
- * The line under the greeting, "3 need your yes · 2 ready to send · 2 meetings · 4 tasks due",
- * each part counting what its section shows, or "Nothing needs you". A count that isn't known yet
- * (null: still being read, or it couldn't be) is left out, and "Nothing needs you" waits for both.
- */
-export function summary(n: {
-  approvals: number | null;
-  ready: number | null;
-  meetings: number;
-  due: number;
-}): SummaryPart[] {
-  const parts: SummaryPart[] = [];
-  if (n.approvals)
-    parts.push({
-      text: `${n.approvals} ${n.approvals === 1 ? "needs" : "need"} your yes`,
-      to: "today-needs",
-    });
-  if (n.ready) parts.push({ text: `${n.ready} ready to send`, to: "today-drafts" });
-  if (n.approvals === 0 && n.ready === 0)
-    parts.push({ text: "Nothing needs you", to: "today-needs" });
-  if (n.meetings) parts.push({ text: plural(n.meetings, "meeting"), to: "today-day" });
-  if (n.due) parts.push({ text: `${plural(n.due, "task")} due`, to: "today-due" });
-  return parts;
 }
 
 // --- Ready to send ---
