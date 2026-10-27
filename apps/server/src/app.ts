@@ -60,6 +60,7 @@ import { fileRoutes } from "./routes/files.ts";
 import { googleRoutes } from "./routes/google.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { importRoutes } from "./routes/imports.ts";
+import { linkRoutes } from "./routes/links.ts";
 import { mailRoutes } from "./routes/mail.ts";
 import { pushRoutes } from "./routes/push.ts";
 import { speechRoutes } from "./routes/speech.ts";
@@ -171,6 +172,7 @@ export function createApp(opts: AppOptions) {
   app.route("/api/push", pushRoutes(sendPush));
   app.route("/api/import", importRoutes());
   app.route("/api/files", fileRoutes());
+  app.route("/api/links", linkRoutes());
   app.route("/api", actionRoutes(timings));
   app.route("/mcp", mcpRoutes());
   app.all("/api/*", (c) => c.json({ error: "Not found." }, 404));

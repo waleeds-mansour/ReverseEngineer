@@ -1,6 +1,7 @@
 // A note drawn as what it says (lib/notePreview.ts decides how): marks faint on the lines you're
 // on and hidden on the rest, bullets for dashes, a rule for ---. Ctrl+click (Cmd on a Mac) opens a
-// link; a plain click puts the caret in it, to edit.
+// link; a plain click puts the caret in it, to edit. Pictures, tables and link cards are drawn too
+// (blocks.ts), and pictures pasted or dropped in go to Nook first (pictures.ts).
 
 import { syntaxTree } from "@codemirror/language";
 import type { Extension, Range } from "@codemirror/state";
@@ -14,6 +15,8 @@ import {
 } from "@codemirror/view";
 import { IS_MAC } from "../../lib/keys.ts";
 import { activeLines, lookOf } from "../../lib/notePreview.ts";
+import { noteBlocks } from "./blocks.ts";
+import { notePictures } from "./pictures.ts";
 
 const BULLETS = ["•", "◦", "▪"];
 
@@ -120,7 +123,7 @@ const openLinks = EditorView.domEventHandlers({
   },
 });
 
-/** The note's look: `hide` false is the Markdown button, every mark showing. */
+/** The note's look: `hide` false is the Markdown button, every mark showing and nothing drawn. */
 export function notePreview(hide: boolean): Extension {
-  return [plugin(hide), openLinks];
+  return [plugin(hide), openLinks, noteBlocks(hide), notePictures];
 }

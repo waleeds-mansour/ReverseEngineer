@@ -1,5 +1,6 @@
 // The / menu: a / at the start of a line lists what it can become (a heading, a list, a quote, a
-// code block, a divider) and what can go in (a link, an @ link to a record, a question for Pip).
+// code block, a divider, a table) and what can go in (a picture, a link, an @ link to a record, a
+// question for Pip).
 // Typing after the / narrows it; Enter or a click puts it in, writing the markdown for it.
 
 import {
@@ -11,7 +12,9 @@ import {
 import type { EditorView } from "@codemirror/view";
 import { JARVIS_ENTITY_ID, newMentionId, renderMention } from "@hearth/core";
 import { setLineKind } from "../../lib/noteFormat.ts";
+import { NEW_TABLE } from "../../lib/noteTable.ts";
 import { type IconName, iconElement } from "../icons.tsx";
+import { pickPictures } from "./pictures.ts";
 import { KINDS } from "./toolbar.ts";
 
 /** A / menu entry: its icon, and what it does once the /word is taken out. */
@@ -74,6 +77,30 @@ const blocks: SlashItem[] = [
       const above = line.number > 1 ? view.state.doc.line(line.number - 1).text.trim() : "";
       const insert = `${above ? "\n" : ""}---\n`;
       put(view, from, to, insert);
+    },
+  },
+  {
+    label: "Table",
+    icon: "sheet",
+    detail: "|",
+    section: BASIC,
+    // Blank lines around it, so the words above and below stay words, not a row.
+    apply: (view, _c, from, to) => {
+      const { doc } = view.state;
+      const line = doc.lineAt(from);
+      const has = (n: number) => n >= 1 && n <= doc.lines && doc.line(n).text.trim() !== "";
+      const above = has(line.number - 1) ? "\n" : "";
+      const below = has(line.number + 1) ? "\n" : "";
+      put(view, from, to, `${above}${NEW_TABLE.text}${below}`, above.length + NEW_TABLE.caret);
+    },
+  },
+  {
+    label: "Image",
+    icon: "image",
+    section: INSERT,
+    apply: (view, _c, from, to) => {
+      put(view, from, to, "");
+      pickPictures(view, view.state.selection.main.head);
     },
   },
   {

@@ -88,6 +88,13 @@ describe("lookOf", () => {
     expect(look("a\n\n---", [3]).some((l) => l.kind === "rule")).toBe(false);
   });
 
+  it("writes a table's lines in even letters, its pipes faint", () => {
+    const doc = "| a | **b** |\n| --- | --- |\n| c | d |";
+    expect(look(doc).filter((l) => l.kind === "line")).toHaveLength(3);
+    expect(marked(doc, "cm-md-marker")).toContain("| --- | --- |");
+    expect(marked(doc, "cm-md-strong")).toEqual(["**b**"]);
+  });
+
   it("leaves what's inside a mention chip alone", () => {
     const doc = 'pay <m-ref type="task" id="1">rent *now*</m-ref> and *this*';
     expect(marked(doc, "cm-md-em")).toEqual(["*this*"]);
