@@ -2,9 +2,13 @@ import { createHash } from "node:crypto";
 
 /**
  * The migrated database each test file clones. Named after the checkout, so test runs in two
- * worktrees against the same Postgres don't drop each other's template.
+ * worktrees against the same Postgres don't drop each other's template, and after HEARTH_TEST_RUN
+ * when set, so runs at the same time in one checkout keep apart too.
  */
-export const TEMPLATE_DB = `hearth_test_template_${createHash("sha256").update(process.cwd()).digest("hex").slice(0, 8)}`;
+export const TEMPLATE_DB = `hearth_test_template_${createHash("sha256")
+  .update(process.cwd() + (process.env.HEARTH_TEST_RUN ?? ""))
+  .digest("hex")
+  .slice(0, 8)}`;
 
 /**
  * A server URL for tests; the database part is replaced per test. There's no default: on a PC
