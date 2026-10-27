@@ -8,6 +8,7 @@ import { browserModule } from "./browser/index.ts";
 import { calendarModule } from "./calendar/index.ts";
 import { canvasModule } from "./canvas/index.ts";
 import { chatModule } from "./chat/index.ts";
+import { codeModule } from "./code/index.ts";
 import { connectModule } from "./connect/index.ts";
 import { dataModule } from "./data/index.ts";
 import { filesModule } from "./files/index.ts";
@@ -58,6 +59,7 @@ export const ALL_MODULES: HearthModule[] = [
   dataModule,
   activityModule,
   filesModule,
+  codeModule,
 ];
 
 export type { Timeline, TimelineGroup } from "./activity/index.ts";

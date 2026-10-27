@@ -15,6 +15,7 @@ export const SETTINGS_SECTIONS = [
   { id: "github", label: "GitHub" },
   { id: "notion", label: "Notion" },
   { id: "data", label: "Data sources" },
+  { id: "code", label: "Code" },
   { id: "import", label: "Import" },
   { id: "signins", label: "Sign-ins" },
   { id: "routines", label: "Routines" },

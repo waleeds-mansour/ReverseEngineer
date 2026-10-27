@@ -13,6 +13,7 @@ import { healthTone, healthWord } from "../lib/status.ts";
 import type { StandingRule, SystemStatus } from "../lib/types.ts";
 import { AppearanceSettings } from "./AppearanceSettings.tsx";
 import { ChromeSettings } from "./ChromeSettings.tsx";
+import { CodeSettings } from "./CodeSettings.tsx";
 import { DataSettings } from "./DataSettings.tsx";
 import { DesktopSettings } from "./DesktopSettings.tsx";
 import { GithubSettings } from "./GithubSettings.tsx";
@@ -168,6 +169,9 @@ export function Settings() {
         </Anchor>
         <Anchor id="data">
           <DataSettings />
+        </Anchor>
+        <Anchor id="code">
+          <CodeSettings />
         </Anchor>
         <Anchor id="import">
           <ImportSettings />
