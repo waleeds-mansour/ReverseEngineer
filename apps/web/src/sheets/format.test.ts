@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyFormat, cellStyle, numberLabel, turnsOn } from "./format.ts";
+import { applyFormat, cellStyle, numberLabel, sameFormat, turnsOn } from "./format.ts";
 
 describe("formatting cells", () => {
   it("puts a format on each cell of a range, and takes a part off with null", () => {
@@ -15,6 +15,16 @@ describe("formatting cells", () => {
       A1: { italic: true, bold: true, number: "currency" },
     });
     expect(before).toEqual({ A1: { italic: true }, B1: { bold: true, fill: "blue" } });
+  });
+
+  it("tells formats apart by what they say, not how they're written", () => {
+    expect(sameFormat({ bold: true, number: "currency" }, { number: "currency", bold: true })).toBe(
+      true,
+    );
+    expect(sameFormat(undefined, null)).toBe(true);
+    expect(sameFormat({ bold: false }, null)).toBe(true);
+    expect(sameFormat({ bold: true }, { bold: true, italic: true })).toBe(false);
+    expect(sameFormat({ fill: "red" }, { fill: "blue" })).toBe(false);
   });
 
   it("turns bold on across a mixed range, and off only when it's all bold", () => {

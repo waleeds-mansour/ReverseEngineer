@@ -29,6 +29,14 @@ export function applyFormat(
   return out;
 }
 
+/** Whether two cells look the same: no format and one that says nothing are alike. */
+export function sameFormat(a?: CellFormat | null, b?: CellFormat | null) {
+  const x: Record<string, unknown> = tidyFormat(a ?? {}) ?? {};
+  const y: Record<string, unknown> = tidyFormat(b ?? {}) ?? {};
+  const keys = Object.keys(x);
+  return keys.length === Object.keys(y).length && keys.every((k) => x[k] === y[k]);
+}
+
 /**
  * Whether Bold (or Italic) turns it on: off only when every cell in the range has it already, so a
  * range with some bold and some not turns all bold, as in Excel and Google Sheets.

@@ -5,7 +5,7 @@ import {
   cellName,
   columnName,
   columnNumber,
-  filledWorkbook,
+  keepableText,
   parseCell,
   renameSheetRefs,
   sheetRef,
@@ -21,6 +21,16 @@ describe("spreadsheet cells", () => {
     expect(parseCell("BA1")).toBeNull();
     expect(parseCell("A501")).toBeNull();
     expect(cellName(10, 27)).toBe("AA10");
+  });
+
+  it("cuts text to fit without splitting an emoji, which the database couldn't keep", () => {
+    const smile = "\u{1F600}"; // two UTF-16 halves
+    expect(keepableText(`a${smile}`, 2)).toBe("a");
+    expect(keepableText(`a${smile}`, 3)).toBe(`a${smile}`);
+    expect(keepableText("x".repeat(2500))).toHaveLength(2000);
+    // A half on its own, as a clipboard can hold, can't be kept either.
+    expect(keepableText("a\uD83Db\uDE00")).toBe("a�b�");
+    expect(JSON.stringify(keepableText(`${"x".repeat(1999)}${smile}`))).not.toMatch(/\\ud/i);
   });
 
   it("refuses cells off the sheet and sheets with the same name", () => {
@@ -86,38 +96,29 @@ describe("formatting cells", () => {
     const saved = { sheets: [{ id: "s1", name: "Budget", cells: { A1: "1200" }, widths: {} }] };
     const book = WorkbookSchema.parse(saved);
     expect(book.sheets[0]).toMatchObject({ cells: { A1: "1200" }, formats: {}, freeze: none });
-    // A copy kept on a device back then, read without the schema, gets the same.
-    expect(filledWorkbook(saved as unknown as Workbook).sheets[0]).toMatchObject({
-      formats: {},
-      freeze: none,
-    });
   });
 
-  it("drops a format that doesn't read, never the workbook", () => {
-    const parsed = WorkbookSchema.safeParse({
-      sheets: [
-        {
-          id: "s1",
-          name: "Budget",
-          cells: { A1: "1200", A2: "300" },
-          formats: {
-            A1: { bold: "very", italic: true, number: "money", fill: "#ff0000" },
-            a2: { number: "currency", align: "justify" },
-            ZZ9: { bold: true },
-            A3: "bold",
-            A4: { bold: false },
-          },
-          freeze: { rows: -1, cols: 2 },
-        },
-        { id: "s2", name: "Plan", cells: { B1: "x" }, formats: [1, 2], freeze: "top row" },
-      ],
+  it("refuses a write with a format, freeze or cell that doesn't fit, saying what's wrong", () => {
+    const sheet = (more: object) => ({ sheets: [{ id: "s1", name: "Budget", ...more }] });
+    for (const bad of [
+      { formats: { A1: { number: "money" } } },
+      { formats: { A1: { bold: "very" } } },
+      { formats: { ZZ9: { bold: true } } },
+      { freeze: { rows: -1, cols: 0 } },
+      { freeze: { rows: 1, cols: 11 } },
+      { cells: { a1: "lower case" } },
+      { widths: { A: 5000 } },
+    ])
+      expect(WorkbookSchema.safeParse(sheet(bad)).success).toBe(false);
+    const money = WorkbookSchema.safeParse(sheet({ formats: { A1: { number: "money" } } }));
+    expect(money.error?.issues[0]?.message).toContain('"currency"');
+    const ok = WorkbookSchema.parse(
+      sheet({ formats: { A1: { bold: true, number: "currency" } }, freeze: { rows: 1 } }),
+    );
+    expect(ok.sheets[0]).toMatchObject({
+      formats: { A1: { bold: true, number: "currency" } },
+      freeze: { rows: 1, cols: 0 },
     });
-    expect(parsed.success).toBe(true);
-    const [budget, plan] = parsed.data!.sheets;
-    expect(budget!.cells).toEqual({ A1: "1200", A2: "300" });
-    expect(budget!.formats).toEqual({ A1: { italic: true }, A2: { number: "currency" } });
-    expect(budget!.freeze).toEqual({ rows: 0, cols: 2 });
-    expect(plan).toMatchObject({ cells: { B1: "x" }, formats: {}, freeze: none });
   });
 
   it("gives IronCalc each number format after what was typed, and only for cells with something in", () => {
@@ -130,6 +131,7 @@ describe("formatting cells", () => {
         void calls.push(`${cellName(a.row, a.column)} ${path} ${value}`),
       evaluate: () => void calls.push("evaluate"),
       getFormattedCellValue: () => "",
+      getCellType: () => 1,
       free() {},
     });
     const book = WorkbookSchema.parse({

@@ -1,6 +1,7 @@
 // A spreadsheet (PLAN.md section 8.5): a grid of cells with a formula bar, a formatting toolbar and
 // sheet tabs. Type to fill a cell, = for a formula; arrows, Tab and Enter move; Ctrl+C and Ctrl+V
-// copy and paste with Excel and Google Sheets; Ctrl+B and Ctrl+I bold and slant the selection.
+// copy and paste with Excel and Google Sheets, and with formats between Nook sheets (clip.ts);
+// Ctrl+Shift+V pastes values only; Ctrl+B and Ctrl+I bold and slant the selection.
 
 import { cellName, columnName, parseCell } from "@hearth/core";
 import {
@@ -15,8 +16,9 @@ import {
 } from "solid-js";
 import { PaneHeader } from "../components/ui.tsx";
 import { useAction } from "../lib/query.ts";
+import { asTyped, copyRange, copyTo, pasteFrom } from "./clip.ts";
 import { cellStyle, turnsOn } from "./format.ts";
-import { clampPos, fromTsv, inRange, type Pos, rangeOf, refsIn, toTsv } from "./grid.ts";
+import { clampPos, inRange, leftOf, type Pos, rangeOf, refsIn } from "./grid.ts";
 import { Header } from "./Header.tsx";
 import { createSheet } from "./state.ts";
 import { Tabs } from "./Tabs.tsx";
@@ -35,6 +37,8 @@ export function SheetGrid(props: { id: string; pane: number }) {
   const [anchor, setAnchor] = createSignal<Pos>({ row: 1, col: 1 });
   const [editing, setEditing] = createSignal<"cell" | "bar" | null>(null);
   const [draft, setDraft] = createSignal("");
+  /** When Ctrl+Shift+V went down: the paste it makes comes next, and pastes values only. */
+  let valuesOnlyAt = Number.NEGATIVE_INFINITY;
   let keys: HTMLInputElement | undefined;
   let scroller!: HTMLDivElement;
 
@@ -58,12 +62,7 @@ export function SheetGrid(props: { id: string; pane: number }) {
   const width = (col: number) => sheet().widths[columnName(col)] ?? WIDTH;
   const freeze = () => sheet().freeze ?? { rows: 0, cols: 0 };
   /** How far from the left a frozen column stays, or null when it scrolls. */
-  const frozenAt = (col: number) => {
-    if (col > freeze().cols) return null;
-    let left = ROW_NUMBERS;
-    for (let c = 1; c < col; c++) left += width(c);
-    return left;
-  };
+  const frozenAt = (col: number) => (col > freeze().cols ? null : leftOf(col, width, ROW_NUMBERS));
 
   // Show what's used, plus room to grow into.
   const used = createMemo(() => {
@@ -176,21 +175,34 @@ export function SheetGrid(props: { id: string; pane: number }) {
       e.preventDefault();
       setAnchor({ row: 1, col: 1 });
       setCur({ row: used().rows || 1, col: used().cols || 1 });
+    } else if (mod && e.shiftKey && e.key.toLowerCase() === "v") {
+      // Not prevented: the browser's paste brings what's on the clipboard, which a key can't read.
+      valuesOnlyAt = performance.now();
     }
   }
 
   const clipboard = (e: ClipboardEvent, cut = false) => {
     if (editing()) return;
     e.preventDefault();
-    e.clipboardData?.setData("text/plain", toTsv(range(), raw));
-    if (cut) s.set(tab(), Object.fromEntries(selected().map((r) => [r, ""])));
+    const values = s.values(tab(), selected());
+    const value = (ref: string) => values[ref] ?? asTyped(shown(ref));
+    copyTo(e.clipboardData, copyRange(range(), raw, value, sheet().formats));
+    // A cut moves the cells, formats and all, as in any spreadsheet.
+    if (cut)
+      s.put(
+        tab(),
+        Object.fromEntries(selected().map((r) => [r, ""])),
+        Object.fromEntries(selected().map((r) => [r, null])),
+      );
   };
   const paste = (e: ClipboardEvent) => {
     if (editing()) return;
     e.preventDefault();
-    const text = e.clipboardData?.getData("text/plain") ?? "";
+    const valuesOnly = performance.now() - valuesOnlyAt < 1000;
+    valuesOnlyAt = Number.NEGATIVE_INFINITY;
     const r = range();
-    if (text) s.set(tab(), fromTsv(text, { row: r.top, col: r.left }));
+    const got = pasteFrom(e.clipboardData, { row: r.top, col: r.left }, valuesOnly);
+    if (got) s.put(tab(), got.cells, got.formats);
   };
 
   const curRef = () => cellName(cur().row, cur().col);
@@ -248,7 +260,7 @@ export function SheetGrid(props: { id: string; pane: number }) {
               "table-layout": "fixed",
               // Moving to a cell scrolls it clear of the rows and columns that stay put.
               "--frozen-top": `${ROW * (1 + freeze().rows)}px`,
-              "--frozen-left": `${frozenAt(freeze().cols + 1) ?? ROW_NUMBERS}px`,
+              "--frozen-left": `${leftOf(freeze().cols + 1, width, ROW_NUMBERS)}px`,
             }}
           >
             <Header
@@ -288,8 +300,12 @@ export function SheetGrid(props: { id: string; pane: number }) {
                           return (
                             <td
                               data-cell={ref}
-                              class="relative h-6 max-w-0 scroll-mt-(--frozen-top) scroll-ml-(--frozen-left) truncate border-r border-b border-line px-1"
+                              class="relative h-6 max-w-0 truncate border-r border-b border-line px-1"
                               classList={{
+                                // Moving to a cell that scrolls brings it clear of what stays
+                                // put; one that stays put is in view already.
+                                "scroll-mt-(--frozen-top)": top() === null,
+                                "scroll-ml-(--frozen-left)": left() === null,
                                 "outline outline-2 -outline-offset-2 outline-jarvis": here(),
                                 // A darker line where what stays put meets what scrolls.
                                 "border-b-border-strong": r === freeze().rows,

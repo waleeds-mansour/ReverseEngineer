@@ -9,6 +9,7 @@ import {
   emptyWorkbook,
   parseCell,
   type Results,
+  readWorkbook,
   tidyFormat,
   type Workbook,
   WorkbookSchema,
@@ -30,14 +31,16 @@ import { results, resultsAt } from "./engine.ts";
 
 type Db = Parameters<typeof liveEntity>[0];
 
-/** The workbook and its version; `lock` holds its row so writes to it go one at a time. */
+/**
+ * The workbook and its version; `lock` holds its row so writes to it go one at a time. What's kept
+ * is read part by part: one that doesn't read is dropped, never the workbook (readWorkbook).
+ */
 async function load(db: Db, bookId: string, lock = false) {
   const row = await liveEntity(db, bookId, "spreadsheet");
   if (!row) throw new ActionError("not_found", "No such spreadsheet");
   const read = db.select().from(sheetBook).where(eq(sheetBook.entityId, bookId));
   const [b] = lock ? await read.for("update") : await read;
-  const parsed = WorkbookSchema.safeParse(b?.data);
-  return { row, book: parsed.success ? parsed.data : emptyWorkbook(), version: b?.version ?? 0 };
+  return { row, book: readWorkbook(b?.data) ?? emptyWorkbook(), version: b?.version ?? 0 };
 }
 
 type Ctx = Parameters<Parameters<typeof defineAction>[0]["handler"]>[1];
@@ -69,17 +72,30 @@ async function store(
   return { version: saved!.version, results: res };
 }
 
-/** "Budget!B3" or "B3" (on the first sheet). */
+/** "Budget!B3" or "B3" (on the first sheet); spaces around either part don't count. */
 function target(book: Workbook, ref: string) {
   const bang = ref.lastIndexOf("!");
-  const sheetName = bang >= 0 ? ref.slice(0, bang).replace(/^'|'$/g, "") : null;
+  const sheetName = bang >= 0 ? ref.slice(0, bang).trim().replace(/^'|'$/g, "") : null;
   const sheet = sheetName
     ? book.sheets.find((s) => s.name.toLowerCase() === sheetName.toLowerCase())
     : book.sheets[0];
-  const cell = ref.slice(bang + 1).toUpperCase();
+  const cell = ref
+    .slice(bang + 1)
+    .trim()
+    .toUpperCase();
   if (!sheet) throw new ActionError("invalid_input", `No sheet named ${sheetName}`);
   if (!parseCell(cell)) throw new ActionError("invalid_input", `${cell} isn't a cell like B3`);
   return { sheet, cell };
+}
+
+/** What a workbook that doesn't fit got wrong, and where: Budget!B3: …, or Sheet "Q4": …. */
+function wrong(book: Workbook, issue: { path: PropertyKey[]; message: string }) {
+  const [, i, part, ref] = issue.path;
+  const sheet = typeof i === "number" ? book.sheets[i]?.name : undefined;
+  if (sheet === undefined) return issue.message;
+  if ((part === "cells" || part === "formats") && typeof ref === "string")
+    return `${sheet}!${ref}: ${issue.message}`;
+  return `Sheet "${sheet}": ${issue.message}`;
 }
 
 export const sheetsModule = defineModule({
@@ -192,7 +208,7 @@ export const sheetsModule = defineModule({
         }
         for (const [ref, f] of Object.entries(i.formats)) {
           const t = target(book, ref);
-          // A part left out (or one that didn't read) leaves the cell's own; false turns one off.
+          // A part left out leaves the cell's own; false turns one off.
           const said = f && Object.entries(f).filter(([, v]) => v !== undefined);
           const next =
             said && tidyFormat({ ...t.sheet.formats[t.cell], ...Object.fromEntries(said) });
@@ -201,7 +217,7 @@ export const sheetsModule = defineModule({
         }
         const checked = WorkbookSchema.safeParse(book);
         if (!checked.success)
-          throw new ActionError("invalid_input", checked.error.issues[0]!.message);
+          throw new ActionError("invalid_input", wrong(book, checked.error.issues[0]!));
         const saved = await store(ctx, i.id, checked.data);
         const now: Record<string, string> = {};
         for (const ref of new Set([...refs, ...Object.keys(i.formats)])) {
