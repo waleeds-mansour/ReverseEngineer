@@ -1,12 +1,38 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { Runner } from "./backup.ts";
-import { checkBackupTools, checkChrome } from "./doctor.ts";
+import { checkBackupTools, checkChrome, checkClaudeLogin } from "./doctor.ts";
 
 const schtasks =
   (code: number, stdout = ""): Runner =>
   async () => ({ code, stdout, stderr: "" });
 
 describe("hearth doctor", () => {
+  it("tells a Claude login that a failed refresh emptied from one that still works", () => {
+    const dir = mkdtempSync(join(tmpdir(), "doctor-claude-"));
+    const login = (oauth: unknown) => {
+      writeFileSync(join(dir, ".credentials.json"), JSON.stringify({ claudeAiOauth: oauth }));
+      return checkClaudeLogin({ CLAUDE_CONFIG_DIR: dir }, 1_000);
+    };
+    const empty = { accessToken: "", refreshToken: "", expiresAt: 0 };
+    expect(login(empty)).toMatchObject({
+      mark: "warn",
+      detail: expect.stringContaining("signed out"),
+    });
+    expect(login({ ...empty, refreshToken: "r" }).mark).toBe("ok");
+    expect(login({ ...empty, accessToken: "a", expiresAt: 2_000 }).mark).toBe("ok");
+    expect(login({ ...empty, accessToken: "a", expiresAt: 500 }).mark).toBe("warn");
+    // A shape it doesn't know isn't called signed out.
+    expect(login(undefined).mark).toBe("ok");
+    writeFileSync(join(dir, ".credentials.json"), "not json");
+    expect(checkClaudeLogin({ CLAUDE_CONFIG_DIR: dir }).mark).toBe("ok");
+    expect(checkClaudeLogin({ ANTHROPIC_API_KEY: "k", CLAUDE_CONFIG_DIR: dir }).detail).toBe(
+      "Using ANTHROPIC_API_KEY",
+    );
+  });
+
   it("checks that Windows can open Chrome for Hearth's service", async () => {
     expect(await checkChrome({}, "win32", schtasks(0))).toMatchObject({
       mark: "ok",

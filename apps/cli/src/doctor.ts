@@ -2,7 +2,7 @@
 // makes it exit non-zero. This file has the setup checks; doctor-db.ts what the database says,
 // doctor-host.ts the running install (services, the server, the build, Tailscale, the drives),
 // and doctor-run.ts puts them together.
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { findChrome, loadLaunchConfig } from "@hearth/server";
@@ -36,19 +36,44 @@ export function checkNode(version = process.versions.node): Check {
   };
 }
 
-/** Jarvis runs on your Claude Code login (or an API key if you set one). Never reads the file. */
-export function checkClaudeLogin(env: NodeJS.ProcessEnv = process.env): Check {
+/**
+ * Jarvis runs on your Claude Code login (or an API key if you set one). Of the login it reads
+ * only whether it still holds a token, never what that is: a refresh that fails empties both and
+ * leaves the file, and then Jarvis can't take a turn.
+ */
+export function checkClaudeLogin(env: NodeJS.ProcessEnv = process.env, now = Date.now()): Check {
   if (env.ANTHROPIC_API_KEY)
     return { name: "Claude", mark: "ok", detail: "Using ANTHROPIC_API_KEY" };
-  const dir = env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
-  if (existsSync(join(dir, ".credentials.json")) || process.platform === "darwin") {
-    return { name: "Claude", mark: "ok", detail: "Claude Code login found" };
+  const file = join(env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude"), ".credentials.json");
+  if (!existsSync(file) && process.platform !== "darwin")
+    return {
+      name: "Claude",
+      mark: "warn",
+      detail: "No Claude login found. Run `claude` once and sign in with your Claude account.",
+    };
+  if (existsSync(file) && !loginHolds(file, now))
+    return {
+      name: "Claude",
+      mark: "warn",
+      detail:
+        "Claude Code is signed out, so Pip can't think. Run `claude` and sign in with /login.",
+    };
+  return { name: "Claude", mark: "ok", detail: "Claude Code login found" };
+}
+
+/** Whether the login still has a token to use or to refresh with. A shape it doesn't know passes. */
+function loginHolds(file: string, now: number): boolean {
+  let read: unknown;
+  try {
+    read = JSON.parse(readFileSync(file, "utf8"))?.claudeAiOauth;
+  } catch {
+    return true;
   }
-  return {
-    name: "Claude",
-    mark: "warn",
-    detail: "No Claude login found. Run `claude` once and sign in with your Claude account.",
-  };
+  if (!read || typeof read !== "object") return true;
+  const login = read as Record<string, unknown>;
+  const has = (key: string) => typeof login[key] === "string" && login[key] !== "";
+  const expires = typeof login.expiresAt === "number" ? login.expiresAt : 0;
+  return has("refreshToken") || (has("accessToken") && (!expires || expires > now));
 }
 
 export function checkOrigin(env: NodeJS.ProcessEnv = process.env): Check {
