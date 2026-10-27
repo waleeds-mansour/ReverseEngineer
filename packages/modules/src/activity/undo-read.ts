@@ -1,18 +1,24 @@
 // What Pip did without asking that Undo can put back, read from what it left behind: the events
-// its calls emitted (a record it made or moved to the trash, a task it changed, a memory it
-// rewrote) and the notes the calendar keeps for what Pip did there (calendar/undo.ts). Each says
+// its calls emitted (a record it made or moved to the trash, a draft it threw away, a task it
+// changed, a memory it rewrote, mail it triaged, an event it added) and the notes the calendar
+// keeps for what Pip did there (calendar/undo.ts). Each says
 // what Pip did, what its Undo does, and why not when it can't: undone, too old, or changed since.
-// Today, What Pip did and the inbox's Undo all read it here, so they always say the same.
-import { isUuid, PRINCIPAL, TASK_STATUSES } from "@hearth/core";
-import { event, type NotificationUndo, type Tx } from "@hearth/db";
-import { and, desc, eq, gt, gte, inArray, lt, not, notInArray, or, sql } from "drizzle-orm";
+// Today, What Pip did and the inbox's Undo all read it here, so they always say the same; the
+// list of them is read in undo-list.ts.
+import { PRINCIPAL, TASK_STATUSES } from "@hearth/core";
+import type { NotificationUndo, Tx } from "@hearth/db";
 import type { Since } from "../calendar/undo.ts";
 import { TRASH_TYPES } from "../graph/trash.ts";
 import type { UndoRef, UndoView } from "./shape.ts";
+import { addedPiece, EVENT_CHANGED } from "./undo-added.ts";
 import { type Change, factsOf, TASK_KINDS } from "./undo-facts.ts";
+import { grouped } from "./undo-group.ts";
+import { mailPiece } from "./undo-mail.ts";
+import { MAIL_CHANGED, type Piece } from "./undo-mail-facts.ts";
 import {
   assignedWords,
   calendarLabel,
+  discardWords,
   dueWords,
   madeWords,
   memoryWords,
@@ -29,15 +35,22 @@ import {
 export const UNDO_DAYS = 7;
 /** The event an Undo you pressed leaves: what the timeline shows as "You undid". */
 export const UNDONE = "activity.undone";
-/** Events are stamped by their writer's clock, so seq order and time order can differ a little. */
-const SKEW_MS = 60_000;
-const MAX_CHANGES = 500;
-const MAX_TOLD = 200;
 
 /** What Pip makes that Undo moves to the trash: not its own conversations, which log its work. */
-const MADE_TYPES: string[] = TRASH_TYPES.filter((t) => t !== "conversation" && t !== "snippet");
-const TRASHABLE = new Set<string>(TRASH_TYPES);
-export const CHANGE_KINDS = ["entity.created", "entity.deleted", ...TASK_KINDS, "memory.changed"];
+export const MADE_TYPES: string[] = TRASH_TYPES.filter(
+  (t) => t !== "conversation" && t !== "snippet",
+);
+/** What Pip trashed that Undo brings back: what the Trash lists, and a draft it threw away. */
+export const DELETED_TYPES: string[] = [...TRASH_TYPES, "email_draft"];
+const TRASHABLE = new Set<string>(DELETED_TYPES);
+export const CHANGE_KINDS = [
+  "entity.created",
+  "entity.deleted",
+  ...TASK_KINDS,
+  "memory.changed",
+  MAIL_CHANGED,
+  EVENT_CHANGED,
+];
 const STATUSES = new Set<unknown>(TASK_STATUSES);
 const ASSIGNEES = new Set<unknown>([null, PRINCIPAL.owner, PRINCIPAL.jarvis]);
 
@@ -47,8 +60,11 @@ export interface Inverse {
   input: Record<string, unknown>;
 }
 export interface Undoable extends UndoView {
-  inverse: Inverse;
+  /** One change, or one for each conversation of a line that stands for many. */
+  inverse: Inverse | Inverse[];
   seq: number;
+  /** For a line that stands for many: the event each one's change left. */
+  members?: string[];
 }
 
 export type { Change };
@@ -62,81 +78,6 @@ export interface Told {
 
 export const refKey = (r: UndoRef) => `${r.kind}:${r.id}`;
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
-
-/** The last event before `since`, give or take a writer's clock: a window reads after it. */
-export async function edgeOf(tx: Tx, since: Date): Promise<number> {
-  const [edge] = await tx
-    .select({ seq: event.seq })
-    .from(event)
-    .where(lt(event.at, new Date(since.getTime() - SKEW_MS)))
-    .orderBy(desc(event.seq))
-    .limit(1);
-  return edge?.seq ?? 0;
-}
-
-/** Undo you pressed since `edge`, by what it undid. */
-export async function undoneSince(tx: Tx, edge: number): Promise<Set<string>> {
-  const rows = await tx
-    .select({ payload: event.payload })
-    .from(event)
-    .where(and(eq(event.kind, UNDONE), gt(event.seq, edge)))
-    .orderBy(desc(event.seq))
-    .limit(2_000);
-  const keys = rows.map((r) => r.payload.ref as UndoRef | undefined);
-  return new Set(keys.flatMap((r) => (r?.kind && r.id ? [refKey(r)] : [])));
-}
-
-/**
- * Everything Pip did since `since` that Undo can put back, newest first; with `groups`, only what
- * those cards of the timeline did (their correlation ids). `edge` is edgeOf(since), when known.
- */
-export async function undosOf(
-  tx: Tx,
-  scope: { since: Date; groups?: readonly string[]; edge?: number },
-  now: Date,
-): Promise<Undoable[]> {
-  const edge = scope.edge ?? (await edgeOf(tx, scope.since));
-  const within = scope.groups
-    ? scope.groups.length
-      ? inArray(event.correlationId, [...scope.groups])
-      : sql`false`
-    : gte(event.at, scope.since);
-  const pip = (kinds: string[]) =>
-    and(inArray(event.kind, kinds), gt(event.seq, edge), eq(event.actor, PRINCIPAL.jarvis), within);
-  const type = sql<string>`${event.payload}->>'type'`;
-  // What went to the trash under a record at the same moment comes back with it, so it isn't
-  // listed: a big trash would otherwise fill the list before its own record.
-  const withParent = sql`EXISTS (SELECT 1 FROM entity c JOIN event p ON p.entity_id = c.parent_id
-    WHERE c.id = ${event.entityId} AND p.kind = 'entity.deleted' AND p.at = ${event.at}
-    AND p.correlation_id IS NOT DISTINCT FROM ${event.correlationId})`;
-  const changes = await tx
-    .select()
-    .from(event)
-    .where(
-      and(
-        pip(CHANGE_KINDS),
-        or(
-          notInArray(event.kind, ["entity.created", "entity.deleted"]),
-          and(eq(event.kind, "entity.created"), inArray(type, MADE_TYPES)),
-          and(eq(event.kind, "entity.deleted"), inArray(type, [...TRASH_TYPES]), not(withParent)),
-        ),
-      ),
-    )
-    .orderBy(desc(event.seq))
-    .limit(MAX_CHANGES);
-  const notes = await tx
-    .select()
-    .from(event)
-    .where(pip(["notification.created"]))
-    .orderBy(desc(event.seq))
-    .limit(MAX_TOLD);
-  const told = notes.flatMap((e): Told[] => {
-    const id = str(e.payload.notificationId);
-    return id && isUuid(id) ? [{ id, groupId: e.correlationId, at: e.at, seq: e.seq }] : [];
-  });
-  return viewsOf(tx, changes, told, await undoneSince(tx, edge), now);
-}
-
 /** Why the calendar's Undo can't any more: the event changed since Pip's change. */
 const CALENDAR_SINCE: Record<Since, (byYou: boolean) => string> = {
   gone: () => WHY_NOT.offCalendar,
@@ -189,18 +130,38 @@ export async function viewsOf(
     reality: string | null,
     opts: { stands?: boolean; old?: string | null } = {},
   ) => {
-    const undid = undone.has(refKey(v.ref)) && (opts.stands ?? reality !== null);
+    const pressed =
+      undone.has(refKey(v.ref)) || !!v.members?.some((id) => undone.has(`event:${id}`));
+    const undid = pressed && (opts.stands ?? reality !== null);
     const old = opts.old === undefined ? WHY_NOT.old : opts.old;
     const blocked = undid
       ? WHY_NOT.undone
       : (reality ?? (old !== null && v.at.getTime() < oldBefore ? old : null));
     out.push({ tells: null, ...v, blocked, undone: undid });
   };
+  const finishPiece = (e: Change, piece: Piece, members?: string[]) => {
+    const { reality, stands, old, op: _, ...v } = piece;
+    const ref: UndoRef = { kind: "event", id: e.id };
+    const at = { ref, groupId: e.correlationId, at: e.at, seq: e.seq, ...(members && { members }) };
+    finish({ ...at, ...v }, reality, { stands, old });
+  };
+  const mail: { e: Change; piece: Piece }[] = [];
 
   for (const e of changes) {
     const rec = e.entityId ? records.get(e.entityId) : undefined;
-    if (!rec || !e.entityId) continue;
     const ref: UndoRef = { kind: "event", id: e.id };
+    // Mail Pip changed (a sender's lane has no record), put together below, and events it added.
+    if (e.kind === MAIL_CHANGED) {
+      const piece = mailPiece(e, rec, facts.mail, now);
+      if (piece) mail.push({ e, piece });
+      continue;
+    }
+    if (e.kind === EVENT_CHANGED) {
+      const piece = addedPiece(e, rec, facts.added);
+      if (piece) finishPiece(e, piece);
+      continue;
+    }
+    if (!rec || !e.entityId) continue;
     const base = {
       ref,
       groupId: e.correlationId,
@@ -233,15 +194,17 @@ export async function viewsOf(
         : rec.deletedAt.getTime() !== e.at.getTime()
           ? WHY_NOT.changed
           : null;
+      // The Trash doesn't list drafts, so a week on it's just too old.
+      const draft = rec.type === "email_draft";
       finish(
         {
           ...base,
           how: "trashed",
-          ...trashedWords(rec.title),
+          ...(draft ? discardWords(rec.title) : trashedWords(rec.title)),
           inverse: { action: "entity.restore", input: { id: rec.id } },
         },
         reality,
-        { stands: !rec.deletedAt, old: WHY_NOT.oldTrash },
+        { stands: !rec.deletedAt, old: draft ? WHY_NOT.old : WHY_NOT.oldTrash },
       );
     } else if (TASK_KINDS.includes(e.kind)) {
       const t = tasks.get(rec.id);
@@ -306,6 +269,25 @@ export async function viewsOf(
     }
   }
 
+  // One call's mail changes done the same way are one line, with one Undo (undo-group.ts), on its
+  // first change: the call's later ones don't move it.
+  const same = new Map<string, { e: Change; piece: Piece }[]>();
+  for (const m of mail) {
+    const k = m.e.correlationId && m.piece.op ? `${m.e.correlationId}|${m.piece.op}` : m.e.id;
+    const list = same.get(k);
+    if (list) list.push(m);
+    else same.set(k, [m]);
+  }
+  for (const ms of same.values()) {
+    if (ms.length === 1) {
+      finishPiece(ms[0]!.e, ms[0]!.piece);
+      continue;
+    }
+    const first = ms.reduce((a, b) => (b.e.seq < a.e.seq ? b : a));
+    const members = ms.map((m) => m.e.id);
+    finishPiece(first.e, grouped(ms.map((m) => m.piece)), members);
+  }
+
   for (const t of told) {
     const n = notes.get(t.id);
     const ref: UndoRef = { kind: "notification", id: t.id };
@@ -337,6 +319,6 @@ export async function viewsOf(
 }
 
 /** A view as the screens get it: what Undo would run stays here. */
-export function shown({ inverse: _, seq: __, ...v }: Undoable): UndoView {
+export function shown({ inverse: _, seq: __, members: ___, ...v }: Undoable): UndoView {
   return v;
 }

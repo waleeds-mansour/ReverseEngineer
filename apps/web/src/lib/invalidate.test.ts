@@ -107,6 +107,16 @@ describe("what a change you make refreshes", () => {
     const thread = affectedBy({ kind: "entity.created", payload: { type: "email_thread" } });
     expect(hits(thread, "activity.undos")).toBe(false);
     expect(hits(thread, "activity.timeline")).toBe(false);
+    // What Pip did to your mail has an Undo on Today, which a later change greys; a draft Pip
+    // threw away comes back by its Undo.
+    const mail = affectedBy({ kind: "mail.changed", payload: {} });
+    expect(hits(mail, "activity.undos")).toBe(true);
+    expect(hits(mail, "mail.threads")).toBe(true);
+    expect(hits(mail, "activity.timeline")).toBe(false);
+    expect(hits(affectedBy({ kind: "mail.received", payload: {} }), "activity.undos")).toBe(false);
+    const draft = affectedBy({ kind: "entity.deleted", payload: { type: "email_draft" } });
+    for (const name of ["activity.undos", "activity.timeline", "mail.drafts"])
+      expect(hits(draft, name)).toBe(true);
   });
 });
 

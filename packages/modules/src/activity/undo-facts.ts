@@ -1,7 +1,8 @@
 // What an Undo needs to know about the things Pip changed, as they are now: each record (in the
 // trash? who changed it last, or did it just come back from the trash?), what others put under
-// what Pip made, each task's fields, each memory's latest version, and the events the calendar's
-// notes are about. Read in one go for a whole list (undo-read.ts).
+// what Pip made, each task's fields, each memory's latest version, the events the calendar's
+// notes are about, the mail Pip changed (undo-mail.ts) and the events it added (undo-added.ts).
+// Read in one go for a whole list (undo-read.ts).
 import { PRINCIPAL } from "@hearth/core";
 import {
   entity,
@@ -16,6 +17,8 @@ import { getSetting } from "@hearth/kernel";
 import { and, eq, gt, inArray, isNull, max } from "drizzle-orm";
 import { sinceOf } from "../calendar/undo.ts";
 import { FOLLOWS_PARENT } from "../graph/trash.ts";
+import { addedFactsOf } from "./undo-added.ts";
+import { mailFactsOf } from "./undo-mail-facts.ts";
 import type { Under } from "./undo-words.ts";
 
 export const TASK_KINDS = ["task.status_changed", "task.due_changed", "task.assigned"];
@@ -165,6 +168,8 @@ export async function factsOf(tx: Tx, changes: readonly Change[], noteIds: reado
     tasks: new Map(tasks.map((t) => [t.id, t])),
     lastRevision: new Map(revisions.map((r) => [r.id, r.last])),
     calendarSince: undos.length ? await sinceOf(tx, undos) : () => null,
+    mail: await mailFactsOf(tx, changes),
+    added: await addedFactsOf(tx, changes),
     timeZone,
   };
 }

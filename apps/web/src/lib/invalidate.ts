@@ -9,6 +9,12 @@ export type Rule = readonly string[];
 
 const MAIL: Rule = ["mail.", "person.view", "company.view"];
 
+/** By the event's kind, before its module's rule. */
+const BY_KIND: Record<string, Rule> = {
+  // A change to your mail can grey an Undo of what Pip did to it, or be one (Today lists them).
+  "mail.changed": [...MAIL, "activity.undos"],
+};
+
 /** By the event's module: the part of its kind before the first dot. */
 const BY_MODULE: Record<string, Rule> = {
   // A channel Jarvis stopped answering in tells you with a card (D62). A note of Pip's about your
@@ -89,7 +95,8 @@ const ANY_RECORD: Rule = [
 
 /**
  * ...and, for what Pip makes and trashes, with its Undo on Today and in What Pip did, which a
- * change can grey. Not mail or events, which their syncs change all day.
+ * change can grey. Not mail or events, which their syncs change all day, but a draft Pip threw
+ * away, which its Undo brings back.
  */
 const UNDOABLE = new Set([
   "note",
@@ -106,6 +113,7 @@ const UNDOABLE = new Set([
   "journal",
   "conversation",
   "snippet",
+  "email_draft",
 ]);
 
 /** ...and in the lists of its own type. */
@@ -169,7 +177,7 @@ export function affectedBy(e: { kind: string; payload?: Record<string, unknown> 
       ? [...ANY_RECORD, ...own, "activity."]
       : [...ANY_RECORD, ...own];
   }
-  return BY_MODULE[module] ?? null;
+  return BY_KIND[e.kind] ?? BY_MODULE[module] ?? null;
 }
 
 /** The reads a change you made through `action` can affect; null for all of them. */

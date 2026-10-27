@@ -9,6 +9,8 @@ import { recomputeThread } from "./flags.ts";
 import { normalizePattern, senderPatterns } from "./people.ts";
 
 export const lane = z.enum(["signal", "noise"]);
+/** The most conversations a lane's Undo moves back. */
+export const MOVED_BACK = 500;
 
 export const laneActions = [
   defineAction({
@@ -29,6 +31,11 @@ export const laneActions = [
       const pattern = normalizePattern(i.sender);
       if (!pattern)
         throw new ActionError("invalid_input", "That isn't an email address or a domain.");
+      const [was] = await ctx.tx
+        .select({ lane: mailSenderRule.lane })
+        .from(mailSenderRule)
+        .where(eq(mailSenderRule.pattern, pattern))
+        .for("update");
       await ctx.tx
         .insert(mailSenderRule)
         .values({ pattern, lane: i.lane, createdAt: ctx.now })
@@ -62,8 +69,19 @@ export const laneActions = [
           .where(inArray(mailThread.entityId, moving));
         // Who each one waits on depends on its lane, and so does its bundle.
         for (const id of moving) await recomputeThread(ctx, id);
-        ctx.emit({ kind: "mail.changed", payload: { lane: i.lane, moved: moving.length } });
       }
+      // The rule before and what moved, for its Undo (mail.lane_back, activity/undo-mail.ts).
+      if (moving.length || was?.lane !== i.lane)
+        ctx.emit({
+          kind: "mail.changed",
+          payload: {
+            lane: i.lane,
+            moved: moving.length,
+            pattern,
+            was: was?.lane ?? null,
+            threads: moving.slice(0, MOVED_BACK),
+          },
+        });
       return { pattern, lane: i.lane, moved: moving.length };
     },
   }),

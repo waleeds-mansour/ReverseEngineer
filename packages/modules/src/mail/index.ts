@@ -24,6 +24,7 @@ import { restoreAction } from "./repair.ts";
 import { sendAction } from "./send.ts";
 import { retrySetAside, syncMail, syncProgress } from "./sync.ts";
 import { alertKey } from "./sync-state.ts";
+import { mailUndoActions } from "./undo.ts";
 import { listThreads, loadThread, searchThreads, threadText, who } from "./views.ts";
 import { followUpRoutine, replyDraftRoutine, waitingActions, waitingDigest } from "./waiting.ts";
 
@@ -35,6 +36,8 @@ export { messageAttachment, messageHtml } from "./views.ts";
 export { threadsToDraft } from "./waiting.ts";
 
 const ids = z.array(id).min(1).max(500).describe("Conversation ids.");
+/** For an Undo (activity/undo-mail.ts): just the messages a change touched go back. */
+const messages = z.array(id).min(1).max(5000).optional().describe("Only these messages of them.");
 
 const syncFailed: ReflexDef = {
   name: "mail.sync_failed",
@@ -117,7 +120,8 @@ function flagAction(
       `${description.split(".")[0]} (${i.ids.length} conversation${i.ids.length === 1 ? "" : "s"})`,
     async handler(i, ctx) {
       const { add, remove } = flags(i as Record<string, unknown>);
-      return { changed: await changeFlags(ctx, i.ids, add, remove) };
+      const only = (i as { messages?: string[] }).messages;
+      return { changed: await changeFlags(ctx, i.ids, add, remove, only) };
     },
   });
 }
@@ -222,14 +226,14 @@ export const mailModule = defineModule({
       "mail.mark_read",
       "Mark conversations read, or unread with read: false.",
       (i) => (i.read === false ? { add: ["UNREAD"], remove: [] } : { add: [], remove: ["UNREAD"] }),
-      { read: z.boolean().default(true) },
+      { read: z.boolean().default(true), messages },
     ),
     flagAction(
       "mail.star",
       "Star conversations, or unstar them with starred: false.",
       (i) =>
         i.starred === false ? { add: [], remove: ["STARRED"] } : { add: ["STARRED"], remove: [] },
-      { starred: z.boolean().default(true) },
+      { starred: z.boolean().default(true), messages },
     ),
     {
       ...flagAction(
@@ -243,6 +247,7 @@ export const mailModule = defineModule({
       ownWorld: true,
     },
     ...laneActions,
+    ...mailUndoActions,
     defineAction({
       name: "mail.accounts",
       description:
