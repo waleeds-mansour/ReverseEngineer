@@ -144,7 +144,7 @@ fn it_shows_once_drawn_and_hides_and_sleeps_over_something_fullscreen() {
 }
 
 #[test]
-fn while_nook_observes_its_game_guard_decides_not_windows() {
+fn while_nook_observes_its_game_guard_hides_it_too() {
     let mut run = up();
     run.plan();
     // A game on the dock's monitor: hidden, though Windows doesn't say busy.
@@ -165,10 +165,13 @@ fn while_nook_observes_its_game_guard_decides_not_windows() {
     };
     run.take(&game);
     assert!(!run.visible());
-    // Busy by Windows' reckoning, but nook-wm sees nothing in front of this monitor.
+    // Busy by Windows' reckoning while nook-wm sees nothing in front: hidden all the same, since
+    // nook-wm misses a window going fullscreen in place unless the bar follows the front window.
     run.take(&observing());
     run.read(true, None);
-    assert!(run.visible(), "nook-wm knows better, monitor by monitor");
+    assert!(!run.visible(), "Windows' reading always counts");
+    run.read(false, None);
+    assert!(run.visible());
     // A window covering the whole monitor hides it too.
     let covered = NookState {
         front: Some(FrontWindow {
@@ -184,9 +187,10 @@ fn while_nook_observes_its_game_guard_decides_not_windows() {
     run.ours = vec![0x400];
     run.take(&covered);
     assert!(run.visible());
-    // Observing stops: Windows' reading counts again, and the monitor it had stays.
+    // Observing stops: Windows' reading still counts, and the monitor it had stays.
     run.take(&NookState::default());
-    assert!(!run.visible(), "Windows still says busy");
+    run.read(true, None);
+    assert!(!run.visible(), "Windows says busy");
     run.read(false, None);
     assert!(run.visible());
     assert_eq!(run.monitor, Some(owners_pc()));

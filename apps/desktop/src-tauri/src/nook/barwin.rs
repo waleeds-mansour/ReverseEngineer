@@ -363,11 +363,12 @@ pub fn focused(app: &AppHandle, label: &str) {
         (run.made, run.before)
     };
     let ours = shared.own_windows();
-    if !made {
+    // The dock shows the Pip chip's count too, so Hearth's window clears it with the bar off.
+    if !shared.chrome_shown() {
         return;
     }
     match label {
-        BAR_LABEL | POPOVER_LABEL | super::dock::DOCK_LABEL => {
+        BAR_LABEL | POPOVER_LABEL | super::dock::DOCK_LABEL if made => {
             let decided = focus::decide(focus::foreground(), &ours, before.as_ref(), focus::live);
             let landed = decided.is_ok_and(focus::hand_back);
             let first = shared

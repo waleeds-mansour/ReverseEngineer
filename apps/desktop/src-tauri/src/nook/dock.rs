@@ -5,7 +5,7 @@
 // switch, which starts on, and shown once its page says it drew (the readiness handshake: a page
 // that never says so is made again once). Over something fullscreen or a game it hides: Windows'
 // own notification state says when, and while Nook observes for the bar or the panel, nook-wm's
-// game guard and the window in front say it more exactly, monitor by monitor. Hovering it opens a
+// game guard and the window in front say it too, monitor by monitor. Hovering it opens a
 // card beside the strip with the hovered dot's label and last line. The disabled file and safe
 // start keep it off, as they keep the bar off. It needs no hook and no observer of its own.
 
@@ -131,13 +131,11 @@ impl DockRun {
         }
     }
 
-    /// Something in front hides it: nook-wm's verdict while it observes, Windows' otherwise.
+    /// Something in front hides it: Windows' reading always, and nook-wm's verdict too while it
+    /// observes. nook-wm alone would miss a window going fullscreen in place (F11, a video) unless
+    /// the bar has it following the window in front.
     fn in_the_way(&self) -> bool {
-        if self.observing {
-            self.game_here || self.covered
-        } else {
-            self.busy
-        }
+        self.busy || (self.observing && (self.game_here || self.covered))
     }
 
     pub fn visible(&self) -> bool {
