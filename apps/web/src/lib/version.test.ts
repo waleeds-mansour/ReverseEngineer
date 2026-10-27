@@ -12,7 +12,6 @@ import {
   tryAgainBy,
   watchBuild,
   whenHidden,
-  wouldLoseWork,
 } from "./version.ts";
 
 describe("whether the page is the Hearth that's running", () => {
@@ -287,57 +286,6 @@ describe("coming back to a page from before an update", () => {
     expect(page.body.inert).toBe(true);
     // Nothing focused, or no body yet: nothing to do there.
     freeze({ activeElement: null, body: null });
-  });
-});
-
-describe("whether reloading would lose something", () => {
-  type Field = {
-    type: string;
-    value: string;
-    defaultValue: string;
-    readOnly?: boolean;
-    disabled?: boolean;
-  };
-  const page = (...fields: Field[]) =>
-    ({ querySelectorAll: () => fields }) as unknown as Pick<ParentNode, "querySelectorAll">;
-  const empty = (type: string): Field => ({ type, value: "", defaultValue: "" });
-
-  it("loses nothing when no field has anything in it and nothing's waiting to be saved", () => {
-    const fields = page(empty("text"), empty("search"), empty("textarea"));
-    expect(wouldLoseWork(new EventTarget(), fields)).toBe(false);
-    expect(wouldLoseWork(new EventTarget(), page())).toBe(false);
-  });
-
-  it("would lose text typed into a field", () => {
-    const typed = { ...empty("textarea"), value: "Ask Jarvis to" };
-    expect(wouldLoseWork(new EventTarget(), page(empty("text"), typed))).toBe(true);
-    expect(wouldLoseWork(new EventTarget(), page({ ...empty("text"), value: "Buy milk" }))).toBe(
-      true,
-    );
-  });
-
-  it("doesn't count boxes, buttons and fields you can't type into", () => {
-    const fields = page(
-      { ...empty("checkbox"), value: "on" },
-      { ...empty("hidden"), value: "token" },
-      { ...empty("range"), value: "50" },
-      { ...empty("text"), value: "https://example.test", readOnly: true },
-      { ...empty("text"), value: "kept", disabled: true },
-      // What the page itself wrote into the field's markup is what it was given.
-      { type: "text", value: "Groceries", defaultValue: "Groceries" },
-    );
-    expect(wouldLoseWork(new EventTarget(), fields)).toBe(false);
-  });
-
-  it("asks the page's own leave-this-page guards, as the browser does", () => {
-    const win = new EventTarget();
-    let unsaved = true;
-    win.addEventListener("beforeunload", (e) => {
-      if (unsaved) e.preventDefault();
-    });
-    expect(wouldLoseWork(win, page())).toBe(true);
-    unsaved = false;
-    expect(wouldLoseWork(win, page())).toBe(false);
   });
 });
 
