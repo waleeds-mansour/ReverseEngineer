@@ -112,6 +112,14 @@ export function lookOf(state: EditorState, from: number, to: number, opts: Previ
         case "FencedCode":
           eachLine(n, "cm-md-codeblock");
           return;
+        // A table is drawn as a grid off its lines (noteBlocks.ts); on them it's its markdown,
+        // in even letters, its pipes faint.
+        case "Table":
+          eachLine(n, "cm-md-table");
+          return;
+        case "TableDelimiter":
+          faint(n.from, n.to);
+          return false;
         case "CodeInfo":
           faint(n.from, n.to);
           return;
@@ -135,7 +143,7 @@ export function lookOf(state: EditorState, from: number, to: number, opts: Previ
         if (parent === "FencedCode") faint(n.from, n.to);
         else mark(n.from, n.to);
       } else if (n.name === "Link" || n.name === "Autolink") linked(n);
-      // Pictures are drawn in a later step; until then they show as written, faint.
+      // A picture shows as written, faint, where it isn't drawn (noteBlocks.ts says where it is).
       else if (n.name === "Image") {
         faint(n.from, n.to);
         return false;

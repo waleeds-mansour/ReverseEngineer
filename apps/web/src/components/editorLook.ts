@@ -1,5 +1,6 @@
-// How the note editor looks: markdown drawn as what it means (notes/preview.ts says where), the
-// selection toolbar and the @ and / menus, in Nook's colours for light and dark.
+// How the note editor looks: markdown drawn as what it means (notes/preview.ts says where), its
+// pictures, tables and link cards, the selection toolbar and the @ and / menus, in Nook's colours
+// for light and dark.
 
 import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
@@ -48,6 +49,79 @@ const look = EditorView.theme({
     verticalAlign: "middle",
     borderTop: "1px solid var(--color-line)",
   },
+  ".cm-md-table": { fontFamily: "var(--font-mono)", fontSize: "0.9em" },
+  // Pictures, tables and link cards (notes/blocks.ts), set in where a line's words start, as
+  // CodeMirror pads lines but not blocks. Beside one is its line, to edit.
+  ".cm-note-picture": { display: "block", padding: "4px 2px 4px 6px", cursor: "text" },
+  ".cm-note-picture img": {
+    display: "block",
+    maxWidth: "100%",
+    maxHeight: "36rem",
+    height: "auto",
+    borderRadius: "6px",
+    border: "1px solid var(--color-line)",
+    cursor: "zoom-in",
+  },
+  ".cm-note-picture-inline": { display: "inline-block", padding: "0", verticalAlign: "bottom" },
+  ".cm-note-picture-inline img": { display: "inline-block", maxHeight: "12rem" },
+  ".cm-note-picture-gone": { color: "var(--color-faint)", fontStyle: "italic" },
+  ".cm-note-adding": {
+    color: "var(--color-muted)",
+    backgroundColor: "var(--color-sunk)",
+    borderRadius: "4px",
+    padding: "1px 6px",
+  },
+  ".cm-note-grid": { padding: "6px 2px 6px 6px", overflowX: "auto", cursor: "text" },
+  ".cm-note-grid table": { borderCollapse: "collapse" },
+  ".cm-note-grid th, .cm-note-grid td": {
+    border: "1px solid var(--color-line)",
+    padding: "4px 10px",
+    minWidth: "5em",
+    textAlign: "left",
+    verticalAlign: "top",
+    whiteSpace: "pre-wrap",
+    cursor: "text",
+  },
+  ".cm-note-grid th": { backgroundColor: "var(--color-sunk)", fontWeight: "600" },
+  ".cm-note-card-line": { padding: "4px 2px 4px 6px", cursor: "text" },
+  ".cm-note-card": {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "10px",
+    maxWidth: "100%",
+    padding: "8px 14px 8px 8px",
+    border: "1px solid var(--color-line)",
+    borderRadius: "8px",
+    backgroundColor: "var(--color-panel)",
+    color: "var(--color-ink)",
+    textDecoration: "none",
+    cursor: "pointer",
+  },
+  ".cm-note-card:hover": { backgroundColor: "var(--color-sunk)" },
+  ".cm-note-card-icon": {
+    display: "inline-flex",
+    flexShrink: "0",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "32px",
+    height: "32px",
+    borderRadius: "6px",
+    backgroundColor: "var(--color-sunk)",
+    color: "var(--color-muted)",
+  },
+  ".cm-note-card-words": {
+    display: "flex",
+    flexDirection: "column",
+    minWidth: "0",
+    lineHeight: "1.35",
+  },
+  ".cm-note-card-title": {
+    fontWeight: "600",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  ".cm-note-card-site": { fontSize: "0.85em", color: "var(--color-muted)" },
   // The @ popup, in Nook's colors rather than CodeMirror's light grey.
   ".cm-tooltip": {
     backgroundColor: "var(--color-panel)",

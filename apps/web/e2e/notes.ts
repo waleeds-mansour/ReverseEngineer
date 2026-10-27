@@ -1,7 +1,8 @@
 // Smoke steps for writing a note the way a person does (Notes, live markdown), run from smoke.ts:
 // the / menu makes a heading and a checklist, double-clicking a word and the bar's Bold make it
 // bold, Ctrl+I italic, and the marks hide once you're off their line. The Markdown button shows
-// them again, and what's saved is plain markdown.
+// them again, and what's saved is plain markdown. A pasted picture shows in the note, a table made
+// with /table and filled in with Tab and Enter is a grid, and a line that's a link is a card.
 import type { Page } from "playwright";
 
 interface Smoke {
@@ -118,5 +119,88 @@ export async function noteSteps({ step, keys, base, tag }: Smoke) {
       await markdown.click();
       await editor.getByText("**flights**").waitFor({ state: "detached" });
     },
+  );
+
+  await step(
+    "a pasted picture, a table filled in with Tab and Enter, and a link card, kept after a reload",
+    async (p) => {
+      await p.goto(`${base}/notes`);
+      await p.getByRole("button", { name: "New note" }).click();
+      const title = p.locator("input[placeholder=Untitled]");
+      await title.fill(`Beach ${tag}`);
+      await title.press("Enter");
+      const editor = p.locator(".cm-content");
+      await editor.click();
+      await p.keyboard.type("Beach day");
+      await keys("Enter");
+      await pastePicture(p);
+      // Nothing's in the note until Nook has it; then the picture, drawn, under the caret's line.
+      await pictureShows(p);
+      await p.keyboard.type("/table");
+      await p.locator(".cm-tooltip-autocomplete li", { hasText: "Table" }).click();
+      await p.keyboard.type("Item");
+      await keys("Tab");
+      await p.keyboard.type("Qty");
+      await keys("Tab");
+      await p.keyboard.type("towels");
+      await keys("Tab");
+      await p.keyboard.type("2");
+      await keys("Enter");
+      await p.keyboard.type("sunscreen");
+      await keys("Tab");
+      await p.keyboard.type("1");
+      // Enter adds a row; Enter on that empty row leaves the table.
+      await keys("Enter", "Enter");
+      await p.keyboard.type("https://example.com");
+      await title.click();
+      const grid = editor.locator(".cm-note-grid");
+      await grid.locator("td", { hasText: "sunscreen" }).waitFor();
+      await editor.locator(".cm-note-card", { hasText: "example.com" }).waitFor();
+      // A click on a cell puts the caret in it, to edit; off the table it's a grid again.
+      await grid.locator("td", { hasText: "2" }).click();
+      await editor.locator(".cm-md-table").first().waitFor();
+      await p.keyboard.type("0");
+      await title.click();
+      await grid.locator("td", { hasText: "20" }).waitFor();
+      const body = await savedBody(p, [
+        "Beach day",
+        "| Item | Qty |",
+        "| --- | --- |",
+        "| towels | 20 |",
+        "| sunscreen | 1 |",
+        "https://example.com",
+      ]);
+      if (!/^!\[Pasted image [^\]]+\]\(\/api\/files\/[0-9a-f-]{36}\)$/m.test(body))
+        throw new Error(`no picture in the note: ${body}`);
+      await p.reload();
+      await editor.locator(".cm-note-grid td", { hasText: "towels" }).waitFor();
+      await editor.locator(".cm-note-card", { hasText: "example.com" }).waitFor();
+      await pictureShows(p);
+    },
+  );
+}
+
+/** Pastes a small picture into the note, as a screenshot is pasted. */
+const pastePicture = (p: Page) =>
+  p.evaluate(`(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 160;
+    canvas.height = 90;
+    const g = canvas.getContext("2d");
+    g.fillStyle = "#3b82f6";
+    g.fillRect(0, 0, 160, 90);
+    const blob = await new Promise((done) => canvas.toBlob(done, "image/png"));
+    const data = new DataTransfer();
+    data.items.add(new File([blob], "image.png", { type: "image/png" }));
+    const paste = new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true });
+    document.querySelector(".cm-content").dispatchEvent(paste);
+  })()`);
+
+/** The note shows a picture kept in Nook, loaded. */
+async function pictureShows(p: Page) {
+  const img = p.locator(".cm-note-picture img");
+  await img.waitFor();
+  await p.waitForFunction(
+    `(() => { const i = document.querySelector(".cm-note-picture img"); return i && i.complete && i.naturalWidth === 160; })()`,
   );
 }
