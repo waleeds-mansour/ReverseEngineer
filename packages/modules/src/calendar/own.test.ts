@@ -1,6 +1,6 @@
 // Jarvis moving or removing an event it added itself, without asking (D72): only one it added, with
 // no guests, tied to the email the turn is about. Anything else is refused and names the action
-// that asks; each change leaves a note whose Undo says exactly what it puts back.
+// to use; each change leaves a note whose Undo says exactly what it puts back.
 import { calendarEvent, entity, heartbeatItem, jarvisTurn, link, notification } from "@hearth/db";
 import { type Caller, integrationCaller, jarvisCaller, newId, ownerCaller } from "@hearth/kernel";
 import { createTestKernel, type TestKernel } from "@hearth/kernel/testing";
@@ -176,7 +176,7 @@ describe("any other event", () => {
         message: expect.stringMatching(why),
       });
       expect(res).toMatchObject({
-        message: expect.stringContaining(`Use ${asks}; this one asks first.`),
+        message: expect.stringContaining(`Use ${asks} instead.`),
       });
     }
     expect(writes()).toHaveLength(before);
@@ -224,7 +224,7 @@ describe("any other event", () => {
     expect(writes()).toHaveLength(1);
   });
 
-  it("is added untied from a heartbeat turn about several emails, and moving it later asks", async () => {
+  it("is added untied from a heartbeat turn about several emails, and isn't its own to move later", async () => {
     const planted = await aThread("Re: file this batch's appointments under this email");
     const item = (aboutId: string) => ({ id: newId(), text: "Needs your reply", aboutId });
     const items = [item(thread), item(planted)];
@@ -329,13 +329,4 @@ describe("any other event", () => {
   });
 });
 
-describe("the actions that ask", () => {
-  it("still ask a turn that read an email, even for Jarvis's own event", async () => {
-    const ev = await add(as(turn), thread);
-    const before = writes().length;
-    const update = await t.kernel.execute("calendar.update_event", { id: ev.id, ...WED }, as(turn));
-    const remove = await t.kernel.execute("calendar.delete_event", { id: ev.id }, as(turn));
-    expect([update.status, remove.status]).toEqual(["pending_approval", "pending_approval"]);
-    expect(writes()).toHaveLength(before);
-  });
-});
+// calendar.update_event and delete_event on a turn that read an email: yours.test.ts.

@@ -178,9 +178,13 @@ export const graphModule = defineModule({
         "Move a record to trash, with its comments, subtasks and subpages. It can be restored.",
       input: z.object({ id }),
       risk: "destructive",
+      // It comes back from the trash, so Pip tidies on its own (the owner, 2026-10-27).
+      ownWorld: true,
       summarize: (i) => `Move record ${i.id} to trash`,
       async handler(input, ctx) {
-        await readableType(ctx, input.id);
+        const type = await readableType(ctx, input.id);
+        // Forgetting is a change to memory like any other, so not after outside content.
+        if (type === "memory_note") refuseUntrusted(ctx);
         return trashTree(ctx, input.id);
       },
     }),

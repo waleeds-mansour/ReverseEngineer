@@ -128,10 +128,10 @@ describe("Google Calendar", () => {
     // Nobody is invited, whatever the call carried.
     const posted = g.calls.filter((c) => c.method === "POST").at(-1);
     expect(JSON.stringify(posted?.body)).not.toContain("elsewhere");
-    // Moving or removing it still asks.
+    // Removing it is Pip's to do too, with a note you can undo (2026-10-27).
     const id = dentist.status === "ok" ? dentist.result.id : "";
     const gone = await h.kernel.execute("calendar.delete_event", { id }, fromMail);
-    expect(gone.status).toBe("pending_approval");
+    expect(gone.status).toBe("ok");
     // A shared calendar would show it to other people.
     const team = await h.kernel.execute(
       "calendar.create_event",

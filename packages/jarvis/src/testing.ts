@@ -1,13 +1,43 @@
 // A harness that runs the whole spine (scheduler, reflex engine, turn runner) against a test
 // database with a scripted brain and a manual clock.
-import { type HearthModule, runDueSchedules } from "@hearth/kernel";
+import { entity } from "@hearth/db";
+import { defineAction, defineModule, type HearthModule, runDueSchedules } from "@hearth/kernel";
 import { createTestKernel, type TestKernel } from "@hearth/kernel/testing";
 import { ALL_MODULES } from "@hearth/modules";
+import { eq } from "drizzle-orm";
+import { z } from "zod";
 import type { Brain } from "./brain.ts";
 import { ScriptedBrain } from "./brains/scripted.ts";
 import { ReflexEngine } from "./engine.ts";
 import { type RunnerOptions, TurnRunner } from "./runner.ts";
 import { registerRoutines } from "./service.ts";
+
+/**
+ * Something hard to undo that isn't the trash, for tests of what still waits for your yes: Pip
+ * trashes on its own since 2026-10-27. Its tool is probe_purge; here it only hides the record.
+ */
+export const purgeModule = defineModule({
+  name: "probe",
+  description: "Test module",
+  entityTypes: [],
+  events: [],
+  knowledge: {},
+  reflexes: [],
+  noReflexesBecause: "test module",
+  actions: [
+    defineAction({
+      name: "probe.purge",
+      description: "Delete a record for good.",
+      input: z.object({ id: z.string() }),
+      risk: "destructive",
+      summarize: (i) => `Delete ${i.id} for good`,
+      async handler(i, ctx) {
+        await ctx.tx.update(entity).set({ deletedAt: ctx.now }).where(eq(entity.id, i.id));
+        return { purged: i.id };
+      },
+    }),
+  ],
+});
 
 export interface JarvisHarness extends TestKernel {
   brain: ScriptedBrain;

@@ -77,14 +77,27 @@ export function roleHold(name: string, ceiling: Risk): Hold {
 
 /** The first hold a call breaks, if any. */
 function heldBy(
-  action: Pick<ActionDef, "risk" | "reports">,
+  action: Pick<ActionDef, "risk" | "reports" | "ownWorld">,
   caller: Caller,
   holds: readonly Hold[],
 ): Hold | undefined {
   if (action.reports) return undefined;
-  return holds.find(
-    (h) => REACH[action.risk] > REACH[h.risk] || (h.asks === true && Boolean(caller.askFirst)),
-  );
+  // What goes to the trash comes back, so to a job it reaches no further than your own accounts.
+  const reach = action.ownWorld
+    ? Math.min(REACH[action.risk], REACH.self_external)
+    : REACH[action.risk];
+  return holds.find((h) => reach > REACH[h.risk] || (h.asks === true && Boolean(caller.askFirst)));
+}
+
+/**
+ * Whether Pip's call to this waits for your yes unless you've said otherwise: what reaches other
+ * people, what's hard to undo, and changing code (the owner, 2026-10-27). Everything else that
+ * stays in your own world it does on its own. Its tools say so.
+ */
+export function asksPip(action: Pick<ActionDef, "risk" | "ownWorld" | "changesCode">): boolean {
+  if (action.changesCode) return true;
+  if (action.ownWorld) return false;
+  return action.risk === "outward" || action.risk === "destructive";
 }
 
 /**
@@ -93,7 +106,7 @@ function heldBy(
  * `holds` cap Pip's call: background work while read-only, and its turn's job (guard.ts).
  */
 export function decide(
-  action: Pick<ActionDef, "risk" | "callers" | "reports">,
+  action: Pick<ActionDef, "risk" | "callers" | "reports" | "ownWorld" | "changesCode">,
   caller: Caller,
   standingRule: boolean,
   holds: readonly Hold[] = [],
@@ -121,7 +134,13 @@ export function decide(
       if (held) return deny(held.reason);
       if (caller.askFirst) return ask(caller.askFirst);
       const untrusted = caller.origin === "untrusted";
+      // Changing code waits for your yes, whatever it reaches; your own rule for it is yours.
+      if (action.changesCode)
+        return standingRule && !untrusted ? allow : ask("This changes code, so it needs your yes.");
       if (risk === "read" || risk === "internal") return allow;
+      // Your own things that can be put back (your calendar with no guests, the trash): Pip does
+      // them on its own, even after outside content (the owner, 2026-10-27).
+      if (action.ownWorld && (risk === "self_external" || risk === "destructive")) return allow;
       if (risk === "self_external") {
         return untrusted
           ? ask("Triggered by outside content, and it changes your own account.")

@@ -4,6 +4,7 @@ import { asUntrusted, formatDateTime, type Origin, type Risk, type SiteRules } f
 import { entity, type TurnMode } from "@hearth/db";
 import {
   type ActionDef,
+  asksPip,
   type Caller,
   holdsOutside,
   isOutsideRecord,
@@ -121,7 +122,7 @@ export function buildTools(kernel: Kernel, state: TurnState, log: LogFn): BrainT
   const tools: BrainTool[] = [];
   for (const def of kernel.registry.allActions()) {
     if (!isVisibleTo(def, "agent") || !(def.input instanceof z.ZodObject)) continue;
-    const needsYes = def.risk === "outward" || def.risk === "destructive";
+    const needsYes = asksPip(def);
     tools.push({
       name: toolName(def.name),
       description: needsYes

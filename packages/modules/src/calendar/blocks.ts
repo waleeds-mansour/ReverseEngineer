@@ -131,6 +131,8 @@ export const blockAction = defineAction({
     "Give a big task time on the owner's calendar before it's due (or remove its blocks if it's done). Uses free working hours only.",
   input: z.object({ taskId: id }),
   risk: "self_external",
+  // Its blocks have no guests: Pip plans them on its own, whatever started it (2026-10-27).
+  ownWorld: true,
   handler: (i, ctx) => blockTask(ctx, i.taskId),
 });
 

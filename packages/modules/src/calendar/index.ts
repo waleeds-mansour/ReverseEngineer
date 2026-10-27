@@ -32,6 +32,7 @@ import { meetingSoon } from "./soon.ts";
 import { guests, loadEvent, NOT_PLANS, toEventView, whenText } from "./store.ts";
 import { syncCalendars } from "./sync.ts";
 import { undoAction } from "./undo.ts";
+import { yourEventActions } from "./yours.ts";
 
 const DAY_MS = 24 * 3600_000;
 
@@ -228,6 +229,7 @@ export const calendarModule = defineModule({
     }),
     disconnectAction,
     ...calendarWriteActions,
+    ...yourEventActions,
     ...ownEventActions,
     ...meetingActions,
     respondAction,

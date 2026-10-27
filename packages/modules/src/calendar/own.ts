@@ -1,7 +1,7 @@
 // Jarvis moving or removing an event it added itself, without asking (D72): only one it added, with
 // no guests, tied to the email or conversation this turn is about (create_event's threadId). Each
-// handler checks all three as it runs; any other event is calendar.update_event or delete_event,
-// which ask. Each change leaves an FYI you can undo.
+// handler checks all three as it runs; any other event is calendar.update_event or delete_event
+// (yours.ts). Each change leaves an FYI you can undo.
 import { PRINCIPAL } from "@hearth/core";
 import { entity, link } from "@hearth/db";
 import { type ActionContext, ActionError, defineAction, getSetting } from "@hearth/kernel";
@@ -18,10 +18,9 @@ import { shortWhen, tellDone, timesOf } from "./undo.ts";
 const why = (did: string) =>
   `Pip added it from the conversation it was working on, so it ${did} it without asking.`;
 
-/** The event, if Jarvis may change it unasked; otherwise why not, and the action that asks. */
+/** The event, if Jarvis may change it as its own; otherwise why not, and the action to use. */
 async function ownEvent(ctx: ActionContext, eventId: string, asks: string): Promise<EventView> {
-  const refuse = (why: string) =>
-    new ActionError("forbidden", `${why} Use ${asks}; this one asks first.`);
+  const refuse = (why: string) => new ActionError("forbidden", `${why} Use ${asks} instead.`);
   const ev = await loadEvent(ctx.tx, eventId);
   if (!ev || ev.status === "cancelled") throw new ActionError("not_found", "Event not found");
   const [made] = await ctx.tx
@@ -66,7 +65,7 @@ export const ownEventActions = [
   defineAction({
     name: "calendar.move_own_event",
     description:
-      "Move an event you added yourself (calendar_create_event with threadId) from this same email or conversation, when it gives a new time: without asking. It has no guests. For any other event this is refused: use calendar_update_event, which asks the owner first.",
+      "Move an event you added yourself (calendar_create_event with threadId) from this same email or conversation, when it gives a new time: without asking. It has no guests. For any other event this is refused: use calendar_update_event.",
     input: z.object({ id, start: fields.start, end: fields.end }),
     risk: "internal",
     callers: ["agent"],
@@ -93,7 +92,7 @@ export const ownEventActions = [
   defineAction({
     name: "calendar.remove_own_event",
     description:
-      "Remove an event you added yourself (calendar_create_event with threadId) from this same email or conversation, when it's called off: without asking. It has no guests. For any other event this is refused: use calendar_delete_event, which asks the owner first.",
+      "Remove an event you added yourself (calendar_create_event with threadId) from this same email or conversation, when it's called off: without asking. It has no guests. For any other event this is refused: use calendar_delete_event.",
     input: z.object({ id }),
     risk: "internal",
     callers: ["agent"],

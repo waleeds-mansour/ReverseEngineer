@@ -20,9 +20,11 @@ async function ok<T>(name: string, input: unknown): Promise<T> {
   return r.result as T;
 }
 
-async function askToTrash() {
-  const task = await ok<{ id: string }>("task.create", { title: "Old errand" });
-  const asked = await run("entity.trash", { id: task.id }, jarvisCaller("owner"));
+/** A card Pip waits on: whose an address is, after reading an email (Pip trashes on its own now). */
+async function askFirst() {
+  const ana = await ok<{ id: string }>("person.create", { name: "Ana" });
+  const input = { id: ana.id, email: "ana@friends.example" };
+  const asked = await run("person.add_email", input, jarvisCaller("untrusted"));
   if (asked.status !== "pending_approval") throw new Error(JSON.stringify(asked));
   const [card] = await t.tdb.db
     .select()
@@ -33,7 +35,7 @@ async function askToTrash() {
 
 describe("approval cards in the inbox", () => {
   it("can't be marked done or snoozed while they wait, only seen", async () => {
-    const { approvalId, card } = await askToTrash();
+    const { approvalId, card } = await askFirst();
     const { id: otherId } = await ok<{ id: string }>("inbox.notify", { title: "Just so you know" });
 
     const marked = await run("inbox.mark", { ids: [card.id, otherId], state: "done" });
