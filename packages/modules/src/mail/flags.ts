@@ -5,6 +5,7 @@ import {
   type DbOrTx,
   entity,
   type MailAddress,
+  type MailBundle,
   type MailLane,
   mailAccount,
   mailMessage,
@@ -12,8 +13,9 @@ import {
   mailThread,
 } from "@hearth/db";
 import { type ActionContext, newId, updateEntity } from "@hearth/kernel";
-import { and, asc, eq, getTableColumns, inArray } from "drizzle-orm";
+import { and, asc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { personFor } from "../people/store.ts";
+import { bundleFor } from "./bundle-sort.ts";
 import { once } from "./copies.ts";
 import { accountAddresses, addressKey, toAnyOf, yourAddresses } from "./mine.ts";
 import { type MailProvider, MailProviderError } from "./provider.ts";
@@ -128,6 +130,11 @@ export async function recomputeThread(ctx: ActionContext, threadId: string): Pro
   // The conversation is named by its first message, whichever arrived first.
   await updateEntity(ctx, threadId, { title: msgs[0]!.subject }).catch(() => {});
   const known = !last.outbound && Boolean(await personFor(ctx.tx, last.fromAddress.toLowerCase()));
+  // Sorted again with each change (bundle-sort.ts), unless it was moved by hand: checked again as
+  // it's written, so a move made meanwhile stands.
+  const sorted = thread?.bundleMoved
+    ? null
+    : await bundleFor(ctx.tx, shown, row?.me ?? "", lane === "noise");
   await ctx.tx
     .update(mailThread)
     .set({
@@ -144,6 +151,9 @@ export async function recomputeThread(ctx: ActionContext, threadId: string): Pro
       lane,
       waiting: said || !row ? null : await waitingFor(ctx.tx, last, row.me, lane, known),
       waitingSince: last.sentAt,
+      ...(sorted && {
+        bundle: sql<MailBundle>`CASE WHEN ${mailThread.bundleMoved} THEN ${mailThread.bundle} ELSE ${sorted}::text END`,
+      }),
     })
     .where(eq(mailThread.entityId, threadId));
 }

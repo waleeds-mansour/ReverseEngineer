@@ -6,6 +6,7 @@ import { googleAccount, mailAccount, mailQuarantine } from "@hearth/db";
 import { type ActionContext, ActionError, savepoint } from "@hearth/kernel";
 import { and, arrayContains, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import { SCOPES } from "../google/client.ts";
+import { sortSome } from "./bundle-sort.ts";
 import { pushFlags } from "./flags.ts";
 import type { MailProvider } from "./provider.ts";
 import { providerFor } from "./providers.ts";
@@ -115,6 +116,12 @@ export async function syncAccount(
     work = { ...none, progressed: false, stopped: err };
   }
   const outcome = await recordOutcome(ctx, fresh, work);
+  // Conversations from before bundles (0058) are sorted a batch a round. It never holds up mail;
+  // a failure is said in the log, once a round, and tried again next round.
+  await savepoint(ctx, (sp) => sortSome(sp, fresh)).catch((err: unknown) => {
+    console.warn(`[mail] sorting ${fresh.id} into bundles failed: ${String(err)}`);
+    return 0;
+  });
   // A quiet round looks for originals missing from this PC (6.6). It never holds up mail.
   if (outcome.status === "ok" && !outcome.more)
     await savepoint(ctx, (sp) => repairSome(sp, provider, fresh)).catch(() => 0);

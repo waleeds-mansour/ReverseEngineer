@@ -1,10 +1,12 @@
 // One email conversation: its messages (mail/Message.tsx), drafts of replies, and what you can do
 // with it. Archiving it on a computer moves on to the next conversation in the list it was opened
-// from; on a phone it goes back to the list. t makes a task that links back to it.
+// from; on a phone it goes back to the list. t makes a task that links back to it. Its header says
+// which bundle it's in, and its menu moves it to another or lets the rules sort it again.
 
 import { createSignal, For, Show, useContext } from "solid-js";
 import { ActionBar } from "../components/ActionBar.tsx";
 import { Backlinks } from "../components/Backlinks.tsx";
+import { Overflow } from "../components/Menu.tsx";
 import { Button, PaneContext, PaneHeader, Placeholder } from "../components/ui.tsx";
 import { useHotkeys } from "../lib/hotkeys.ts";
 import { toast } from "../lib/live.ts";
@@ -12,12 +14,18 @@ import { archive, makeTask, nextInList, reply as replyTo, showThread } from "../
 import { narrow } from "../lib/narrow.ts";
 import { layout } from "../lib/panes.ts";
 import { act, useAction } from "../lib/query.ts";
-import type { MailDraft, MailMessage, MailThreadView } from "../lib/types.ts";
+import type { BundledThread, MailDraft, MailMessage, MailThreadView } from "../lib/types.ts";
 import { Composer } from "./MailCompose.tsx";
+import { BUNDLE_LOOK, moveItems } from "./mail/bundleLook.ts";
 import { Message } from "./mail/Message.tsx";
 
 export function MailThreadPane(props: { id: string; pane: number }) {
-  const t = useAction<MailThreadView>("mail.thread", () => ({ id: props.id }));
+  const t = useAction<MailThreadView & Pick<BundledThread, "bundle" | "bundleMoved">>(
+    "mail.thread",
+    () => ({
+      id: props.id,
+    }),
+  );
   // Asked for alongside the conversation, not after it. The id opened is almost always the
   // conversation's own; when it's one of its messages', this asks again once that's known.
   const drafts = useAction<MailDraft[]>("mail.drafts", () => ({
@@ -70,7 +78,7 @@ export function MailThreadPane(props: { id: string; pane: number }) {
         <div class="flex h-full flex-col">
           <PaneHeader
             title={v().subject}
-            sub={`${v().account} · ${v().messageCount} message${v().messageCount === 1 ? "" : "s"} · ${v().lane === "noise" ? "Noise" : "Signal"}${v().waiting === "you" ? " · needs your reply" : v().waiting === "them" ? " · waiting on them" : ""}`}
+            sub={`${v().account} · ${v().messageCount} message${v().messageCount === 1 ? "" : "s"} · ${BUNDLE_LOOK[v().bundle].name}${v().waiting === "you" ? " · needs your reply" : v().waiting === "them" ? " · waiting on them" : ""}`}
           >
             <Button size="sm" onClick={archiveOrBack}>
               {v().inInbox ? "Archive" : "Move to inbox"}
@@ -95,6 +103,7 @@ export function MailThreadPane(props: { id: string; pane: number }) {
                 No reply needed
               </Button>
             </Show>
+            <Overflow label="Move to another bundle" items={moveItems(v())} />
           </PaneHeader>
           <div class="flex-1 space-y-3 overflow-auto px-5 py-4">
             <For each={v().messages}>

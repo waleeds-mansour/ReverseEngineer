@@ -16,6 +16,8 @@ const SAID: Record<string, Said> = {
   "mail.star": ["Starring mail", "Starred mail"],
   "mail.no_reply": ["Marking mail as needing no reply", "Marked mail as needing no reply"],
   "mail.set_lane": ["Sorting a sender's mail", "Sorted a sender's mail"],
+  "mail.bundles": ["Looking over your inbox", "Looked over your inbox"],
+  "mail.set_bundle": ["Moving an email to another bundle", "Moved an email to another bundle"],
   "calendar.events": ["Checking your calendar", "Checked your calendar"],
   "calendar.get": ["Looking at an event", "Looked at an event"],
   "calendar.free_time": ["Finding free time", "Found free time"],

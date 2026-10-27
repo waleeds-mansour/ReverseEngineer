@@ -67,7 +67,7 @@ const POLICY: [string, string[], Want][] = [
   ],
   ["reminders", ["reminder.create", "reminder.cancel"], "act"],
   [
-    "mail triage: archive, read, star, snooze, lanes",
+    "mail triage: archive, read, star, snooze, lanes, bundles",
     [
       "mail.archive",
       "mail.unarchive",
@@ -75,6 +75,7 @@ const POLICY: [string, string[], Want][] = [
       "mail.star",
       "inbox.snooze",
       "mail.set_lane",
+      "mail.set_bundle",
     ],
     "act",
   ],

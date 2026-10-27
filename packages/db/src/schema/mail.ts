@@ -1,6 +1,7 @@
 // Mail and the people it comes from (M2). Mirrors migrations/0006_mail.up.sql and
 // 0007_mail_drafts.up.sql, 0008_mail_waiting.up.sql, 0009_mail_invites.up.sql,
-// 0022_google_pacing.up.sql, 0032_integrations.up.sql and 0034_mail_drafted.up.sql.
+// 0022_google_pacing.up.sql, 0032_integrations.up.sql, 0034_mail_drafted.up.sql and
+// 0058_mail_bundles.up.sql.
 import { sql } from "drizzle-orm";
 import {
   boolean,
@@ -88,6 +89,9 @@ export interface MailAttachment {
 
 export type MailLane = "signal" | "noise";
 
+/** Which pile of the inbox a conversation sorts into (0058, modules' mail/bundles.ts). */
+export type MailBundle = "people" | "updates" | "receipts" | "newsletters";
+
 export const mailThread = pgTable(
   "mail_thread",
   {
@@ -114,6 +118,10 @@ export const mailThread = pgTable(
     nudgedAt: ts("nudged_at"),
     /** When Jarvis last wrote a draft in it; kept when you throw the draft away. */
     draftedAt: ts("drafted_at"),
+    /** Its bundle; null until sync sorts it, and shown with People until then (0058). */
+    bundle: text("bundle").$type<MailBundle>(),
+    /** Moved to its bundle by hand, by you or Pip: sync never sorts it again. */
+    bundleMoved: boolean("bundle_moved").notNull().default(false),
   },
   (t) => [unique().on(t.accountId, t.rootMessageId)],
 );
