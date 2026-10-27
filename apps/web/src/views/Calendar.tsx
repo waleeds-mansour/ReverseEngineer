@@ -2,13 +2,18 @@
 // its weeks starting on the day they do where you are, with focus blocks, unanswered invites and
 // "Prep ready" marked. An event opens a popover with its details, your answer and its notes; on a
 // phone the days are a list instead. The box at the top adds an event to your own calendar from a
-// line like "Dentist Fri 3pm 1h"; one with guests still goes through Pip, who asks first. Keys,
-// while Calendar's pane has focus: t today, ← and → earlier and later, d, w and m for day, week
-// and month.
+// line like "Dentist Fri 3pm 1h"; one with guests still goes through Pip, who asks first. An event
+// you can change drags to another time or day, and stretches by its bottom edge; a meeting's guests
+// would get an update, so dropping one asks first (lib/calMoves.ts). Keys, while Calendar's pane
+// has focus and nothing is being dragged: t today, ← and → earlier and later, d, w and m for day,
+// week and month.
 
 import { batch, createMemo, createSignal, Match, Show, Switch } from "solid-js";
 import { QueryView } from "../components/QueryView.tsx";
 import { Empty, Failed, PaneHeader } from "../components/ui.tsx";
+import { moveQuestion } from "../lib/calDrag.ts";
+import { holding } from "../lib/calHold.ts";
+import { createMoves } from "../lib/calMoves.ts";
 import { createToday } from "../lib/clock.ts";
 import { useHotkeys } from "../lib/hotkeys.ts";
 import { narrow } from "../lib/narrow.ts";
@@ -30,6 +35,7 @@ import {
 import { Agenda } from "./calendar/Agenda.tsx";
 import { EventPopover } from "./calendar/EventPopover.tsx";
 import { MonthGrid } from "./calendar/MonthGrid.tsx";
+import { MoveConfirm } from "./calendar/MoveConfirm.tsx";
 import { NewEvent, NoEvents, NotKept } from "./calendar/QuickAdd.tsx";
 import { TimeGrid } from "./calendar/TimeGrid.tsx";
 import { Toolbar } from "./calendar/Toolbar.tsx";
@@ -60,6 +66,9 @@ export function Calendar(props: { pane: number }) {
     to: shown().to.toISOString(),
   }));
   const plans = createMemo(() => (events.data ?? []).filter(isPlan));
+  // What's drawn: each event moved by hand where it was dropped, while Nook saves it.
+  const moves = createMoves(plans, () => events.dataUpdatedAt);
+  const drawn = moves.shown;
   const list = createMemo(() => listed(view(), shown()));
   const kept = (d: Date) => d >= syncedFrom(day()) && d < syncedUntil(day());
 
@@ -76,7 +85,9 @@ export function Calendar(props: { pane: number }) {
       setOffset(offsetFor(next, day(), at));
     });
   };
-  const focused = () => layout.focused() === props.pane;
+  // Not while an event is held: the days under it would change, and it would land where you
+  // never put it.
+  const focused = () => layout.focused() === props.pane && !holding();
   useHotkeys([
     { keys: "t", run: () => go(null), when: focused, label: "Calendar: today" },
     { keys: "arrowleft", run: () => go(-1), when: focused, label: "Calendar: earlier" },
@@ -89,7 +100,7 @@ export function Calendar(props: { pane: number }) {
   // The open event as last read, so its answers and guests stay current while it's open.
   const popover = createMemo(() => {
     const o = open();
-    const event = o && plans().find((e) => e.id === o.id);
+    const event = o && drawn().find((e) => e.id === o.id);
     return o && event ? { event, at: o.at } : undefined;
   });
   const onOpen = (e: CalEvent, el: HTMLElement) =>
@@ -124,7 +135,7 @@ export function Calendar(props: { pane: number }) {
               {() => (
                 <>
                   <Agenda
-                    events={plans()}
+                    events={drawn()}
                     from={list().from}
                     to={list().to}
                     pane={props.pane}
@@ -160,22 +171,26 @@ export function Calendar(props: { pane: number }) {
                 <MonthGrid
                   days={shown().days}
                   month={month()}
-                  events={plans()}
+                  events={drawn()}
                   today={today()}
                   kept={kept}
                   onOpen={onOpen}
                   onDay={(d) => show("day", d)}
+                  canMove={moves.can}
+                  onMove={moves.drop}
                 />
               )}
             </Match>
             <Match when={!shown().month}>
               <TimeGrid
                 days={shown().days}
-                events={plans()}
+                events={drawn()}
                 today={today()}
                 kept={kept}
                 onOpen={onOpen}
                 onDay={(d) => show("day", d)}
+                canMove={moves.can}
+                onMove={moves.drop}
               />
             </Match>
           </Switch>
@@ -183,6 +198,15 @@ export function Calendar(props: { pane: number }) {
       </Show>
       <Show when={popover()}>
         {(p) => <EventPopover event={p().event} at={p().at} pane={props.pane} onClose={close} />}
+      </Show>
+      <Show when={moves.asking()}>
+        {(a) => (
+          <MoveConfirm
+            question={moveQuestion(a().e, a().to, a().guests)}
+            at={a().at}
+            onAnswer={moves.answer}
+          />
+        )}
       </Show>
     </div>
   );

@@ -1,11 +1,14 @@
 // One event on Calendar's grid: a block in its day's column, a bar in the all-day row, or a line in
 // a month's day. Each is a button that opens the event's popover, in its calendar's colour; a focus
-// block has the task mark, and one Pip put there has Pip's.
+// block has the task mark, and one Pip put there has Pip's. One you can move has the grab cursor,
+// and a block its bottom edge to stretch; while it's held it's drawn where it would land.
 
 import { type Accessor, createMemo, For, type JSX, Show } from "solid-js";
 import { Icon } from "../../components/icons.tsx";
 import { JarvisMark } from "../../components/Mark.tsx";
-import type { Lane, Placed } from "../../lib/calLayout.ts";
+import { endsOn, spanOf } from "../../lib/calDrag.ts";
+import type { Grab, Held, TileDrag } from "../../lib/calHold.ts";
+import { type Lane, minuteOf, type Placed } from "../../lib/calLayout.ts";
 import { timeNow } from "../../lib/clock.ts";
 import { hours, time } from "../../lib/format.ts";
 import type { CalEvent } from "../../lib/types.ts";
@@ -46,14 +49,19 @@ function Tile(props: {
   class: string;
   style?: JSX.CSSProperties;
   onOpen: OpenEvent;
+  drag?: TileDrag;
+  /** Its look while it's held. */
+  held?: string | false;
   children: JSX.Element;
 }) {
+  const grab = () => (props.drag?.can ? "cursor-grab select-none" : "");
   return (
     <button
       type="button"
-      class={`min-w-0 text-left hover:shadow-2 ${props.class}`}
+      class={`min-w-0 text-left hover:shadow-2 ${props.held || grab()} ${props.class}`}
       style={{ ...evColour(props.e), ...props.style }}
       aria-label={eventLabel(props.e)}
+      onPointerDown={(ev) => props.drag?.can && props.drag.press(ev)}
       onClick={(ev) => props.onOpen(props.e, ev.currentTarget)}
     >
       {props.children}
@@ -75,54 +83,89 @@ function Marks(props: { e: CalEvent }) {
   );
 }
 
-/** A timed event in its day's column, `hour` px to an hour. Over, it's quieter. */
-export function Block(props: { placed: Placed<CalEvent>; hour: number; onOpen: OpenEvent }) {
+/** A timed event in its day's column (`day`), `hour` px to an hour. Over, it's quieter. */
+export function Block(props: {
+  placed: Placed<CalEvent>;
+  day: Date;
+  hour: number;
+  onOpen: OpenEvent;
+  drag?: TileDrag;
+  /** Where it would land, while it's held. */
+  held?: Held<Grab>;
+}) {
   const e = () => props.placed.item;
   const p = () => props.placed;
+  const h = () => props.held;
+  const start = () => h()?.start ?? new Date(e().startsAt);
+  const end = () => h()?.end ?? new Date(e().endsAt);
+  // Its bottom edge dragged: as tall as it would be, and never shorter than the column draws one.
+  const bottom = () =>
+    h()?.grab.mode === "resize" ? Math.max(minuteOf(end(), props.day), p().top + 20) : p().bottom;
   const px = (minutes: number) => (minutes / 60) * props.hour;
-  const tall = () => px(p().bottom - p().top) >= 34;
+  const tall = () => px(bottom() - p().top) >= 34;
   const over = () => Date.parse(e().endsAt) <= timeNow().getTime();
   const meta = () =>
-    [hours(new Date(e().startsAt), new Date(e().endsAt)), e().prepId ? "Prep ready" : null]
-      .filter(Boolean)
-      .join(" · ");
+    [hours(start(), end()), e().prepId ? "Prep ready" : null].filter(Boolean).join(" · ");
+  const lifted = () =>
+    h() && `z-5 shadow-3 ${h()?.grab.mode === "resize" ? "cursor-ns-resize" : "cursor-grabbing"}`;
   return (
     <Tile
       e={e()}
-      class={`absolute overflow-hidden rounded-sm px-1.5 py-0.5 text-meta ${tint(e())} ${over() ? "opacity-70" : ""}`}
+      class={`absolute overflow-hidden rounded-sm px-1.5 py-0.5 text-meta ${tint(e())} ${over() && !h() ? "opacity-70" : ""}`}
       style={{
         top: `${px(p().top) + 1}px`,
-        height: `${px(p().bottom - p().top) - 2}px`,
+        height: `${px(bottom() - p().top) - 2}px`,
         left: `calc(${(p().col / p().cols) * 100}% + 2px)`,
         width: `calc(${(p().span / p().cols) * 100}% - 4px)`,
+        ...(h() ? { transform: `translate(${h()?.dx}px, ${h()?.dy}px)` } : {}),
       }}
       onOpen={props.onOpen}
+      drag={props.drag}
+      held={lifted()}
     >
       <span class="flex min-w-0 items-center gap-1 font-medium">
         <Marks e={e()} />
         <span class="truncate">
           {e().title}
           <Show when={!tall()}>
-            <span class="font-normal text-muted">, {time(new Date(e().startsAt))}</span>
+            <span class="font-normal text-muted">, {time(start())}</span>
           </Show>
         </span>
       </span>
       <Show when={tall()}>
         <span class="block truncate text-muted">{meta()}</span>
       </Show>
+      <Show when={props.drag?.can && endsOn(spanOf(e()), props.day)}>
+        <span
+          data-resize
+          aria-hidden="true"
+          class="absolute inset-x-0 bottom-0 h-1.5 cursor-ns-resize"
+        />
+      </Show>
     </Tile>
   );
 }
 
 /** An all-day event in the row above the hours, across its days; cut square where it runs on. */
-export function AllDayBar(props: { lane: Lane<CalEvent>; onOpen: OpenEvent }) {
+export function AllDayBar(props: {
+  lane: Lane<CalEvent>;
+  onOpen: OpenEvent;
+  drag?: TileDrag;
+  held?: Held<Grab>;
+}) {
   const l = () => props.lane;
   return (
     <Tile
       e={l().item}
       class={`mx-0.5 flex items-center gap-1 rounded-sm px-1.5 text-meta font-medium ${tint(l().item)} ${l().before ? "ml-0 rounded-l-none" : ""} ${l().after ? "mr-0 rounded-r-none" : ""}`}
-      style={{ "grid-column": `${l().col + 1} / span ${l().span}`, "grid-row": `${l().lane + 1}` }}
+      style={{
+        "grid-column": `${l().col + 1} / span ${l().span}`,
+        "grid-row": `${l().lane + 1}`,
+        ...(props.held ? { transform: `translateX(${props.held.dx}px)` } : {}),
+      }}
       onOpen={props.onOpen}
+      drag={props.drag}
+      held={props.held && "z-5 shadow-3 cursor-grabbing"}
     >
       <Marks e={l().item} />
       <span class="truncate">{l().item.title}</span>
@@ -131,7 +174,14 @@ export function AllDayBar(props: { lane: Lane<CalEvent>; onOpen: OpenEvent }) {
 }
 
 /** An event in a month's day: a bar for an all-day one, else a dot, its time and its name. */
-export function MonthItem(props: { e: CalEvent; long: boolean; onOpen: OpenEvent }) {
+export function MonthItem(props: {
+  e: CalEvent;
+  long: boolean;
+  onOpen: OpenEvent;
+  drag?: TileDrag;
+  /** It's being dragged to another day: it stays here, faded, till it's dropped. */
+  held?: boolean;
+}) {
   const e = () => props.e;
   const look = () =>
     props.long
@@ -142,6 +192,8 @@ export function MonthItem(props: { e: CalEvent; long: boolean; onOpen: OpenEvent
       e={e()}
       class={`flex shrink-0 items-center gap-1 rounded-sm px-1 text-micro leading-4 ${look()}`}
       onOpen={props.onOpen}
+      drag={props.drag}
+      held={props.held && "cursor-grabbing opacity-50"}
     >
       <Show when={!props.long}>
         <span aria-hidden="true" class="size-1.5 shrink-0 rounded-full bg-[var(--ev)]" />
