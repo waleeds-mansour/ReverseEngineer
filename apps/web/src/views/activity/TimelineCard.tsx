@@ -1,7 +1,8 @@
 // One card of What Pip did: what set Pip off, each action it ran with how far it reaches and how
-// it went, the approvals it asked for and your answers, what it made or changed, the heartbeat
-// items it took up, and its reply. Its heading opens the conversation; a record opens itself; an
-// approval still waiting opens its card in Updates (lib/inbox.ts).
+// it went, the approvals it asked for and your answers, what it did without asking with its Undo
+// (the same Undo Today shows), what else it made or changed, the heartbeat items it took up, and
+// its reply. Its heading opens the conversation; a record opens itself; an approval still waiting
+// opens its card in Updates (lib/inbox.ts).
 
 import { For, Show } from "solid-js";
 import { OutsideMark } from "../../components/OutsideMark.tsx";
@@ -21,6 +22,7 @@ import type { PaneRoute } from "../../lib/panes.ts";
 import { routeFor } from "../../lib/panes.ts";
 import type { Tone } from "../../lib/status.ts";
 import { plainReply, turnResult } from "../../lib/turns.ts";
+import { UndoAct } from "./UndoAct.tsx";
 
 const SUB = "mt-2 text-meta font-medium text-muted";
 
@@ -45,6 +47,11 @@ export function TimelineCard(props: {
   const reply = () => {
     const t = turn();
     return t ? (t.reply ?? t.skipReason ?? t.error) : null;
+  };
+  // A record with an Undo row opens from there, so it isn't listed twice.
+  const touched = () => {
+    const undoable = new Set(g().undos.map((u) => u.entityId));
+    return g().touched.filter((r) => !undoable.has(r.id));
   };
   const open = (beside: boolean) => {
     const t = turn();
@@ -130,10 +137,36 @@ export function TimelineCard(props: {
           </For>
         </ul>
       </Show>
-      <Show when={g().touched.length > 0}>
+      <Show when={g().undos.length > 0}>
+        <p class={SUB}>Without asking</p>
+        <ul class="mt-0.5 space-y-1">
+          <For each={g().undos}>
+            {(u) => (
+              <li class="flex flex-wrap items-center gap-2 text-sm">
+                <span class="min-w-0 flex-1" classList={{ "text-muted": u.undone }}>
+                  <Show when={u.entityId && u.entityType} fallback={u.did}>
+                    <TextButton
+                      alone
+                      class="text-left text-ink"
+                      onClick={(e) => props.go(routeFor(u.entityType!, u.entityId!), e.shiftKey)}
+                    >
+                      {u.did}
+                    </TextButton>
+                  </Show>
+                </span>
+                <Show when={u.outside}>
+                  <OutsideMark>Outside content</OutsideMark>
+                </Show>
+                <UndoAct undo={u} />
+              </li>
+            )}
+          </For>
+        </ul>
+      </Show>
+      <Show when={touched().length > 0}>
         <p class={SUB}>Touched</p>
         <ul class="mt-0.5 flex flex-wrap gap-x-3 gap-y-1 text-sm">
-          <For each={g().touched}>
+          <For each={touched()}>
             {(r) => (
               <li class="min-w-0">
                 <span class="text-muted">{touchedHow(r.how)} </span>

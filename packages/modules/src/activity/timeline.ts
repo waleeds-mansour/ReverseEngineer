@@ -21,6 +21,8 @@ import {
   type TurnRow,
   turnOf,
 } from "./shape.ts";
+import { undidGroups } from "./undo.ts";
+import { shown, undosOf } from "./undo-read.ts";
 import { clip, inputWords, recordIn } from "./words.ts";
 
 /** How far back a page looks when there are fewer turns than it asks for. */
@@ -125,6 +127,8 @@ export async function readTimeline(
         approvals: [],
         touched: [],
         setAside: [],
+        undos: [],
+        undid: null,
         touchedBy: new Map(),
       };
       groups.set(id, g);
@@ -250,6 +254,11 @@ export async function readTimeline(
       })
       .slice(0, MAX_TOUCHED),
   }));
+  // What each card did without asking, with its Undo; and each Undo you pressed, as its own card.
+  const undos = await undosOf(tx, { since, groups: keys, edge: edge?.seq ?? 0 }, now);
+  for (const g of out) g.undos = undos.filter((u) => u.groupId === g.id).map(shown);
+  if (!i.roleId)
+    out.push(...(await undidGroups(tx, edge?.seq ?? 0, since, i.before ? end : undefined)));
   out.sort((a, b) => b.at.getTime() - a.at.getTime());
   return { groups: out, waiting, next: full && oldest ? oldest.toISOString() : null };
 }

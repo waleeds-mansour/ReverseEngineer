@@ -89,7 +89,13 @@ export const notification = pgTable("notification", {
  */
 export type NotificationUndo =
   | { kind: "unaccept"; eventId: string; before: { scope: "this" | "all" } }
-  | { kind: "unmove"; eventId: string; before: { start: string; end: string; when: string } }
+  | {
+      kind: "unmove";
+      eventId: string;
+      before: { start: string; end: string; when: string };
+      /** Where Jarvis moved it: a move since means Undo would undo yours. Older notes lack it. */
+      after?: { start: string; end: string };
+    }
   | {
       kind: "unremove";
       eventId: string;

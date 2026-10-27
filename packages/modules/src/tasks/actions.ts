@@ -74,7 +74,14 @@ function emitFieldEvents(
     ctx.emit({
       kind: "task.due_changed",
       entityId: after.id,
-      payload: { ...base, from: beforeDue, to: afterDue },
+      // Whether each is a whole day, so an Undo puts back exactly what was there.
+      payload: {
+        ...base,
+        from: beforeDue,
+        to: afterDue,
+        fromIsDate: before?.dueIsDate ?? false,
+        toIsDate: after.dueIsDate,
+      },
     });
   }
   if (before && before.priority !== after.priority) changed.push("priority");

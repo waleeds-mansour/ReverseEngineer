@@ -11,8 +11,9 @@ const MAIL: Rule = ["mail.", "person.view", "company.view"];
 
 /** By the event's module: the part of its kind before the first dot. */
 const BY_MODULE: Record<string, Rule> = {
-  // A channel Jarvis stopped answering in tells you with a card (D62).
-  notification: ["inbox.list", "slack.channels"],
+  // A channel Jarvis stopped answering in tells you with a card (D62). A note of Pip's about your
+  // calendar comes with an Undo, which Today lists.
+  notification: ["inbox.list", "slack.channels", "activity.undos"],
   // What Pip did lists each approval, and how it went.
   approval: [
     "inbox.list",
@@ -26,9 +27,10 @@ const BY_MODULE: Record<string, Rule> = {
   ],
   link: ["entity.", "task.", "note.list", "person.view", "company.view", "doc."],
   mail: MAIL,
-  task: ["task.", "inbox.list"],
-  // An Undo on an inbox line (D71, D72) puts the line away.
-  calendar: ["calendar.", "person.view", "company.view", "inbox.list"],
+  // What Pip changed on a task has an Undo, which a later change greys.
+  task: ["task.", "inbox.list", "activity."],
+  // An Undo on an inbox line (D71, D72) puts the line away, and an event moved since greys it.
+  calendar: ["calendar.", "person.view", "company.view", "inbox.list", "activity.undos"],
   // A Slack member's conversation growing shows on the Slack screens too (D62). A turn's
   // conversation grows as it works, so What Pip did fills in its card as it goes.
   conversation: [
@@ -52,7 +54,9 @@ const BY_MODULE: Record<string, Rule> = {
     "reminder.list",
   ],
   system: ["system.status"],
-  memory: ["memory."],
+  memory: ["memory.", "activity."],
+  // An Undo pressed elsewhere (another browser, the phone) shows as undone here.
+  activity: ["activity.", "jarvis.did", "inbox.list"],
   page_watch: ["page_watch."],
   browser: ["browser.", "vault.logins"],
   vault: ["vault.", "browser.sites"],
@@ -82,6 +86,27 @@ const ANY_RECORD: Rule = [
   "doc.",
   "jarvis.did",
 ];
+
+/**
+ * ...and, for what Pip makes and trashes, with its Undo on Today and in What Pip did, which a
+ * change can grey. Not mail or events, which their syncs change all day.
+ */
+const UNDOABLE = new Set([
+  "note",
+  "task",
+  "canvas",
+  "spreadsheet",
+  "person",
+  "company",
+  "meeting",
+  "page_watch",
+  "memory_note",
+  "comment",
+  "brief",
+  "journal",
+  "conversation",
+  "snippet",
+]);
 
 /** ...and in the lists of its own type. */
 const BY_TYPE: Record<string, Rule> = {
@@ -139,7 +164,10 @@ export function affectedBy(e: { kind: string; payload?: Record<string, unknown> 
   if (module === "entity") {
     const type = typeof e.payload?.type === "string" ? e.payload.type : null;
     const own = type === null ? undefined : BY_TYPE[type];
-    return own ? [...ANY_RECORD, ...own] : null;
+    if (!own) return null;
+    return type && UNDOABLE.has(type)
+      ? [...ANY_RECORD, ...own, "activity."]
+      : [...ANY_RECORD, ...own];
   }
   return BY_MODULE[module] ?? null;
 }
@@ -147,8 +175,9 @@ export function affectedBy(e: { kind: string; payload?: Record<string, unknown> 
 /** The reads a change you made through `action` can affect; null for all of them. */
 export function affectedByChange(action: string): Rule | null {
   const module = moduleOf(action);
-  // Trashing a record (any type) shows in that type's lists, which the name doesn't tell.
-  if (module === "entity") return null;
+  // Trashing a record (any type) shows in that type's lists, which the name doesn't tell; nor
+  // does an Undo of Pip's, which can put back any of them.
+  if (module === "entity" || action === "activity.undo") return null;
   return [`${module}.`, ...(AFTER_CHANGE[module] ?? [])];
 }
 

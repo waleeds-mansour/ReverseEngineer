@@ -21,6 +21,7 @@ import { time } from "../lib/format.ts";
 import { askedToSend } from "../lib/needsYou.ts";
 import { layout, type PaneRoute, routeFor } from "../lib/panes.ts";
 import { dayLooks, newFromPip, pipDid, pipLine } from "../lib/pipFeed.ts";
+import type { UndoView } from "../lib/pipUndo.ts";
 import { usePush } from "../lib/push.ts";
 import { inboxInput, useAction, usePendingApprovals } from "../lib/query.ts";
 import {
@@ -32,7 +33,6 @@ import {
   splitDue,
   startOfYesterday,
 } from "../lib/today.ts";
-import { TRASHABLE } from "../lib/trash.ts";
 import type { CalEvent, Did, InboxRow, MailDraft, MailThread, Task, Turn } from "../lib/types.ts";
 import { openToReply } from "./Mail.tsx";
 import { Brief } from "./today/Brief.tsx";
@@ -80,9 +80,11 @@ export function Today(props: { pane: number }) {
     limit: 50,
   }));
   const counts = useAction<{ unread: number; toReply: number }>("mail.counts");
-  // What Pip made since yesterday, and its runs, for the ones that didn't finish.
+  // What Pip made since yesterday and what else it did without asking, with the Undo What Pip
+  // did shows for each; and its runs, for the ones that didn't finish.
   const since = createMemo(() => startOfYesterday(new Date(dayStart())));
   const made = useAction<Did[]>("jarvis.did", () => ({ since: since().toISOString(), limit: 50 }));
+  const undos = useAction<UndoView[]>("activity.undos", () => ({ since: since().toISOString() }));
   const turns = useAction<Turn[]>("jarvis.activity", () => ({ limit: 100 }));
   // What Pip is on now, and what's waiting. Read again every half minute while there's something,
   // since a turn that ends outside a conversation says nothing live.
@@ -141,7 +143,7 @@ export function Today(props: { pane: number }) {
     owed(replies.data, new Set(mine().flatMap((d) => (d.threadId ? [d.threadId] : [])))),
   );
   const fromPip = createMemo(() => newFromPip(inbox.data));
-  const did = createMemo(() => pipDid(made.data, inbox.data, TRASHABLE, since()));
+  const did = createMemo(() => pipDid(made.data, undos.data));
   const meetings = () => plan().today.filter((e) => !e.allDay);
   const dueCount = () => due().overdue.length + due().today.length;
   const said = () =>

@@ -93,6 +93,44 @@ export interface TimelineGroup {
   touched: TimelineTouched[];
   /** Heartbeat items the turn took up. */
   setAside: TimelineItem[];
+  /** What it did that Undo can put back, each with its Undo or why not (undo-read.ts). */
+  undos: UndoView[];
+  /** A card of its own for an Undo you pressed: "You undid: …". */
+  undid: Undid | null;
+}
+
+/** What activity.undo is given: one thing Pip did, by the event it left or the calendar's note. */
+export type UndoRef = { kind: "event"; id: string } | { kind: "notification"; id: string };
+
+/** One thing Pip did without asking, and its Undo: the same on Today and in What Pip did. */
+export interface UndoView {
+  ref: UndoRef;
+  /** The card it's on: the correlation of the call that did it. */
+  groupId: string | null;
+  at: Date;
+  how: "made" | "trashed" | "changed";
+  /** What Pip did: 'Made a task: Call the plumber'. */
+  did: string;
+  /** What pressing Undo does: 'Undo: move "Call the plumber" to the trash'. */
+  label: string;
+  /** Who pressing it tells, said beside the button: "Its organizer will see". Null for nobody. */
+  tells: string | null;
+  /** Why it can't be undone now (undone, too old, changed since), or null when it can. */
+  blocked: string | null;
+  /** You pressed its Undo, and what it put back still stands. */
+  undone: boolean;
+  entityId: string | null;
+  entityType: string | null;
+  /** Its words are outside content's (D58). */
+  outside: boolean;
+}
+
+export interface Undid {
+  did: string;
+  entityId: string | null;
+  entityType: string | null;
+  /** Its words are outside content's (D58). */
+  outside: boolean;
 }
 
 export interface Timeline {

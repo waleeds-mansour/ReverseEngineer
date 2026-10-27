@@ -94,7 +94,7 @@ export const yourEventActions = [
           entityId: ev.id,
           outside: true,
         },
-        { kind: "unmove", eventId: ev.id, before },
+        { kind: "unmove", eventId: ev.id, before, after: timesOf(changed, timeZone) },
       );
       return changed;
     },

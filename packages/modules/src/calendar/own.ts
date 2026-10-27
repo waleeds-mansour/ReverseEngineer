@@ -84,7 +84,7 @@ export const ownEventActions = [
           // Its title is the email's words, as the turn that added it read them.
           outside: true,
         },
-        { kind: "unmove", eventId: ev.id, before },
+        { kind: "unmove", eventId: ev.id, before, after: timesOf(moved, timeZone) },
       );
       return moved;
     },
