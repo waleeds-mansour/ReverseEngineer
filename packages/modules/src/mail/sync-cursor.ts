@@ -22,6 +22,8 @@ export interface SyncCursor {
   backfill?: { listed: number; target: number };
   /** When a sync last looked for set-aside mail due another try. */
   lookedAside: number;
+  /** Sent mail is in: a first sync brought it in, or an older account looked in Sent once. */
+  lookedInSent: boolean;
 }
 
 const ids = (v: unknown) => (Array.isArray(v) ? v.filter((x) => typeof x === "string") : []);
@@ -34,7 +36,8 @@ function parkedIn(v: unknown): Record<string, Parked> {
 }
 
 export function readCursor(raw: Record<string, unknown> | null): SyncCursor {
-  const { pending, parked, relabel, quiet, backfill, lookedAside, ...provider } = raw ?? {};
+  const { pending, parked, relabel, quiet, backfill, lookedAside, lookedInSent, ...provider } =
+    raw ?? {};
   const b = backfill as SyncCursor["backfill"] | undefined;
   return {
     provider,
@@ -44,6 +47,7 @@ export function readCursor(raw: Record<string, unknown> | null): SyncCursor {
     quiet: quiet === true,
     ...(b && typeof b.listed === "number" ? { backfill: b } : {}),
     lookedAside: typeof lookedAside === "number" ? lookedAside : 0,
+    lookedInSent: lookedInSent === true,
   };
 }
 
@@ -57,5 +61,6 @@ export function writeCursor(c: SyncCursor): Record<string, unknown> {
     ...(left && c.quiet ? { quiet: true } : {}),
     ...(c.backfill && (left || "pageToken" in c.provider) ? { backfill: c.backfill } : {}),
     ...(c.lookedAside ? { lookedAside: c.lookedAside } : {}),
+    ...(c.lookedInSent ? { lookedInSent: true } : {}),
   };
 }

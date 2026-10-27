@@ -187,6 +187,19 @@ export class FakeGmail {
     return id;
   }
 
+  /** A draft written in Gmail itself, not sent yet. Returns its Gmail id. */
+  draft(m: FakeMail): string {
+    return this.deliver(m, ["DRAFT"]);
+  }
+
+  /** Sends a draft from Gmail itself, as Gmail does: the same message, from Drafts to Sent. */
+  sendDraft(id: string) {
+    const m = this.messages.get(id)!;
+    m.at = this.now();
+    this.sent.push(m.raw);
+    this.label(id, ["SENT"], ["DRAFT"]);
+  }
+
   label(id: string, add: string[], remove: string[]) {
     const m = this.messages.get(id)!;
     m.labelIds = [...new Set([...m.labelIds.filter((l) => !remove.includes(l)), ...add])];
