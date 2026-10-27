@@ -1,12 +1,14 @@
 // An event's popover, beside it on Calendar's grid: when and where, who's coming and their
 // answers, yours to give if it's an invitation, its prep and meeting notes, Join, and Pip's mark on
 // one Pip put there. Escape, a click elsewhere or a scroll closes it; Open shows the event's page.
+// One time of a repeating event says a drag moves that time only.
 
 import { createSignal, createUniqueId, onCleanup, onMount, Show } from "solid-js";
 import { Portal } from "solid-js/web";
 import { InviteAnswers } from "../../components/InviteAnswers.tsx";
 import { JarvisMark } from "../../components/Mark.tsx";
 import { Badge, Button, IconButton, TextButton } from "../../components/ui.tsx";
+import { canDrag } from "../../lib/calDrag.ts";
 import { popoverAt } from "../../lib/calLayout.ts";
 import { layout } from "../../lib/panes.ts";
 import type { CalEvent } from "../../lib/types.ts";
@@ -119,6 +121,9 @@ export function EventPopover(props: {
             <p class="break-words text-muted">{e().location}</p>
           </Show>
           <Guests event={e()} />
+          <Show when={e().recurringEventId && canDrag(e())}>
+            <p class="text-meta text-muted">Dragging it moves this time only.</p>
+          </Show>
         </div>
         <Show when={e().taskId || e().prepId || e().canWrite === false}>
           <div class="mt-2 flex flex-wrap gap-1.5">

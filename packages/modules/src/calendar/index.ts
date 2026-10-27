@@ -1,7 +1,7 @@
 // Google Calendar, two-way: your events synced in every few minutes, Jarvis writing your own
 // calendar directly and asking before anything guests would see, prep packets each morning,
 // conflict warnings, and time blocks for big tasks (PLAN.md sections 6.1, 6.2 and 8.2).
-import { formatTime, localDate } from "@hearth/core";
+import { formatTime, localDate, PRINCIPAL } from "@hearth/core";
 import { calendar, calendarEvent, entity, googleAccount, link } from "@hearth/db";
 import {
   type DigestItem,
@@ -150,6 +150,7 @@ export const calendarModule = defineModule({
             own: googleAccount.email,
             writeDefault: calendar.writeDefault,
             color: calendar.color,
+            canWrite: calendar.canWrite,
           })
           .from(calendarEvent)
           .innerJoin(entity, eq(entity.id, calendarEvent.entityId))
@@ -178,6 +179,10 @@ export const calendarModule = defineModule({
             ...toEventView(x.e, x.r),
             ownCalendar: x.own !== null,
             calendarColor: x.color,
+            // Calendar lets you drag it only where Google lets Nook change it.
+            canWrite: x.canWrite,
+            // Pip added it (a time block, one from an email): Calendar marks it.
+            madeByPip: x.e.createdBy === PRINCIPAL.jarvis,
             ...(prep ? { prepId: prep.id } : {}),
           };
         });
