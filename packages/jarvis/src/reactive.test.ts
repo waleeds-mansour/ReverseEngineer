@@ -4,11 +4,11 @@ import { ownerCaller } from "@hearth/kernel";
 import { MENTION_SETTLE_MS, type TaskView } from "@hearth/modules";
 import { and, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createJarvisHarness, type JarvisHarness } from "./testing.ts";
+import { createJarvisHarness, type JarvisHarness, purgeModule } from "./testing.ts";
 
 let h: JarvisHarness;
 beforeEach(async () => {
-  h = await createJarvisHarness();
+  h = await createJarvisHarness(undefined, { modules: [purgeModule] });
 });
 afterEach(() => h.destroy());
 
@@ -108,13 +108,13 @@ describe("Jarvis reacts", () => {
   it("asks before doing something hard to undo, then picks up after you approve", async () => {
     const note = await ok<{ id: string }>("note.create", { title: "Old draft" });
     h.brain.next([
-      { call: "entity_trash", input: { id: note.id } },
+      { call: "probe_purge", input: { id: note.id } },
       { say: "I've asked to trash the old draft." },
     ]);
     await ok("chat.send", { text: "clean up the old draft" });
     await h.settle();
     const [pending] = await h.tdb.db.select().from(approval).where(eq(approval.status, "pending"));
-    expect(pending).toMatchObject({ action: "entity.trash", requestedBy: "jarvis" });
+    expect(pending).toMatchObject({ action: "probe.purge", requestedBy: "jarvis" });
     expect((await turns())[0]?.outcome).toBe("ask");
 
     h.brain.next([{ say: "Done, it's in the trash." }]);
@@ -164,22 +164,22 @@ describe("Jarvis reacts", () => {
   it("treats the rest of a turn as untrusted after reading the web", async () => {
     const a = await ok<{ id: string }>("note.create", { title: "Scratch A" });
     const b = await ok<{ id: string }>("note.create", { title: "Scratch B" });
-    await ok("standing_rule.create", { action: "entity.trash", note: "tidy freely" });
+    await ok("standing_rule.create", { action: "probe.purge", note: "tidy freely" });
     // With your standing rule, Jarvis may trash without asking...
-    h.brain.next([{ call: "entity_trash", input: { id: a.id } }, { say: "ok" }]);
+    h.brain.next([{ call: "probe_purge", input: { id: a.id } }, { say: "ok" }]);
     await ok("chat.send", { text: "tidy up A" });
     await h.settle();
     expect(await h.tdb.db.select().from(approval)).toEqual([]);
     // ...but not once the turn has read the web.
     h.brain.next([
       { readWeb: "WebFetch" },
-      { call: "entity_trash", input: { id: b.id } },
+      { call: "probe_purge", input: { id: b.id } },
       { say: "ok" },
     ]);
     await ok("chat.send", { text: "look this up, then tidy up B" });
     await h.settle();
     const [pending] = await h.tdb.db.select().from(approval).where(eq(approval.status, "pending"));
-    expect(pending).toMatchObject({ action: "entity.trash", origin: "untrusted" });
+    expect(pending).toMatchObject({ action: "probe.purge", origin: "untrusted" });
   });
 
   it("never runs two turns of one conversation at once, even when claimed together", async () => {

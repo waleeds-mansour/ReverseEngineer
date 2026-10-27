@@ -189,7 +189,7 @@ export const calendarWriteActions = [
   defineAction({
     name: "calendar.create_event",
     description:
-      "Put an event on the owner's own calendar, with no guests (a reminder, a block of time, a personal appointment). When it comes from the one email or conversation this turn is about, give its record id as threadId: then you can move or remove it later without asking. In a turn about several, it's added untied, and moving it later asks.",
+      "Put an event on the owner's own calendar, with no guests (a reminder, a block of time, a personal appointment). When it comes from the one email or conversation this turn is about, give its record id as threadId: it's tied to it, so a later email from there can move or remove it. In a turn about several, it's added untied.",
     input: z.object({
       ...fields,
       calendarId: z.string().optional(),
@@ -200,7 +200,7 @@ export const calendarWriteActions = [
         ),
     }),
     // With no guests nobody else sees it, so Jarvis adds one without asking, even from an email
-    // (the owner, 2026-10-05, D67). Moving and removing events ask, except D72's.
+    // (the owner, 2026-10-05, D67), and changes or removes one too (2026-10-27, yours.ts).
     risk: "internal",
     summarize: (i) => `Add ${describeTimes(i)} to your calendar`,
     async handler({ threadId, ...i }, ctx) {
@@ -227,27 +227,5 @@ export const calendarWriteActions = [
       return ev;
     },
   }),
-  defineAction({
-    name: "calendar.update_event",
-    description:
-      "Move or change one of the owner's own events (no guests); it asks the owner first when the conversation read outside content. For an event you added yourself from this conversation, calendar_move_own_event moves it without asking. For meetings with guests use calendar_update_meeting.",
-    input: z.object({
-      id,
-      title: fields.title.optional(),
-      start: when.optional(),
-      end: when.optional(),
-      description: fields.description,
-      location: fields.location,
-    }),
-    risk: "self_external",
-    handler: ({ id: eid, ...patch }, ctx) => patchEvent(ctx, eid, patch),
-  }),
-  defineAction({
-    name: "calendar.delete_event",
-    description:
-      "Remove one of the owner's own events (no guests) from their calendar; it asks the owner first when the conversation read outside content. For an event you added yourself from this conversation, calendar_remove_own_event removes it without asking.",
-    input: z.object({ id }),
-    risk: "self_external",
-    handler: (i, ctx) => removeEvent(ctx, i.id),
-  }),
+  // Changing and removing your own events: yours.ts.
 ];

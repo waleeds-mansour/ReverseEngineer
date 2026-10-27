@@ -89,14 +89,15 @@ export function Settings() {
               {(s) => (
                 <div class="space-y-1 rounded-md bg-sunk px-3 py-2">
                   <Checkbox
-                    checked={s().backgroundReadOnly ?? false}
-                    onChange={(readOnly) => void act("jarvis.background", { readOnly })}
+                    checked={!s().backgroundReadOnly}
+                    onChange={(on) => void act("jarvis.background", { readOnly: !on })}
                   >
-                    <span class="font-medium">Background work is read-only</span>
+                    <span class="font-medium">Pip acts on its own</span>
                   </Checkbox>
                   <p class="text-sm text-muted">
-                    What Pip does on its own can only read and keep notes. Anything else is held for
-                    your brief, and Pip won't ask you about it.
+                    {s().backgroundReadOnly
+                      ? "Off: what Pip does on its own only reads and keeps notes, tasks and drafts. Anything else is held for your brief, and Pip won't ask you about it."
+                      : "Pip does what stays in your own world without asking: tasks, notes, your own calendar, sorting mail, drafts, reminders, people and the trash. Anything that reaches other people, and any change to code, still waits for your yes. All of it shows in What Pip did."}
                   </p>
                 </div>
               )}
@@ -109,10 +110,10 @@ export function Settings() {
           <section class="space-y-2">
             <h2 class="font-semibold">Pip may do without asking</h2>
             <p class="text-sm text-muted">
-              Things other people would see, or that are hard to undo, wait for your yes. Always
-              allow on a card from a conversation you started adds it here, for that one channel or
-              person. Rules never apply when outside content (an email, a web page, a Slack message)
-              started the request.
+              Things other people would see, changes to code and what's hard to undo wait for your
+              yes. Always allow on a card from a conversation you started adds it here, for that one
+              channel or person. Rules never apply when outside content (an email, a web page, a
+              Slack message) started the request.
             </p>
             <Show
               when={(rules.data ?? []).length > 0}

@@ -228,13 +228,17 @@ export const mailModule = defineModule({
         i.starred === false ? { add: [], remove: ["STARRED"] } : { add: ["STARRED"], remove: [] },
       { starred: z.boolean().default(true) },
     ),
-    flagAction(
-      "mail.trash",
-      "Move conversations to the trash. The provider deletes them for good after 30 days.",
-      () => ({ add: ["TRASH"], remove: ["INBOX"] }),
-      {},
-      "destructive",
-    ),
+    {
+      ...flagAction(
+        "mail.trash",
+        "Move conversations to the trash. The provider deletes them for good after 30 days.",
+        () => ({ add: ["TRASH"], remove: ["INBOX"] }),
+        {},
+        "destructive",
+      ),
+      // Back out with mail.unarchive for 30 days, so Pip triages on its own (2026-10-27).
+      ownWorld: true,
+    },
     defineAction({
       name: "mail.set_lane",
       description:

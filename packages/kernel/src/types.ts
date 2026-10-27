@@ -131,6 +131,18 @@ export interface ActionDef<S extends z.ZodType = z.ZodType, R = unknown> {
    */
   reports?: boolean;
   /**
+   * What it changes stays in your own world and can be put back: your own calendar with no
+   * guests, the trash. Pip does it without asking, even in work it started itself or after
+   * reading outside content (the owner, 2026-10-27). Nothing that reaches other people is.
+   */
+  ownWorld?: boolean;
+  /**
+   * It changes code: writes in a repo, runs a build or test that writes, commits, pushes or opens
+   * a pull request. Pip asks first whatever its risk (the owner, 2026-10-27); reading code,
+   * searching it and git log, diff or blame don't.
+   */
+  changesCode?: boolean;
+  /**
    * What "Always allow" on its approval card covers (D70): the one place or person the call
    * reaches, as the rule's target, and the button's words for it ("posting in #eng"). Given the
    * input with its snapshot. An action without it offers no Always allow.

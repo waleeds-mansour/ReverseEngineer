@@ -20,7 +20,7 @@ import {
 import { FakeGoogle } from "@hearth/modules/google-testing";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createJarvisHarness, type JarvisHarness } from "./testing.ts";
+import { createJarvisHarness, type JarvisHarness, purgeModule } from "./testing.ts";
 
 const ME = "owner@example.com";
 let h: JarvisHarness;
@@ -35,7 +35,7 @@ async function ok<T>(name: string, input: unknown = {}, caller: Caller = ownerCa
 }
 
 beforeEach(async () => {
-  h = await createJarvisHarness("2026-10-01T14:00:00Z"); // Thursday 10 a.m.
+  h = await createJarvisHarness("2026-10-01T14:00:00Z", { modules: [purgeModule] }); // Thursday 10 a.m.
   g = new FakeGoogle(ME);
   g.clock = h.clock;
   g.grants = ["openid", "email", ...SCOPES.gmail];
@@ -214,11 +214,11 @@ describe("a reminder set after you say yes to something", () => {
     const note = await ok<{ id: string }>("note.create", { title: "Old draft" });
     // It asks first, while still yours, then reads the email.
     await chat("trash the old draft, then go through my email", [
-      { call: "entity_trash", input: { id: note.id } },
+      { call: "probe_purge", input: { id: note.id } },
       read(),
     ]);
     const [pending] = await h.tdb.db.select().from(approval).where(eq(approval.status, "pending"));
-    expect(pending).toMatchObject({ action: "entity.trash", origin: "owner" });
+    expect(pending).toMatchObject({ action: "probe.purge", origin: "owner" });
     // Your yes picks the conversation up again, the email still in it.
     h.brain.next([...(SET_ALL as never[]), { say: "Done." }]);
     await h.kernel.decideApproval(pending!.id, "approve", ownerCaller());

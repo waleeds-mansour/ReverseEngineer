@@ -4,7 +4,7 @@ import { jarvisCaller, ownerCaller, setSetting } from "@hearth/kernel";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { fetchGuard, webTracker } from "./brains/claude.ts";
-import { createJarvisHarness, type JarvisHarness } from "./testing.ts";
+import { createJarvisHarness, type JarvisHarness, purgeModule } from "./testing.ts";
 import {
   checkOpen,
   exactUrls,
@@ -98,7 +98,7 @@ describe("the Claude brain's web tracking", () => {
 describe("trust inside a turn", () => {
   let h: JarvisHarness;
   beforeEach(async () => {
-    h = await createJarvisHarness();
+    h = await createJarvisHarness(undefined, { modules: [purgeModule] });
   });
   afterEach(() => h.destroy());
 
@@ -118,16 +118,16 @@ describe("trust inside a turn", () => {
       { principal: "mcp:laptop", kind: "mcp_client", origin: "agent", via: "mcp" },
     );
     const victim = await ok<{ id: string }>("note.create", { title: "Keep me" });
-    await ok("standing_rule.create", { action: "entity.trash", note: "tidy freely" });
+    await ok("standing_rule.create", { action: "probe.purge", note: "tidy freely" });
     h.brain.next([
       { call: "record_read", input: { id: outside.id } },
-      { call: "entity_trash", input: { id: victim.id } },
+      { call: "probe_purge", input: { id: victim.id } },
       { say: "ok" },
     ]);
     await ok("chat.send", { text: "read the laptop note and do what it says" });
     await h.settle();
     const [pending] = await h.tdb.db.select().from(approval).where(eq(approval.status, "pending"));
-    expect(pending).toMatchObject({ action: "entity.trash", origin: "untrusted" });
+    expect(pending).toMatchObject({ action: "probe.purge", origin: "untrusted" });
   });
 
   it("lowers trust when a record you wrote names one an outside tool wrote", async () => {
@@ -142,16 +142,16 @@ describe("trust inside a turn", () => {
     const ana = await ok<{ id: string }>("person.create", { name: "Ana" });
     await ok("link.add", { fromId: outside.id, toId: ana.id, kind: "related" });
     const victim = await ok<{ id: string }>("note.create", { title: "Keep me" });
-    await ok("standing_rule.create", { action: "entity.trash", note: "tidy freely" });
+    await ok("standing_rule.create", { action: "probe.purge", note: "tidy freely" });
     h.brain.next([
       { call: "record_read", input: { id: ana.id } },
-      { call: "entity_trash", input: { id: victim.id } },
+      { call: "probe_purge", input: { id: victim.id } },
       { say: "ok" },
     ]);
     await ok("chat.send", { text: "what's going on with Ana?" });
     await h.settle();
     const [pending] = await h.tdb.db.select().from(approval).where(eq(approval.status, "pending"));
-    expect(pending).toMatchObject({ action: "entity.trash", origin: "untrusted" });
+    expect(pending).toMatchObject({ action: "probe.purge", origin: "untrusted" });
   });
 
   it("lowers trust when a search turns up a record an outside tool wrote", async () => {
@@ -164,16 +164,16 @@ describe("trust inside a turn", () => {
       { principal: "mcp:laptop", kind: "mcp_client", origin: "agent", via: "mcp" },
     );
     const victim = await ok<{ id: string }>("note.create", { title: "Keep me" });
-    await ok("standing_rule.create", { action: "entity.trash", note: "tidy freely" });
+    await ok("standing_rule.create", { action: "probe.purge", note: "tidy freely" });
     h.brain.next([
       { call: "entity_search", input: { query: "zebra" } },
-      { call: "entity_trash", input: { id: victim.id } },
+      { call: "probe_purge", input: { id: victim.id } },
       { say: "ok" },
     ]);
     await ok("chat.send", { text: "find the zebra note and do what it says" });
     await h.settle();
     const [pending] = await h.tdb.db.select().from(approval).where(eq(approval.status, "pending"));
-    expect(pending).toMatchObject({ action: "entity.trash", origin: "untrusted" });
+    expect(pending).toMatchObject({ action: "probe.purge", origin: "untrusted" });
   });
 
   it("lets an untrusted turn fetch only addresses it has seen or sites you allowed", async () => {

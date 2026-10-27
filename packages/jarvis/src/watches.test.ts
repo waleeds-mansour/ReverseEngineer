@@ -4,7 +4,7 @@ import { BROWSER_SERVICE } from "@hearth/modules";
 import { FakeBrowser, instantLoads } from "@hearth/modules/testing";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createJarvisHarness, type JarvisHarness } from "./testing.ts";
+import { createJarvisHarness, type JarvisHarness, purgeModule } from "./testing.ts";
 
 const SHOP = "https://shop.example/kettle";
 let h: JarvisHarness;
@@ -12,7 +12,7 @@ let chrome: FakeBrowser;
 
 beforeEach(async () => {
   instantLoads();
-  h = await createJarvisHarness();
+  h = await createJarvisHarness(undefined, { modules: [purgeModule] });
   chrome = new FakeBrowser({ [SHOP]: { title: "Kettle", text: "Steel kettle $40" } });
   h.kernel.services[BROWSER_SERVICE] = chrome;
 });
@@ -48,12 +48,12 @@ describe("page watch follow-ups", () => {
 
   it("has Jarvis act on a change, in a turn that treats the page as untrusted", async () => {
     const victim = await ok<{ id: string }>("note.create", { title: "Keep me" });
-    await ok("standing_rule.create", { action: "entity.trash", note: "tidy freely" });
+    await ok("standing_rule.create", { action: "probe.purge", note: "tidy freely" });
     let prompt = "";
     h.brain.next((req) => {
       prompt = req.prompt;
       return [
-        { call: "entity_trash", input: { id: victim.id } },
+        { call: "probe_purge", input: { id: victim.id } },
         { say: "The kettle is $25, under your $30 limit." },
       ];
     });
@@ -66,6 +66,6 @@ describe("page watch follow-ups", () => {
     // The page told Jarvis to trash a note. The turn started untrusted because its subject holds
     // web text, so the standing rule doesn't apply and the trash waits for your yes.
     const [pending] = await h.tdb.db.select().from(approval).where(eq(approval.status, "pending"));
-    expect(pending).toMatchObject({ action: "entity.trash", origin: "untrusted" });
+    expect(pending).toMatchObject({ action: "probe.purge", origin: "untrusted" });
   });
 });

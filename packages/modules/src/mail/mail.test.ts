@@ -210,12 +210,15 @@ describe("triage", () => {
     expect(await t.events("mail.change_failed")).toHaveLength(1);
   });
 
-  it("asks before Jarvis trashes mail", async () => {
+  it("lets Jarvis trash mail on its own, even from an email, and it comes back (2026-10-27)", async () => {
     g.gmail.deliver({ from: ANA, subject: "Old", text: "." });
     await sync();
     const [x] = await inbox();
-    const res = await t.kernel.execute("mail.trash", { ids: [x!.id] }, jarvisCaller("agent"));
-    expect(res.status).toBe("pending_approval");
+    const res = await t.kernel.execute("mail.trash", { ids: [x!.id] }, jarvisCaller("untrusted"));
+    expect(res.status).toBe("ok");
+    expect(await inbox()).toEqual([]);
+    await ok("mail.unarchive", { ids: [x!.id] });
+    expect((await inbox()).map((y) => y.id)).toEqual([x!.id]);
   });
 
   it("learns Signal and Noise from your choices", async () => {
