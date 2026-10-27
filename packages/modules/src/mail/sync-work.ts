@@ -11,6 +11,7 @@ import { type MailChange, type MailProvider, MailProviderError, type RawMail } f
 import { type AccountRow, leftOut, removeMail, type Saved, saveMail } from "./store.ts";
 import { forget, LOOK_ASIDE_MS, QUARANTINE_AFTER, quarantine, release } from "./sync-aside.ts";
 import { type Parked, readCursor, type SyncCursor, writeCursor } from "./sync-cursor.ts";
+import { lookInSent } from "./sync-sent.ts";
 
 /** Calls to the provider per sync, so no transaction stays open long; more follow at once. */
 export const CALLS_PER_SYNC = 50;
@@ -103,6 +104,9 @@ export async function bringIn(
       work.more = changes.more;
       work.removed += await removeMail(ctx, account.id, changes.removed);
       await sort(ctx, account, changes.changed, c, work);
+      // A first sync brings Sent in with the rest; an older account looks in it once.
+      if (c.quiet) c.lookedInSent = true;
+      else if (!c.lookedInSent) await lookInSent(ctx, provider, account, c);
     } else work.more = true;
     let calls = CALLS_PER_SYNC;
     while (c.pending.length && calls-- > 0)

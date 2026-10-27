@@ -107,11 +107,17 @@ export class GmailProvider implements MailProvider {
         }>(address, "GET", `/history?${q}`, GMAIL_COST.history);
         for (const h of res.history ?? []) {
           for (const x of h.messagesAdded ?? []) touch(x.message, x.message.labelIds).added = true;
+          // A draft sent from Gmail keeps its id and only moves from Drafts to Sent: it's new
+          // mail to Hearth, which left the draft out, though history never says it was added.
           for (const x of h.labelsAdded ?? []) {
             const c = touch(x.message, x.message.labelIds);
             if (x.labelIds?.includes("INBOX")) c.inboxed = true;
+            if (x.labelIds?.includes("SENT")) c.added = true;
           }
-          for (const x of h.labelsRemoved ?? []) touch(x.message, x.message.labelIds);
+          for (const x of h.labelsRemoved ?? []) {
+            const c = touch(x.message, x.message.labelIds);
+            if (x.labelIds?.includes("DRAFT")) c.added = true;
+          }
           for (const x of h.messagesDeleted ?? []) removed.add(x.message.id);
           // Enough for one go: the next call starts after this record.
           if (changed.size + removed.size >= CHANGES_PER_CALL) {
@@ -250,6 +256,21 @@ export class GmailProvider implements MailProvider {
       ...(threadId ? { threadId } : {}),
     });
     return { providerId: sent.id };
+  }
+
+  async sentSince(address: string, days: number, max: number): Promise<string[]> {
+    // Gmail lists newest first, up to 500 a page: one page is all that's asked for.
+    const q = new URLSearchParams({
+      q: `in:sent newer_than:${days}d`,
+      maxResults: String(Math.min(max, 500)),
+    });
+    const res = await this.call<{ messages?: GMessage[] }>(
+      address,
+      "GET",
+      `/messages?${q}`,
+      GMAIL_COST.list,
+    );
+    return (res.messages ?? []).slice(0, max).map((m) => m.id);
   }
 
   async findSent(address: string, messageId: string, since: Date): Promise<string | null> {

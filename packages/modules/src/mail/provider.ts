@@ -56,6 +56,8 @@ export interface MailProvider {
    * since `since` (in case the provider gave it a Message-ID of its own). Null if it isn't there.
    */
   findSent(address: string, messageId: string, since: Date): Promise<string | null>;
+  /** Mail sent in the last `days` days, newest first: up to `max` of the provider's ids. */
+  sentSince(address: string, days: number, max: number): Promise<string[]>;
 }
 
 /**
