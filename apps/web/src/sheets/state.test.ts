@@ -3,7 +3,7 @@
 // a blank workbook whose cells share their names with Hearth's, and a copy kept here earlier is
 // what's saved once it's restored, with its new name on screen. Runs against a fake Hearth, an
 // in-memory stand-in for IndexedDB and fake Web Locks (no DOM here).
-import type { Workbook } from "@hearth/core";
+import { blankSheet, type Workbook } from "@hearth/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Unsaved } from "../lib/docStore.ts";
 import type { LiveEvent } from "../lib/live.ts";
@@ -67,7 +67,7 @@ beforeEach(() => {
     version: 3,
     title: "Budget",
     book: {
-      sheets: [{ id: "s1", name: "Costs", cells: { A1: "Revenue", B2: "100" }, widths: {} }],
+      sheets: [{ ...blankSheet("s1", "Costs"), cells: { A1: "Revenue", B2: "100" } }],
     },
   };
   trashed = false;
@@ -176,5 +176,53 @@ describe("a spreadsheet before it's first read", () => {
     expect(server.title).toBe("Renamed in the trash");
     expect(kept.size).toBe(0);
     await second.flush();
+  });
+});
+
+describe("formatting", () => {
+  it("formats as one step to undo, and Delete clears what's in a cell but keeps its format", async () => {
+    const { createSheet } = await import("./state.ts");
+    const s = createSheet("x1");
+    await s.load();
+    const formats = () => s.book.sheets[0]!.formats;
+    s.format(0, ["A1", "B2"], { bold: true, number: "currency" });
+    s.setFreeze(0, 1, 0);
+    expect(formats()).toEqual({
+      A1: { bold: true, number: "currency" },
+      B2: { bold: true, number: "currency" },
+    });
+    // Again, the same: nothing changes, so there's nothing to undo.
+    s.format(0, ["A1", "B2"], { bold: true });
+    s.undo();
+    expect(s.book.sheets[0]!.freeze).toEqual({ rows: 0, cols: 0 });
+    expect(formats()).toEqual({
+      A1: { bold: true, number: "currency" },
+      B2: { bold: true, number: "currency" },
+    });
+    s.undo();
+    expect(formats()).toEqual({});
+    s.redo();
+    // What Delete does: the cell's value goes, its format stays.
+    s.set(0, { B2: "" });
+    expect(cells(s.book)).toEqual({ A1: "Revenue" });
+    expect(formats().B2).toEqual({ bold: true, number: "currency" });
+    await vi.advanceTimersByTimeAsync(700);
+    expect(server.book.sheets[0]).toMatchObject({
+      cells: { A1: "Revenue" },
+      formats: { B2: { bold: true, number: "currency" } },
+    });
+    await s.flush();
+  });
+
+  it("reads a copy saved before sheets had formats as having none", async () => {
+    const { cells: kept, ...old } = server.book.sheets[0]!;
+    server.book = { sheets: [{ id: old.id, name: old.name, cells: kept } as never] };
+    const { createSheet } = await import("./state.ts");
+    const s = createSheet("x1");
+    await s.load();
+    expect(s.book.sheets[0]).toMatchObject({ formats: {}, freeze: { rows: 0, cols: 0 } });
+    s.format(0, ["A1"], { italic: true });
+    expect(s.book.sheets[0]!.formats).toEqual({ A1: { italic: true } });
+    await s.flush();
   });
 });

@@ -43,6 +43,69 @@ export const cellName = (row: number, col: number) => `${columnName(col)}${row}`
 
 const cellKey = z.string().refine((k) => parseCell(k) !== null, "not a cell like A1");
 
+/** Fills by name: each theme draws its own shade of one, so a fill reads in light and dark alike. */
+export const SHEET_FILLS = ["red", "orange", "yellow", "green", "blue", "purple", "gray"] as const;
+export type SheetFill = (typeof SHEET_FILLS)[number];
+
+/** Number formats by name, and how IronCalc writes each: a result then reads "$1,200.00". */
+export const NUMBER_FORMATS = {
+  number: "#,##0.00",
+  currency: "$#,##0.00",
+  percent: "0%",
+  date: "mmm d, yyyy",
+} as const;
+export type NumberFormat = keyof typeof NUMBER_FORMATS;
+
+// Each part of a format stands alone: one that doesn't read is dropped, never the cell's other
+// parts, its sheet or the workbook (a workbook that doesn't read loads as an empty one, and the
+// next save would write that over the real one).
+const part = <T extends z.ZodType>(s: T) => s.optional().catch(undefined);
+
+export const CellFormatSchema = z.object({
+  bold: part(z.boolean()),
+  italic: part(z.boolean()),
+  align: part(z.enum(["left", "center", "right"])),
+  fill: part(z.enum(SHEET_FILLS)),
+  number: part(z.enum(Object.keys(NUMBER_FORMATS) as [NumberFormat, ...NumberFormat[]])),
+});
+export type CellFormat = z.infer<typeof CellFormatSchema>;
+
+/** The format with what it doesn't say (off, unset) left out, or null when that's everything. */
+export function tidyFormat(f: CellFormat): CellFormat | null {
+  const out = Object.fromEntries(
+    Object.entries(f).filter(([, v]) => v !== undefined && v !== false),
+  );
+  return Object.keys(out).length ? (out as CellFormat) : null;
+}
+
+/** Formats by cell. An entry that doesn't read, or says nothing, is dropped on its own. */
+const formatsSchema = z
+  .record(z.string(), CellFormatSchema.catch({}))
+  .catch({})
+  .transform((all) => {
+    const out: Record<string, CellFormat> = {};
+    for (const [ref, f] of Object.entries(all)) {
+      const at = parseCell(ref);
+      const kept = tidyFormat(f);
+      if (at && kept) out[cellName(at.row, at.col)] = kept;
+    }
+    return out;
+  })
+  .default({});
+
+/** Rows at the top and columns at the left that stay put while the rest scrolls. */
+export const NO_FREEZE: Readonly<{ rows: number; cols: number }> = Object.freeze({
+  rows: 0,
+  cols: 0,
+});
+const freezeSchema = z
+  .object({
+    rows: z.number().int().min(0).max(20).catch(0),
+    cols: z.number().int().min(0).max(10).catch(0),
+  })
+  .catch(() => ({ ...NO_FREEZE }))
+  .default(() => ({ ...NO_FREEZE }));
+
 export const WorksheetSchema = z.object({
   id: z.string().min(1).max(40),
   name: z
@@ -55,6 +118,9 @@ export const WorksheetSchema = z.object({
   cells: z.record(cellKey, z.string().max(MAX_CELL)).default({}),
   /** Column widths in pixels, by column letter. */
   widths: z.record(z.string().regex(/^[A-Z]{1,2}$/), z.number().min(30).max(800)).default({}),
+  /** Bold, italic, alignment, fill and number format, by cell; a cell without one has none. */
+  formats: formatsSchema,
+  freeze: freezeSchema,
 });
 
 export const WorkbookSchema = z
@@ -66,8 +132,29 @@ export const WorkbookSchema = z
 export type Worksheet = z.infer<typeof WorksheetSchema>;
 export type Workbook = z.infer<typeof WorkbookSchema>;
 
-export const emptyWorkbook = (): Workbook => ({
-  sheets: [{ id: "s1", name: "Sheet1", cells: {}, widths: {} }],
+/** A new sheet, with nothing in it. */
+export const blankSheet = (id: string, name: string): Worksheet => ({
+  id,
+  name,
+  cells: {},
+  widths: {},
+  formats: {},
+  freeze: { ...NO_FREEZE },
+});
+
+export const emptyWorkbook = (): Workbook => ({ sheets: [blankSheet("s1", "Sheet1")] });
+
+/**
+ * A workbook as this version reads it, from wherever it was kept: a copy kept on a device before
+ * sheets had formats has none, rather than none to read.
+ */
+export const filledWorkbook = (b: Workbook): Workbook => ({
+  sheets: b.sheets.map((s) => ({
+    ...s,
+    widths: s.widths ?? {},
+    formats: s.formats ?? {},
+    freeze: s.freeze ?? { ...NO_FREEZE },
+  })),
 });
 
 /** The part of IronCalc's Model that working out a workbook needs. */
@@ -75,6 +162,11 @@ export interface CalcModel {
   newSheet(): void;
   renameSheet(sheet: number, name: string): void;
   setUserInput(sheet: number, row: number, column: number, input: string): void;
+  updateRangeStyle(
+    range: { sheet: number; row: number; column: number; width: number; height: number },
+    path: string,
+    value: string,
+  ): void;
   evaluate(): void;
   getFormattedCellValue(sheet: number, row: number, column: number): string;
   free(): void;
@@ -95,6 +187,16 @@ export function calculate(book: Workbook, model: () => CalcModel): Results {
       for (const [ref, input] of Object.entries(s.cells)) {
         const at = parseCell(ref);
         if (at && input !== "") m.setUserInput(i, at.row, at.col, input);
+      }
+      // After the input, which sets a format of its own when you type "$1,200" or "15%".
+      for (const [ref, f] of Object.entries(s.formats ?? {})) {
+        const at = parseCell(ref);
+        if (at && f.number && s.cells[ref])
+          m.updateRangeStyle(
+            { sheet: i, row: at.row, column: at.col, width: 1, height: 1 },
+            "num_fmt",
+            NUMBER_FORMATS[f.number],
+          );
       }
     });
     m.evaluate();

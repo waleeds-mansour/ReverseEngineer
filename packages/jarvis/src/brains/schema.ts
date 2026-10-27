@@ -1,7 +1,8 @@
 // What the model sees of a tool's input. Zod writes a long pattern beside format "uuid" for every
 // record id, about 80 of them across Jarvis's tools, sent with every turn. The format says the
 // same thing, and the kernel checks every input anyway, so the model's copy leaves the pattern
-// out. Anything this doesn't recognise is passed through as it is.
+// out, and of a transformed field it gets the side it writes. Anything this doesn't recognise is
+// passed through as it is.
 import { z } from "zod";
 
 export function forModel(input: z.ZodObject): z.ZodRawShape {
@@ -32,6 +33,10 @@ function lighten(s: z.ZodType): z.ZodType {
     const shape = forModel(s);
     if (Object.keys(shape).some((k) => shape[k] !== s.shape[k]))
       next = s.clone({ ...def, shape } as never);
+  } else if (s instanceof z.ZodPipe) {
+    // A transform (a sheet's formats, tidied as they're read) has no JSON Schema, and the SDK
+    // would fail to list every tool over one. The model writes the input, so it gets that side.
+    next = lighten(def.in as z.ZodType);
   }
   if (!next) return s;
   return s.description ? next.describe(s.description) : next;

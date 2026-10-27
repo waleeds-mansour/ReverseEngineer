@@ -2,7 +2,7 @@
 // on. None of that until the spreadsheet has first been read: until then its one tab is a blank
 // workbook's.
 
-import { WorksheetSchema } from "@hearth/core";
+import { blankSheet, WorksheetSchema } from "@hearth/core";
 import { For, Show } from "solid-js";
 import { Icon } from "../components/icons.tsx";
 import type { Sheet } from "./state.ts";
@@ -17,12 +17,7 @@ export function Tabs(props: { sheet: Sheet; tab: number; onTab: (i: number) => v
     let n = props.sheet.book.sheets.length + 1;
     while (names().includes(`sheet${n}`)) n += 1;
     props.sheet.change((d) => {
-      d.sheets.push({
-        id: crypto.randomUUID().slice(0, 8),
-        name: `Sheet${n}`,
-        cells: {},
-        widths: {},
-      });
+      d.sheets.push(blankSheet(crypto.randomUUID().slice(0, 8), `Sheet${n}`));
     });
     props.onTab(props.sheet.book.sheets.length - 1);
   };

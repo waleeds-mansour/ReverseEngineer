@@ -1,5 +1,11 @@
-import { DEFAULT_DAY_RULES, mergeWorkbook, renameSheetRefs, type Workbook } from "@hearth/core";
-import { entity } from "@hearth/db";
+import {
+  blankSheet,
+  DEFAULT_DAY_RULES,
+  mergeWorkbook,
+  renameSheetRefs,
+  type Workbook,
+} from "@hearth/core";
+import { entity, sheetBook } from "@hearth/db";
 import { budget, fastest } from "@hearth/db/testing";
 import { type Caller, jarvisCaller, ownerCaller, setSetting } from "@hearth/kernel";
 import { createTestKernel, type TestKernel } from "@hearth/kernel/testing";
@@ -74,8 +80,8 @@ describe("spreadsheets", () => {
 
   it("refuses a save made from an old version; Jarvis's cells survive the merge", async () => {
     const { id } = await ok<{ id: string }>("sheet.create", { title: "Budget" });
-    const sheet = (cells: Record<string, string>) => ({
-      sheets: [{ id: "s1", name: "Sheet1", cells, widths: {} }],
+    const sheet = (cells: Record<string, string>): Workbook => ({
+      sheets: [{ ...blankSheet("s1", "Sheet1"), cells }],
     });
     const v1 = sheet({ A1: "Rent", B1: "1200" });
     await ok("sheet.save", { id, book: v1, baseVersion: 0 });
@@ -100,12 +106,77 @@ describe("spreadsheets", () => {
   it("keeps formulas working when a sheet they point at is renamed", () => {
     const book: Workbook = {
       sheets: [
-        { id: "a", name: "Costs", cells: { B1: "1200", B2: "300", B3: "=SUM(B1:B2)" }, widths: {} },
-        { id: "b", name: "Plan", cells: { A1: "=Costs!B3*12" }, widths: {} },
+        { ...blankSheet("a", "Costs"), cells: { B1: "1200", B2: "300", B3: "=SUM(B1:B2)" } },
+        { ...blankSheet("b", "Plan"), cells: { A1: "=Costs!B3*12" } },
       ],
     };
     for (const name of ["Monthly costs", "Q4", "Spend"])
       expect(results(renameSheetRefs(book, 0, name))[1]!.A1).toBe("18000");
+  });
+
+  it("reads a currency cell as $1,200.00, in its results and the body Pip reads", async () => {
+    const { id } = await ok<{ id: string }>("sheet.create", { title: "Rent" });
+    const book = {
+      sheets: [
+        {
+          id: "s1",
+          name: "Costs",
+          cells: { A1: "Rent", B1: "1200", B2: "=B1*1.25", B3: "0.2" },
+          formats: { A1: { bold: true }, B1: { number: "currency" }, B2: { number: "currency" } },
+          freeze: { rows: 1, cols: 0 },
+        },
+      ],
+    };
+    await ok("sheet.save", { id, book, baseVersion: 0 });
+    const s = await ok<Sheet & { book: Workbook }>("sheet.get", { id });
+    expect(s.results[0]).toMatchObject({ A1: "Rent", B1: "$1,200.00", B2: "$1,500.00" });
+    expect(s.book.sheets[0]).toMatchObject({
+      formats: book.sheets[0]!.formats,
+      freeze: { rows: 1 },
+    });
+    const [row] = await t.tdb.db.select().from(entity).where(eq(entity.id, id));
+    expect(row?.body).toContain("| Rent | $1,200.00 |");
+    // Pip formats the way you do: a part it leaves out stays, false turns one off, null clears.
+    const jarvis = jarvisCaller("owner");
+    const set = await ok<{ results: Record<string, string> }>(
+      "sheet.set",
+      { id, formats: { B3: { number: "percent" }, A1: { italic: true }, B1: null } },
+      jarvis,
+    );
+    expect(set.results).toEqual({ B3: "20%", A1: "Rent", B1: "1200" });
+    await ok("sheet.set", { id, formats: { A1: { bold: false } } }, jarvis);
+    const after = await ok<Sheet & { book: Workbook }>("sheet.get", { id });
+    expect(after.book.sheets[0]!.formats).toEqual({
+      A1: { italic: true },
+      B2: { number: "currency" },
+      B3: { number: "percent" },
+    });
+  });
+
+  it("drops a saved format that doesn't read, and keeps the sheet", async () => {
+    const { id } = await ok<{ id: string }>("sheet.create", { title: "Old" });
+    // As a later version might write it, or a bad hand edit: the cells must still come through,
+    // or the next save would put an empty workbook over them.
+    const data = {
+      sheets: [
+        {
+          id: "s1",
+          name: "Sheet1",
+          cells: { A1: "1200" },
+          widths: {},
+          formats: { A1: { number: "accounting", bold: true }, B9: { fill: { r: 1 } }, Q: 1 },
+          freeze: { rows: "one" },
+        },
+      ],
+    };
+    await t.tdb.db.update(sheetBook).set({ data }).where(eq(sheetBook.entityId, id));
+    const s = await ok<Sheet & { book: Workbook }>("sheet.get", { id });
+    expect(s.book.sheets[0]).toMatchObject({
+      cells: { A1: "1200" },
+      formats: { A1: { bold: true } },
+      freeze: { rows: 0, cols: 0 },
+    });
+    expect(s.results[0]!.A1).toBe("1200");
   });
 
   it("works out a 3,000-cell sheet in under 100 ms", async () => {
@@ -114,7 +185,7 @@ describe("spreadsheets", () => {
     for (let r = 1; r <= 300; r++)
       for (let c = 0; c < 10; c++)
         cells[`${"ABCDEFGHIJ"[c]}${r}`] = c === 0 ? String(r * 3) : `=A${r}*${c + 1}`;
-    const book = { sheets: [{ id: "s1", name: "Big", cells, widths: {} }] };
+    const book = { sheets: [{ ...blankSheet("s1", "Big"), cells }] };
     expect(results(book)[0]!.J300).toBe("9000");
     // The first few runs are slow while V8 compiles IronCalc's WebAssembly fully (100+ ms), so
     // they don't count: a server works out sheets all day. The best of ten then allows for a
@@ -127,7 +198,7 @@ describe("spreadsheets", () => {
 
   it("works out NOW() and TODAY() in the owner's time zone", async () => {
     const { id } = await ok<{ id: string }>("sheet.create", { title: "Clock" });
-    const book = { sheets: [{ id: "s", name: "S", cells: { A1: "=NOW()" }, widths: {} }] };
+    const book = { sheets: [{ ...blankSheet("s", "S"), cells: { A1: "=NOW()" } }] };
     // "10/4/2026, 3:13 PM" → 15
     const hour = (s = "") => {
       const m = /(\d+):\d+ (AM|PM)/.exec(s)!;

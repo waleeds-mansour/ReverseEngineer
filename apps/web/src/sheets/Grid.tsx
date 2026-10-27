@@ -1,6 +1,6 @@
-// A spreadsheet (PLAN.md section 8.5): a grid of cells with a formula bar and sheet tabs. Type to
-// fill a cell, = for a formula; arrows, Tab and Enter move; Ctrl+C and Ctrl+V copy and paste with
-// Excel and Google Sheets.
+// A spreadsheet (PLAN.md section 8.5): a grid of cells with a formula bar, a formatting toolbar and
+// sheet tabs. Type to fill a cell, = for a formula; arrows, Tab and Enter move; Ctrl+C and Ctrl+V
+// copy and paste with Excel and Google Sheets; Ctrl+B and Ctrl+I bold and slant the selection.
 
 import { cellName, columnName, parseCell } from "@hearth/core";
 import {
@@ -15,11 +15,18 @@ import {
 } from "solid-js";
 import { PaneHeader } from "../components/ui.tsx";
 import { useAction } from "../lib/query.ts";
-import { clampPos, fromTsv, inRange, isNumber, type Pos, rangeOf, refsIn, toTsv } from "./grid.ts";
+import { cellStyle, turnsOn } from "./format.ts";
+import { clampPos, fromTsv, inRange, type Pos, rangeOf, refsIn, toTsv } from "./grid.ts";
+import { Header } from "./Header.tsx";
 import { createSheet } from "./state.ts";
 import { Tabs } from "./Tabs.tsx";
+import { Toolbar } from "./Toolbar.tsx";
 
 const WIDTH = 96;
+/** Each row's height, and the column letters' row above them, in pixels (h-6). */
+const ROW = 24;
+/** The row numbers' column (w-10). */
+const ROW_NUMBERS = 40;
 
 export function SheetGrid(props: { id: string; pane: number }) {
   const s = createSheet(props.id);
@@ -47,7 +54,16 @@ export function SheetGrid(props: { id: string; pane: number }) {
   const raw = (ref: string) => sheet().cells[ref] ?? "";
   const shown = (ref: string) => s.results()[tab()]?.[ref] ?? raw(ref);
   const range = () => rangeOf(anchor(), cur());
+  const selected = createMemo(() => refsIn(range()));
   const width = (col: number) => sheet().widths[columnName(col)] ?? WIDTH;
+  const freeze = () => sheet().freeze ?? { rows: 0, cols: 0 };
+  /** How far from the left a frozen column stays, or null when it scrolls. */
+  const frozenAt = (col: number) => {
+    if (col > freeze().cols) return null;
+    let left = ROW_NUMBERS;
+    for (let c = 1; c < col; c++) left += width(c);
+    return left;
+  };
 
   // Show what's used, plus room to grow into.
   const used = createMemo(() => {
@@ -98,9 +114,18 @@ export function SheetGrid(props: { id: string; pane: number }) {
     setEditing(null);
     focusGrid();
   };
+  const toggle = (part: "bold" | "italic") =>
+    s.format(tab(), selected(), { [part]: turnsOn(sheet().formats, selected(), part) || null });
 
   function onKey(e: KeyboardEvent) {
     const mod = e.ctrlKey || e.metaKey;
+    // Bold and italic work while typing in a cell too: they're the cell's, not its words'.
+    const key = e.key.toLowerCase();
+    if (mod && !e.shiftKey && !e.altKey && (key === "b" || key === "i")) {
+      e.preventDefault();
+      toggle(key === "b" ? "bold" : "italic");
+      return;
+    }
     if (editing()) {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -137,8 +162,9 @@ export function SheetGrid(props: { id: string; pane: number }) {
       e.preventDefault();
       startEdit("cell");
     } else if (e.key === "Delete" || e.key === "Backspace") {
+      // What's in the cells goes; how they look stays, as in any spreadsheet.
       e.preventDefault();
-      s.set(tab(), Object.fromEntries(refsIn(range()).map((r) => [r, ""])));
+      s.set(tab(), Object.fromEntries(selected().map((r) => [r, ""])));
     } else if (mod && e.key.toLowerCase() === "z") {
       e.preventDefault();
       if (e.shiftKey) s.redo();
@@ -157,7 +183,7 @@ export function SheetGrid(props: { id: string; pane: number }) {
     if (editing()) return;
     e.preventDefault();
     e.clipboardData?.setData("text/plain", toTsv(range(), raw));
-    if (cut) s.set(tab(), Object.fromEntries(refsIn(range()).map((r) => [r, ""])));
+    if (cut) s.set(tab(), Object.fromEntries(selected().map((r) => [r, ""])));
   };
   const paste = (e: ClipboardEvent) => {
     if (editing()) return;
@@ -165,33 +191,6 @@ export function SheetGrid(props: { id: string; pane: number }) {
     const text = e.clipboardData?.getData("text/plain") ?? "";
     const r = range();
     if (text) s.set(tab(), fromTsv(text, { row: r.top, col: r.left }));
-  };
-
-  // Dragging a column header's right edge sets its width.
-  const resize = (col: number, e: PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const start = e.clientX;
-    const from = width(col);
-    let to = from;
-    const el = e.currentTarget as HTMLElement;
-    el.setPointerCapture(e.pointerId);
-    const th = el.parentElement!;
-    const moveIt = (m: PointerEvent) => {
-      to = Math.min(800, Math.max(30, from + m.clientX - start));
-      th.style.width = `${to}px`;
-      th.style.minWidth = `${to}px`;
-    };
-    const up = () => {
-      el.removeEventListener("pointermove", moveIt);
-      el.removeEventListener("pointerup", up);
-      if (to !== from)
-        s.change((d) => {
-          d.sheets[tab()]!.widths[columnName(col)] = Math.round(to);
-        });
-    };
-    el.addEventListener("pointermove", moveIt);
-    el.addEventListener("pointerup", up);
   };
 
   const curRef = () => cellName(cur().row, cur().col);
@@ -218,22 +217,25 @@ export function SheetGrid(props: { id: string; pane: number }) {
           (s.saving() ? "Saving…" : "Type to fill a cell · = starts a formula · F2 edits")
         }
       />
-      <div class="flex items-center gap-2 border-b border-line px-2 py-1 text-sm">
-        <span class="w-14 shrink-0 text-center font-mono text-xs text-muted">{curRef()}</span>
-        <span class="text-faint">ƒx</span>
-        <input
-          class="min-w-0 flex-1 rounded bg-sunk px-2 py-1 font-mono text-xs"
-          aria-label="Cell contents"
-          value={editing() ? draft() : raw(curRef())}
-          // Before the first read the screen is a blank workbook, not Hearth's: nothing to edit.
-          readOnly={!s.loaded()}
-          onFocus={() =>
-            s.loaded() && editing() !== "bar" && startEdit("bar", editing() ? draft() : undefined)
-          }
-          onInput={(e) => setDraft(e.currentTarget.value)}
-          onKeyDown={onKey}
-          onBlur={() => editing() === "bar" && commit()}
-        />
+      <div class="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line px-2 py-1 text-sm">
+        <div class="flex min-w-48 flex-1 items-center gap-2">
+          <span class="w-14 shrink-0 text-center font-mono text-xs text-muted">{curRef()}</span>
+          <span class="text-faint">ƒx</span>
+          <input
+            class="min-w-0 flex-1 rounded bg-sunk px-2 py-1 font-mono text-xs"
+            aria-label="Cell contents"
+            value={editing() ? draft() : raw(curRef())}
+            // Before the first read the screen is a blank workbook, not Hearth's: nothing to edit.
+            readOnly={!s.loaded()}
+            onFocus={() =>
+              s.loaded() && editing() !== "bar" && startEdit("bar", editing() ? draft() : undefined)
+            }
+            onInput={(e) => setDraft(e.currentTarget.value)}
+            onKeyDown={onKey}
+            onBlur={() => editing() === "bar" && commit()}
+          />
+        </div>
+        <Toolbar sheet={s} tab={tab()} refs={selected()} at={curRef()} done={focusGrid} />
       </div>
       <div ref={scroller} class="relative flex-1 overflow-auto" data-sheet-grid>
         <Show
@@ -242,95 +244,115 @@ export function SheetGrid(props: { id: string; pane: number }) {
         >
           <table
             class="border-separate border-spacing-0 text-sm"
-            style={{ "table-layout": "fixed" }}
+            style={{
+              "table-layout": "fixed",
+              // Moving to a cell scrolls it clear of the rows and columns that stay put.
+              "--frozen-top": `${ROW * (1 + freeze().rows)}px`,
+              "--frozen-left": `${frozenAt(freeze().cols + 1) ?? ROW_NUMBERS}px`,
+            }}
           >
-            <thead>
-              <tr>
-                <th class="sticky top-0 left-0 z-20 w-10 min-w-10 border-r border-b border-line bg-sunk" />
-                <For each={colList()}>
-                  {(c) => (
-                    <th
-                      class="sticky top-0 z-10 border-r border-b border-line bg-sunk px-1 text-xs font-normal text-muted"
-                      classList={{ "text-ink": c >= range().left && c <= range().right }}
-                      style={{ width: `${width(c)}px`, "min-width": `${width(c)}px` }}
-                    >
-                      <div class="relative">
-                        {columnName(c)}
-                        <div
-                          class="absolute -right-1 top-0 h-full w-2 cursor-col-resize"
-                          onPointerDown={(e) => resize(c, e)}
-                        />
-                      </div>
-                    </th>
-                  )}
-                </For>
-              </tr>
-            </thead>
+            <Header
+              sheet={s}
+              tab={tab()}
+              cols={colList()}
+              width={width}
+              range={range()}
+              frozenAt={frozenAt}
+              frozenCols={freeze().cols}
+            />
             <tbody>
               <For each={rowList()}>
-                {(r) => (
-                  <tr>
-                    <th class="sticky left-0 z-10 border-r border-b border-line bg-sunk px-1 text-right text-xs font-normal text-muted">
-                      {r}
-                    </th>
-                    <For each={colList()}>
-                      {(c) => {
-                        const ref = cellName(r, c);
-                        const here = () => cur().row === r && cur().col === c;
-                        const value = () => shown(ref);
-                        return (
-                          <td
-                            data-cell={ref}
-                            class="relative h-6 max-w-0 truncate border-r border-b border-line px-1"
-                            classList={{
-                              "bg-jarvis/10": inRange(range(), r, c) && !here(),
-                              "text-right": isNumber(value()),
-                              "outline outline-2 -outline-offset-2 outline-jarvis": here(),
-                            }}
-                            onMouseDown={(e) => {
-                              if (e.button !== 0) return;
-                              e.preventDefault();
-                              if (editing()) commit();
-                              select({ row: r, col: c }, e.shiftKey);
-                              focusGrid();
-                            }}
-                            onMouseEnter={(e) =>
-                              e.buttons === 1 && select({ row: r, col: c }, true)
-                            }
-                            onDblClick={() => {
-                              startEdit("cell");
-                              focusGrid();
-                            }}
-                          >
-                            {here() && editing() === "cell" ? "" : value()}
-                            <Show when={here()}>
-                              <input
-                                ref={keys}
-                                class="absolute inset-0 h-full w-full bg-panel px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset"
-                                classList={{
-                                  "pointer-events-none opacity-0": editing() !== "cell",
-                                }}
-                                aria-label={`Cell ${ref}`}
-                                value={editing() === "cell" ? draft() : ""}
-                                onInput={(e) => {
-                                  // Read it first: starting the edit re-renders the input's value.
-                                  const text = e.currentTarget.value;
-                                  setDraft(text);
-                                  setEditing("cell");
-                                }}
-                                onKeyDown={onKey}
-                                onCopy={(e) => clipboard(e)}
-                                onCut={(e) => clipboard(e, true)}
-                                onPaste={paste}
-                                onBlur={() => editing() === "cell" && commit()}
-                              />
-                            </Show>
-                          </td>
-                        );
-                      }}
-                    </For>
-                  </tr>
-                )}
+                {(r) => {
+                  const top = () => (r <= freeze().rows ? ROW * r : null);
+                  return (
+                    <tr>
+                      <th
+                        class="sticky left-0 border-r border-b border-line bg-sunk px-1 text-right text-xs font-normal text-muted"
+                        // A frozen row's number stays over the numbers that scroll under it.
+                        classList={{
+                          "z-10": top() === null,
+                          "z-20": top() !== null,
+                          "border-b-border-strong": r === freeze().rows,
+                        }}
+                        style={{ top: top() === null ? undefined : `${top()}px` }}
+                      >
+                        {r}
+                      </th>
+                      <For each={colList()}>
+                        {(c) => {
+                          const ref = cellName(r, c);
+                          const here = () => cur().row === r && cur().col === c;
+                          const value = () => shown(ref);
+                          const left = () => frozenAt(c);
+                          const stuck = () => top() !== null || left() !== null;
+                          return (
+                            <td
+                              data-cell={ref}
+                              class="relative h-6 max-w-0 scroll-mt-(--frozen-top) scroll-ml-(--frozen-left) truncate border-r border-b border-line px-1"
+                              classList={{
+                                "outline outline-2 -outline-offset-2 outline-jarvis": here(),
+                                // A darker line where what stays put meets what scrolls.
+                                "border-b-border-strong": r === freeze().rows,
+                                "border-r-border-strong": c === freeze().cols,
+                              }}
+                              style={{
+                                ...cellStyle(sheet().formats?.[ref], value(), {
+                                  selected: inRange(range(), r, c) && !here(),
+                                  frozen: stuck(),
+                                }),
+                                position: stuck() ? "sticky" : undefined,
+                                top: top() === null ? undefined : `${top()}px`,
+                                left: left() === null ? undefined : `${left()}px`,
+                                // Over the cells that scroll under them; a corner over both.
+                                "z-index": stuck()
+                                  ? String(top() !== null && left() !== null ? 2 : 1)
+                                  : undefined,
+                              }}
+                              onMouseDown={(e) => {
+                                if (e.button !== 0) return;
+                                e.preventDefault();
+                                if (editing()) commit();
+                                select({ row: r, col: c }, e.shiftKey);
+                                focusGrid();
+                              }}
+                              onMouseEnter={(e) =>
+                                e.buttons === 1 && select({ row: r, col: c }, true)
+                              }
+                              onDblClick={() => {
+                                startEdit("cell");
+                                focusGrid();
+                              }}
+                            >
+                              {here() && editing() === "cell" ? "" : value()}
+                              <Show when={here()}>
+                                <input
+                                  ref={keys}
+                                  class="absolute inset-0 h-full w-full bg-panel px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset"
+                                  classList={{
+                                    "pointer-events-none opacity-0": editing() !== "cell",
+                                  }}
+                                  aria-label={`Cell ${ref}`}
+                                  value={editing() === "cell" ? draft() : ""}
+                                  onInput={(e) => {
+                                    // Read it first: starting the edit re-renders the input's value.
+                                    const text = e.currentTarget.value;
+                                    setDraft(text);
+                                    setEditing("cell");
+                                  }}
+                                  onKeyDown={onKey}
+                                  onCopy={(e) => clipboard(e)}
+                                  onCut={(e) => clipboard(e, true)}
+                                  onPaste={paste}
+                                  onBlur={() => editing() === "cell" && commit()}
+                                />
+                              </Show>
+                            </td>
+                          );
+                        }}
+                      </For>
+                    </tr>
+                  );
+                }}
               </For>
             </tbody>
           </table>
