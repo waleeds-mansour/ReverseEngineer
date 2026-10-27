@@ -4,8 +4,10 @@
 // board's cards and arrows by id, a workbook's sheets by id and their cells (and the cells'
 // formats) by name. A piece only one side changed takes that side; a piece both changed takes
 // this screen's.
+// Types only from sheet.ts: the web app's main script loads this file for its text merge, and a
+// value from there would bring zod and every sheet schema into it.
 import type { Canvas } from "./canvas.ts";
-import { NO_FREEZE, type Workbook, type Worksheet } from "./sheet.ts";
+import type { Workbook, Worksheet } from "./sheet.ts";
 
 /** JSON with keys sorted, so the same value reads the same whichever side built it. */
 const canonical = (v: unknown): string =>
@@ -78,7 +80,7 @@ function mergeSheet(
   const from = b ?? { ...t, cells: {}, widths: {}, formats: {} };
   // A copy kept on a device before sheets had formats has none.
   const formats = (s: Worksheet) => s.formats ?? {};
-  const freeze = (s: Worksheet) => s.freeze ?? { ...NO_FREEZE };
+  const freeze = (s: Worksheet) => s.freeze ?? { rows: 0, cols: 0 };
   return {
     ...t,
     name: same(m.name, from.name) ? t.name : m.name,
