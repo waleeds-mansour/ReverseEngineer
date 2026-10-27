@@ -2,6 +2,7 @@
 // from; /api/health/deep says the build the server started with and whether its database fits.
 // A page you come back to (the desktop app's window opened from the tray, a tab, the phone app)
 // moves to a new build by itself when that loses nothing; otherwise it says Hearth was updated.
+import { type Typing, typing } from "./typing.ts";
 
 /** What the page reads from /api/health/deep. */
 export interface ServerBuild {
@@ -192,19 +193,21 @@ const CLICKED = new Set([
 /**
  * Whether reloading the page now would lose something: what its own "leave this page?" guards
  * hold, asked as the browser asks them (a note or a board not saved yet: doc.ts, wholeSave.ts),
- * or text in a field (a message half-written, a task not added yet). A field filled in by the
- * page counts too, since that can't be told from typing; the notice then asks first.
+ * text you typed in a field and haven't sent (a message half-written, a task not added yet), or
+ * typing a moment ago anywhere. What Nook filled in a field itself isn't counted (typing.ts).
  */
 export function wouldLoseWork(
   win: EventTarget = window,
   doc: Pick<ParentNode, "querySelectorAll"> = document,
+  typed: Typing = typing,
 ): boolean {
   const leaving = new Event("beforeunload", { cancelable: true });
   win.dispatchEvent(leaving);
   if (leaving.defaultPrevented) return true;
+  if (typed.recently()) return true;
   const fields = doc.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea");
   return Array.from(fields).some(
-    (f) => !CLICKED.has(f.type) && !f.readOnly && !f.disabled && f.value !== f.defaultValue,
+    (f) => !CLICKED.has(f.type) && !f.readOnly && !f.disabled && typed.changed(f),
   );
 }
 
