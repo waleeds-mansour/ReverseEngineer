@@ -126,6 +126,19 @@
   }
 }
 
+/* Pip's bar floats over the bottom of the panes (jarvis/PipDock.tsx); --pip-room is its height.
+   A pane's view keeps that much clear, so what it ends with (a conversation's reply bar, a
+   composer, the calendar's grid) never sits under the bar. When it ends with its scroll, the
+   scroll runs on under the bar instead, on the page's own background, and ends with that room,
+   so its last row scrolls up clear of the bar. Unlayered: it beats a scroll's own padding. */
+[data-pane] > * {
+  padding-bottom: var(--pip-room, 0px);
+}
+[data-pane] > * > .flex-1:is(.overflow-auto, .overflow-y-auto):last-child {
+  margin-bottom: calc(-1 * var(--pip-room, 0px));
+  padding-bottom: calc(var(--pip-room, 0px) + 0.5rem);
+}
+
 /* A theme change crossfades (lib/theme.ts sets this for one beat). */
 :root[data-theme-fade] *,
 :root[data-theme-fade] *::before,

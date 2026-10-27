@@ -65,27 +65,34 @@ function Row(props: { event: CalEvent; pane: number }) {
         style={{ "background-color": colour(e().calendarColor) }}
         aria-hidden="true"
       />
+      {/* Its marks go under its name, so a row with guests and Join still has room for the name. */}
       <span class="min-w-0 flex-1">
-        <span
-          class={`block truncate ${e().selfResponse === "declined" ? "line-through opacity-60" : ""}`}
-        >
-          {e().title}
+        <span class="flex items-center gap-1.5">
+          <span
+            class={`truncate ${e().selfResponse === "declined" ? "line-through opacity-60" : ""}`}
+          >
+            {e().title}
+          </span>
+          <Show when={e().madeByPip}>
+            <JarvisMark size={14} label="Pip put this here" class="shrink-0" />
+          </Show>
         </span>
         <span class="block truncate text-xs text-faint">
           {[e().allDay ? null : `until ${time(new Date(e().endsAt))}`, e().location]
             .filter(Boolean)
             .join(" · ")}
         </span>
+        <Show when={e().taskId || e().prepId}>
+          <span class="mt-1 flex flex-wrap gap-1.5">
+            <Show when={e().taskId}>
+              <Badge>focus</Badge>
+            </Show>
+            <Show when={e().prepId}>
+              <Badge tone="positive">Prep ready</Badge>
+            </Show>
+          </span>
+        </Show>
       </span>
-      <Show when={e().madeByPip}>
-        <JarvisMark size={14} label="Pip put this here" class="self-center" />
-      </Show>
-      <Show when={e().taskId}>
-        <Badge>focus</Badge>
-      </Show>
-      <Show when={e().prepId}>
-        <Badge tone="positive">Prep ready</Badge>
-      </Show>
       <Show when={guests() > 0}>
         <span class="text-xs text-faint">{plural(guests(), "guest")}</span>
       </Show>

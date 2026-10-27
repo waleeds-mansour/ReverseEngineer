@@ -1,6 +1,7 @@
 // One conversation in Mail's list: who it's with, its subject and first words, and its marks
 // (starred, a draft waiting, a reply owed). Pointing at it on a computer shows Archive, Make task
-// and Reply; its menu, there on a phone too, moves it to another bundle.
+// and Reply; its menu, there on a phone too, moves it to another bundle. On a phone it takes two
+// lines, as a phone's mail does: who and when over the subject and its marks.
 
 import { Show } from "solid-js";
 import { Icon } from "../../components/icons.tsx";
@@ -35,12 +36,15 @@ export function ThreadRow(props: {
       data-active={props.active}
       onClick={(e) => props.onOpen(e.shiftKey)}
     >
-      <div class="flex items-baseline gap-3">
+      {/* On a phone, the dot, who, when and the menu come first (-order-1), and the subject and
+          its marks after the break, on a line of their own under who it's with. */}
+      <div class="flex items-baseline gap-3 max-md:flex-wrap max-md:gap-y-0.5">
         <span
-          class={`mt-1.5 size-2 shrink-0 self-start rounded-full ${t().unread ? "bg-accent" : "bg-transparent"}`}
+          class={`mt-1.5 size-2 shrink-0 self-start rounded-full max-md:-order-1 ${t().unread ? "bg-accent" : "bg-transparent"}`}
         />
-        {/* Narrower on a phone, where the subject needs the room. */}
-        <span class={`w-24 shrink-0 truncate text-sm md:w-40 ${t().unread ? "font-semibold" : ""}`}>
+        <span
+          class={`min-w-0 flex-1 truncate text-sm max-md:-order-1 md:w-40 md:flex-none ${t().unread ? "font-semibold" : ""}`}
+        >
           {t()
             .participants.filter((p) => p.address !== t().account)
             .map(named)
@@ -49,7 +53,7 @@ export function ThreadRow(props: {
             <span class="text-faint"> {t().messageCount}</span>
           </Show>
         </span>
-        <span class="min-w-0 flex-1 truncate text-sm">
+        <span class="min-w-0 flex-1 truncate text-sm max-md:ml-5">
           <span class={t().unread ? "font-semibold" : ""}>{t().subject}</span>
           <span class="text-muted"> · {t().snippet}</span>
         </span>
@@ -74,7 +78,7 @@ export function ThreadRow(props: {
         <Show when={t().waiting === "them" && props.lane === "waiting"}>
           <Badge>no answer yet</Badge>
         </Show>
-        <span class="shrink-0 text-xs text-faint md:group-hover:hidden">
+        <span class="shrink-0 text-xs text-faint max-md:-order-1 md:group-hover:hidden">
           {ago(t().lastMessageAt)}
         </span>
         {/* Pointing at a row on a computer; a phone has the open email's bar. */}
@@ -101,13 +105,14 @@ export function ThreadRow(props: {
             onClick={() => props.onReply()}
           />
         </span>
-        <span class="-my-1.5 self-center">
+        <span class="-my-1.5 self-center max-md:-order-1">
           <Overflow
             class={ROW_MENU}
             label={`Move ${t().subject || "this conversation"} to another bundle`}
             items={moveItems(t())}
           />
         </span>
+        <span class="hidden h-0 basis-full max-md:-order-1 max-md:block" />
       </div>
     </li>
   );

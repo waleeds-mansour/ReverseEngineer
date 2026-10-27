@@ -1,7 +1,7 @@
 // The app: sign-in gate, then the shell: the tabs along the top (on a phone, a tab bar at the
-// bottom), split panes at the window's full width, Pip's bar at the bottom of every screen, and
-// Cmd+K. A device that was signed in last time gets the shell at once, while the server confirms
-// it (lib/signedIn.ts).
+// bottom), split panes at the window's full width, Pip's bar floating over the bottom of every
+// screen, and Cmd+K. A device that was signed in last time gets the shell at once, while the
+// server confirms it (lib/signedIn.ts).
 
 import { QueryClientProvider } from "@tanstack/solid-query";
 import {
@@ -143,6 +143,7 @@ function Shell(props: { onSignOut: () => void; covered: boolean }) {
   const [palette, setPalette] = createSignal(false);
   const [help, setHelp] = createSignal(false);
   const [menu, setMenu] = createSignal(false);
+  const [pipRoom, setPipRoom] = createSignal(0);
   const waiting = useWaiting();
   onMount(() => {
     live.start();
@@ -216,6 +217,8 @@ function Shell(props: { onSignOut: () => void; covered: boolean }) {
     return (
       <section
         class={`relative min-w-0 flex-1 overflow-hidden border-r border-line bg-panel last:border-r-0 md:min-w-80 ${layout.panes().length > 1 && layout.focused() === index() && !narrow() ? "shadow-[inset_0_2px_0_var(--color-accent)]" : ""}`}
+        // Its view keeps Pip's bar clear (index.css).
+        data-pane
         onMouseDown={focusHere}
         onFocusIn={focusHere}
       >
@@ -256,7 +259,9 @@ function Shell(props: { onSignOut: () => void; covered: boolean }) {
           />
         </Show>
       </Show>
-      <div class="flex min-h-0 flex-1">
+      {/* Pip's bar floats over the panes' bottom: --pip-room is its height, which each pane keeps
+          clear or scrolls past (index.css). */}
+      <div class="relative flex min-h-0 flex-1" style={{ "--pip-room": `${pipRoom()}px` }}>
         {/* On a phone Pip's conversation takes the place of the pane. */}
         <main
           class="flex min-w-0 flex-1 pt-[env(safe-area-inset-top)] md:overflow-x-auto md:pt-0"
@@ -272,8 +277,8 @@ function Shell(props: { onSignOut: () => void; covered: boolean }) {
         <Show when={narrow() && jarvis.open()}>
           <JarvisPane onClose={() => jarvis.toggle(false)} />
         </Show>
+        <PipDock onHeight={setPipRoom} />
       </div>
-      <PipDock />
       <Show when={narrow()}>
         <TabBar waiting={waiting()} onMenu={() => setMenu(true)} />
       </Show>

@@ -40,10 +40,8 @@ export function Starters(props: { go: Go; class?: string }) {
     });
 
   return (
-    // One line, even on a phone: it scrolls sideways rather than taking two.
-    <div
-      class={`-mx-4 flex items-center gap-2 overflow-x-auto px-4 md:mx-0 md:px-0 ${props.class ?? ""}`}
-    >
+    // On a narrow phone the last chip goes onto a second line, rather than off the screen's edge.
+    <div class={`flex flex-wrap items-center gap-2 ${props.class ?? ""}`}>
       <Chip icon="today" busy={busy().has("plan")} onClick={() => void plan()}>
         Plan my day
       </Chip>
