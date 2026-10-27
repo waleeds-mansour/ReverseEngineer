@@ -1,6 +1,7 @@
-// CI runs on the owner's PC, which is also the live Hearth's (D66). A self-hosted job runs this
-// first, and again at the top of every step that starts a server, takes a backup or restores
-// one. It exits 1, naming each problem, unless everything the job could reach is CI's own: its
+// CI's Windows job runs on the owner's PC, which is also the live Hearth's (D66). Each CI job runs
+// this first, and again at the top of every step that starts a server, takes a backup or restores
+// one: the Linux job too, on GitHub's own machine, so both test Hearth set up the same way. It
+// exits 1, naming each problem, unless everything the job could reach is CI's own: its
 // Postgres (5499, never the live 5432), a database named for this run, ports 4480-4499 (never
 // 4400 or 4443), folders under the runner's temp folder, an empty rclone config (the owner's
 // lists Google Drive), no .env, and no Chrome but Playwright's. Hearth's own defaults point at
@@ -103,8 +104,12 @@ export function check(env: NodeJS.ProcessEnv, host: Host = realHost): string[] {
         if (inside(dir, live) || inside(live, dir))
           problems.push(`${name} is ${dir}, which overlaps the live Hearth's ${live}.`);
     }
+  } else if (env.RUNNER_ENVIRONMENT === "github-hosted") {
+    // GitHub's own machine, made for the job and thrown away after it: not a container, and its
+    // Docker is GitHub's, with none of the PC behind it. The runner sets RUNNER_ENVIRONMENT, and a
+    // workflow can't override a RUNNER_ variable, so the PC's runners can't claim to be this.
   } else {
-    // The Linux runner is a container with no way out to the PC's drives or Docker.
+    // The PC's Linux runner is a container with no way out to the PC's drives or Docker.
     if (!host.exists("/.dockerenv"))
       problems.push(
         "Not inside a container: the Linux CI jobs run only in the hearth-ci-linux container.",

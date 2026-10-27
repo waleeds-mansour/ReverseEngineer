@@ -1,12 +1,15 @@
 name: CI
 
-# Both jobs run on the owner's PC, which is also the live Hearth's (D66, docs/ci.md): the Linux one
-# in a container (ops/ci-runner/linux), the Windows one as the owner, at below-normal priority.
-# Everything they touch is CI's own: Postgres on 5499 (the live one is 5432), a database named for
-# the run, ports 4480-4499 (the live server is 4400, Tailscale serves it on 4443), folders under
-# RUNNER_TEMP, an empty rclone config, no .env and no Chrome but Playwright's. Hearth's defaults
-# point at the live install, so each is set here, at the job, and ops/ci-runner/guard.ts refuses
-# to go on without them: first in each job, then before each server, backup and restore.
+# The Windows job runs on the owner's PC, which is also the live Hearth's (D66, docs/ci.md), as the
+# owner, at below-normal priority. The Linux one runs on GitHub's own machine (free: the repository
+# is public), so pull requests' Linux checks run side by side, off the PC. Everything both touch
+# is CI's own: Postgres on 5499 (the live one is 5432), a database named for the run, ports
+# 4480-4499 (the live server is 4400, Tailscale serves it on 4443), folders under RUNNER_TEMP, an
+# empty rclone config, no .env and no Chrome but Playwright's. Hearth's defaults point at the live
+# install, so each is set here, at the job, and ops/ci-runner/guard.ts refuses to go on without
+# them: before anything of Hearth's runs in each job, then before each server, backup and restore.
+# GitHub's machine can't reach the PC, but the Linux job keeps the same settings and checks, so the
+# two jobs test Hearth set up the same way.
 
 on:
   # The deploy branch (what update.ps1 pulls): every merge is tested again, as merged.
@@ -75,9 +78,14 @@ jobs:
 
   check:
     needs: changes
-    # Never a fork's code on the owner's PC. Whatever became of `changes`, short of a cancel.
+    # Not a fork's pull request: the same rule as the Windows job, where it keeps a fork's code off
+    # the owner's PC. Whatever became of `changes`, short of a cancel.
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-    runs-on: [self-hosted, Linux, hearth-ci]
+    # GitHub's Ubuntu runner, 4 vCPUs. The PC had one Linux runner, a container with 4 of its
+    # cores: every pull request's check waited its turn there, about 9 min each, while the owner
+    # was using the same PC. 24.04 by name, not ubuntu-latest: PostgreSQL 16's folder below and
+    # Playwright's list of Ubuntu packages are that release's.
+    runs-on: ubuntu-24.04
     # Each job queues on its own, so a merge's Linux check never waits for the Windows job before it
     # (which a busy PC can hold for an hour). A new push to a PR replaces its running check; a merge
     # to the deploy branch waits for the one before it. Checks still waiting are dropped for newer.
@@ -100,13 +108,11 @@ jobs:
       HEARTH_E2E_URL: http://localhost:4480
       HEARTH_E2E_PORT: "4484"
       HEARTH_CHROME_LAUNCH: "off"
-      # The container gets 4 of the PC's 16 cores, which the live Hearth shares, and its CPU quota
-      # stalls a busy moment where a GitHub runner wouldn't: timed tests get three times a
-      # developer's PC's budget (packages/db/src/testing/timing.ts), as on the Windows job.
+      # Timed tests get three times a developer's PC's budget (packages/db/src/testing/timing.ts),
+      # as on the Windows job: GitHub's 4 vCPUs are shared by four test files at a time and the
+      # job's Postgres, and are slower than a developer's cores. Three still fails a tenfold
+      # slowdown; a timed test that fails only because the runner was busy costs more than slack.
       HEARTH_PERF_SLACK: "3"
-      # Kept in the work volume, so they survive the job (and a new image).
-      npm_config_store_dir: /home/runner/_work/_cache/pnpm-store
-      PLAYWRIGHT_BROWSERS_PATH: /home/runner/_work/_cache/ms-playwright
     steps:
       - name: CI's folders, under RUNNER_TEMP
         run: |
@@ -123,18 +129,29 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
+      # pnpm before Node: setup-node asks pnpm where its store is, restores it from GitHub's cache
+      # (keyed on pnpm-lock.yaml), and saves it when there was none yet for this lockfile.
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-          package-manager-cache: false
+          cache: pnpm
       - name: Guard (nothing here may reach the live Hearth)
         run: node ops/ci-runner/guard.ts
-      - uses: pnpm/action-setup@v4
-      # In the image (ops/ci-runner/linux/Dockerfile): a cluster of the job's own in RUNNER_TEMP,
-      # gone with it. Nothing on it outlives the job, so it skips flushing to disk.
-      - name: PostgreSQL 16 in this container (port 5499), and a database for this run
+      # GitHub's Ubuntu 24.04 image has PostgreSQL 16 from PGDG with its service off (runner-images,
+      # Ubuntu2404-Readme.md). The job starts a cluster of its own in RUNNER_TEMP instead, gone with
+      # it. Nothing on it outlives the job, so it skips flushing to disk.
+      - name: PostgreSQL 16 (port 5499), and a database for this run
         run: |
           bin=/usr/lib/postgresql/16/bin
+          # Should the image move on from 16, Ubuntu 24.04's own archive still has it.
+          if [ ! -x "$bin/initdb" ]; then
+            echo "::warning::PostgreSQL 16 isn't in GitHub's image any more; installing Ubuntu's."
+            sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends postgresql-16
+          fi
+          # 16's own psql, pg_dump and pg_restore for the steps after this, ahead of Debian's
+          # version-picking wrappers in /usr/bin.
+          echo "$bin" >> "$GITHUB_PATH"
           "$bin/initdb" -D "$RUNNER_TEMP/pg" -U hearth --auth=trust -E UTF8 --locale=C.UTF-8 > /dev/null
           "$bin/pg_ctl" -D "$RUNNER_TEMP/pg" -l "$RUNNER_TEMP/pg.log" -w start -o "-p 5499 \
             -c listen_addresses=localhost -k $RUNNER_TEMP -c fsync=off -c synchronous_commit=off \
@@ -151,12 +168,14 @@ jobs:
       - name: Typecheck
         if: needs.changes.outputs.docs_only != 'true'
         run: pnpm typecheck
-      - name: Chromium (page tests and the browser smoke test; its libraries are in the image)
+      # Downloaded each run, not cached: Playwright's CI guide advises against it (a restore takes
+      # about as long as the download, and the Ubuntu packages can't be cached anyway).
+      - name: Chromium, and the libraries and fonts it needs from Ubuntu (page and end-to-end tests)
         if: needs.changes.outputs.docs_only != 'true'
-        run: pnpm --filter @hearth/web exec playwright install chromium
+        run: pnpm --filter @hearth/web exec playwright install --with-deps chromium
       - name: Tests
         if: needs.changes.outputs.docs_only != 'true'
-        # Four test files at a time, one per core the container has.
+        # Four test files at a time, one per vCPU of GitHub's runner.
         run: pnpm test --maxWorkers=4
       - name: Build the web app
         if: needs.changes.outputs.docs_only != 'true'
@@ -164,9 +183,9 @@ jobs:
       - name: Main bundle size, and no Loro or WebAssembly in it
         if: needs.changes.outputs.docs_only != 'true'
         run: pnpm check:bundle
-      # Each end-to-end step gets at least five times the longest it took in the 40 runs before
-      # 2026-10-23 (17-49 s), so a hang fails in minutes, not at the job's 30: run 39928093984 sat
-      # 23 min in the offline one.
+      # Each end-to-end step gets at least five times the longest it took in the 40 runs on the
+      # PC's runner before 2026-10-23 (17-49 s), so a hang fails in minutes, not at the job's 30:
+      # run 39928093984 sat 23 min in the offline one.
       - name: Browser smoke test
         if: needs.changes.outputs.docs_only != 'true'
         timeout-minutes: 4
@@ -299,8 +318,8 @@ jobs:
       HEARTH_CHROME_LAUNCH: "off"
       # Timed tests get three times a developer's PC's budget (packages/db/src/testing/timing.ts).
       # This PC is that developer's PC, but CI runs at below-normal priority beside the live
-      # Hearth and the Linux job, and shares the cluster on 5499 with other test runs: a timed run
-      # can wait its turn. Three still fails a tenfold slowdown, as on GitHub's Windows runner.
+      # Hearth and the owner's own use, and shares the cluster on 5499 with other test runs: a timed
+      # run can wait its turn. Three still fails a tenfold slowdown, as on GitHub's Windows runner.
       HEARTH_PERF_SLACK: "3"
       # On D:, next to the runner: C: has little room, and these are CI's, not the owner's.
       npm_config_store_dir: D:\hearth-ci\pnpm-store
