@@ -1,7 +1,8 @@
-// Email (M2): your Gmail accounts in one triage inbox, split into Signal and Noise, threaded by
-// RFC headers, with people built from the mail you send (PLAN.md section 8.1, D15).
+// Email (M2): your Gmail accounts in one triage inbox, sorted into bundles (People, Updates,
+// Receipts, Newsletters: L2-04) with Signal and Noise by sender (lanes.ts), threaded by RFC
+// headers, with people built from the mail you send (PLAN.md section 8.1, D15).
 import { localDate } from "@hearth/core";
-import { mailAccount, mailMessage, mailSenderRule, mailThread } from "@hearth/db";
+import { mailAccount, mailMessage } from "@hearth/db";
 import {
   ActionError,
   type DigestItem,
@@ -10,14 +11,15 @@ import {
   getSetting,
   type ReflexDef,
 } from "@hearth/kernel";
-import { and, eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { id, isoDateTime } from "../shared.ts";
 import { archiveAction, unarchiveAction } from "./archive.ts";
 import { newMailNeedsReply } from "./arrivals.ts";
+import { bundle, bundleActions } from "./bundle-actions.ts";
 import { describeDraft, draftActions } from "./drafts.ts";
-import { changeFlags, pendingChanges, recomputeThread } from "./flags.ts";
-import { normalizePattern, senderPatterns } from "./people.ts";
+import { changeFlags, pendingChanges } from "./flags.ts";
+import { lane, laneActions } from "./lanes.ts";
 import { restoreAction } from "./repair.ts";
 import { sendAction } from "./send.ts";
 import { retrySetAside, syncMail, syncProgress } from "./sync.ts";
@@ -33,7 +35,6 @@ export { messageAttachment, messageHtml } from "./views.ts";
 export { threadsToDraft } from "./waiting.ts";
 
 const ids = z.array(id).min(1).max(500).describe("Conversation ids.");
-const lane = z.enum(["signal", "noise"]);
 
 const syncFailed: ReflexDef = {
   name: "mail.sync_failed",
@@ -123,7 +124,8 @@ function flagAction(
 
 export const mailModule = defineModule({
   name: "mail",
-  description: "Email: your Gmail accounts in one inbox, split into Signal and Noise.",
+  description:
+    "Email: your Gmail accounts in one inbox, sorted into People, Updates, Receipts and Newsletters. Senders you send to Noise stay out of People.",
   entityTypes: ["email_thread", "email", "email_draft"],
   // Mail is written by other people: reading it makes the rest of Jarvis's turn untrusted (D25).
   outsideTypes: ["email_thread", "email", "email_draft"],
@@ -165,10 +167,11 @@ export const mailModule = defineModule({
     defineAction({
       name: "mail.threads",
       description:
-        "List email conversations, newest first: the inbox (default), starred, sent, all, or trash. Filter by lane (signal or noise), account or unread.",
+        "List email conversations, newest first: the inbox (default), starred, sent, all, or trash. Filter by lane (signal or noise), bundle (people, updates, receipts, newsletters), account or unread.",
       input: z.object({
         view: z.enum(["inbox", "starred", "sent", "all", "trash"]).default("inbox"),
         lane: lane.optional(),
+        bundle: bundle.optional(),
         account: z.string().email().optional(),
         unread: z.boolean().optional(),
         waiting: z
@@ -239,83 +242,7 @@ export const mailModule = defineModule({
       // Back out with mail.unarchive for 30 days, so Pip triages on its own (2026-10-27).
       ownWorld: true,
     },
-    defineAction({
-      name: "mail.set_lane",
-      description:
-        "Send all mail from an address or a whole domain to Signal or Noise from now on, and move what's in the inbox from them now.",
-      input: z.object({
-        sender: z
-          .string()
-          .min(3)
-          .max(320)
-          .describe('An address ("news@shop.example") or a domain ("shop.example").'),
-        lane,
-      }),
-      risk: "internal",
-      summarize: (i) => `Mail from ${i.sender} goes to ${i.lane === "noise" ? "Noise" : "Signal"}`,
-      async handler(i, ctx) {
-        const pattern = normalizePattern(i.sender);
-        if (!pattern)
-          throw new ActionError("invalid_input", "That isn't an email address or a domain.");
-        await ctx.tx
-          .insert(mailSenderRule)
-          .values({ pattern, lane: i.lane, createdAt: ctx.now })
-          .onConflictDoUpdate({
-            target: mailSenderRule.pattern,
-            set: { lane: i.lane, createdAt: ctx.now },
-          });
-        // Conversations in the inbox from that sender move now; ones you've written in stay Signal.
-        const inbox = await ctx.tx
-          .select({
-            id: mailThread.entityId,
-            lane: mailThread.lane,
-            out: mailThread.lastOutboundAt,
-            from: mailMessage.fromAddress,
-          })
-          .from(mailThread)
-          .innerJoin(mailMessage, eq(mailMessage.threadId, mailThread.entityId))
-          .where(and(eq(mailThread.inInbox, true), eq(mailMessage.outbound, false)));
-        const moving = [
-          ...new Set(
-            inbox
-              .filter((t) => t.lane !== i.lane && !(i.lane === "noise" && t.out))
-              .filter((t) => senderPatterns(t.from).includes(pattern))
-              .map((t) => t.id),
-          ),
-        ];
-        if (moving.length) {
-          await ctx.tx
-            .update(mailThread)
-            .set({ lane: i.lane })
-            .where(inArray(mailThread.entityId, moving));
-          // Who each one waits on depends on its lane.
-          for (const id of moving) await recomputeThread(ctx, id);
-          ctx.emit({ kind: "mail.changed", payload: { lane: i.lane, moved: moving.length } });
-        }
-        return { pattern, lane: i.lane, moved: moving.length };
-      },
-    }),
-    defineAction({
-      name: "mail.rules",
-      description: "Your Signal and Noise rules by sender.",
-      input: z.object({}),
-      risk: "read",
-      handler: (_i, ctx) => ctx.tx.select().from(mailSenderRule).orderBy(mailSenderRule.pattern),
-    }),
-    defineAction({
-      name: "mail.remove_rule",
-      description: "Forget a Signal or Noise rule.",
-      input: z.object({ pattern: z.string().min(1).max(320) }),
-      risk: "internal",
-      callers: ["owner"],
-      async handler(i, ctx) {
-        const gone = await ctx.tx
-          .delete(mailSenderRule)
-          .where(eq(mailSenderRule.pattern, i.pattern))
-          .returning();
-        return { removed: gone.length };
-      },
-    }),
+    ...laneActions,
     defineAction({
       name: "mail.accounts",
       description:
@@ -359,6 +286,7 @@ export const mailModule = defineModule({
       callers: ["integration"],
       handler: (i, ctx) => syncMail(ctx, i.account),
     }),
+    ...bundleActions,
     ...draftActions,
     sendAction,
     restoreAction,

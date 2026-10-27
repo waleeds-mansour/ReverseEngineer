@@ -369,3 +369,27 @@ export interface Did {
 }
 
 export type * from "./integration-types.ts";
+
+// Mail's bundles (mail.bundles, mail.set_bundle): the inbox sorted into People, Updates, Receipts
+// and Newsletters.
+
+/** Which pile of the inbox a conversation sorts into; one not sorted yet comes as People. */
+export type MailBundle = "people" | "updates" | "receipts" | "newsletters";
+
+/** A conversation as mail.threads and mail.search list it, with its bundle and if moved by hand. */
+export type BundledThread = import("./integration-types.ts").MailThread & {
+  bundle: MailBundle;
+  bundleMoved: boolean;
+};
+
+/** A bundle's row in the inbox. */
+export interface MailBundleCount {
+  bundle: MailBundle;
+  /** Conversations of it in the inbox, and how many of those are unread. */
+  count: number;
+  unread: number;
+  /** When its newest one last had a message. */
+  latest: string | null;
+  /** Who it's mostly from, most first: a sender's name, or their domain. */
+  senders: string[];
+}

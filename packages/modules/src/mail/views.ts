@@ -5,6 +5,7 @@ import {
   entity,
   type MailAddress,
   type MailAttachment,
+  type MailBundle,
   type MailLane,
   mailAccount,
   mailMessage,
@@ -30,6 +31,10 @@ export interface ThreadSummary {
   inInbox: boolean;
   trashed: boolean;
   lane: MailLane;
+  /** Its bundle of the inbox (bundles.ts); one not sorted yet is People's. */
+  bundle: MailBundle;
+  /** Moved there by hand (mail.set_bundle): the rules leave it be. */
+  bundleMoved: boolean;
   /** "you": it needs your reply. "them": you wrote last and are waiting. */
   waiting: "you" | "them" | null;
   waitingSince: Date | null;
@@ -75,6 +80,9 @@ export interface ThreadView extends ThreadSummary {
 
 export type MailView = "inbox" | "starred" | "sent" | "all" | "trash";
 
+/** A conversation's bundle, with one not sorted yet in People: as 0058's index has it. */
+export const threadBundle = sql<MailBundle>`coalesce(${mailThread.bundle}, 'people')`;
+
 const summaryFields = {
   id: mailThread.entityId,
   subject: entity.title,
@@ -88,6 +96,8 @@ const summaryFields = {
   inInbox: mailThread.inInbox,
   trashed: mailThread.trashed,
   lane: mailThread.lane,
+  bundle: threadBundle,
+  bundleMoved: mailThread.bundleMoved,
   waiting: mailThread.waiting,
   waitingSince: mailThread.waitingSince,
 };
@@ -115,6 +125,7 @@ export async function listThreads(
   q: {
     view: MailView | "any";
     lane?: MailLane;
+    bundle?: MailBundle;
     account?: string;
     unread?: boolean;
     /**
@@ -145,6 +156,7 @@ export async function listThreads(
       and(
         viewFilter(q.view),
         q.lane ? eq(mailThread.lane, q.lane) : undefined,
+        q.bundle ? eq(threadBundle, q.bundle) : undefined,
         q.account ? eq(mailAccount.address, q.account.toLowerCase()) : undefined,
         q.unread !== undefined ? eq(mailThread.unread, q.unread) : undefined,
         q.before ? older(q.before) : undefined,
@@ -246,7 +258,7 @@ function inviteLine(i: InviteView): string {
 export function threadText(t: ThreadView, maxPerMessage = 4000): string {
   const head = [
     `# ${t.subject}`,
-    `id: ${t.id} · email conversation · ${t.account} · ${t.messageCount} messages · ${t.lane}${
+    `id: ${t.id} · email conversation · ${t.account} · ${t.messageCount} messages · ${t.lane} · ${t.bundle} bundle${t.bundleMoved ? " (moved by hand)" : ""}${
       t.inInbox ? " · in inbox" : " · archived"
     }${t.unread ? " · unread" : ""}${t.starred ? " · starred" : ""}`,
   ];
