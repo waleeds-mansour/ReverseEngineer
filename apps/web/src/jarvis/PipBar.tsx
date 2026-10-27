@@ -88,7 +88,7 @@ export function PipBar() {
     });
 
   return (
-    <div class="relative mx-auto w-full max-w-[42.5rem]">
+    <div class="pointer-events-auto relative mx-auto w-full max-w-[42.5rem]">
       {/* Over the bar, so offering it doesn't move the bar under your typing. */}
       <div ref={chips} class="absolute bottom-full left-0 mb-2 flex max-w-full">
         <Show when={task()}>
