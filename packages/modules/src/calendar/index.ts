@@ -32,6 +32,7 @@ import { meetingSoon } from "./soon.ts";
 import { guests, loadEvent, NOT_PLANS, toEventView, whenText } from "./store.ts";
 import { syncCalendars } from "./sync.ts";
 import { undoAction } from "./undo.ts";
+import { takeBackAction } from "./undo-added.ts";
 import { yourEventActions } from "./yours.ts";
 
 const DAY_MS = 24 * 3600_000;
@@ -96,6 +97,11 @@ export const calendarModule = defineModule({
     {
       kind: "calendar.no_room",
       description: "A big task doesn't fit before it's due. Payload: title, minutesShort, dueAt.",
+    },
+    {
+      kind: "calendar.block_taken_back",
+      description:
+        "You took back a block of a task's with its Undo, so it isn't planned again until its due date or estimate changes. Payload: event.",
     },
   ],
   kernelEvents: ["entity.created", "entity.updated", "link.added"],
@@ -240,6 +246,7 @@ export const calendarModule = defineModule({
     respondAction,
     acceptInviteAction,
     undoAction,
+    takeBackAction,
     blockAction,
     prepPublish,
   ],

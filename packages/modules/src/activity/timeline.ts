@@ -22,7 +22,8 @@ import {
   turnOf,
 } from "./shape.ts";
 import { undidGroups } from "./undo.ts";
-import { shown, undosOf } from "./undo-read.ts";
+import { undosOf } from "./undo-list.ts";
+import { shown } from "./undo-read.ts";
 import { clip, inputWords, recordIn } from "./words.ts";
 
 /** How far back a page looks when there are fewer turns than it asks for. */

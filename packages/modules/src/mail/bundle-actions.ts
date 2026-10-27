@@ -154,7 +154,17 @@ export const bundleActions = [
         await recomputeThread(ctx, i.threadId);
       }
       const [now] = await ctx.tx.select(place).from(mailThread).where(where);
-      ctx.emit({ kind: "mail.changed", entityId: i.threadId, payload: { bundle: now!.bundle } });
+      // Where it was too, for its Undo (activity/undo-mail.ts).
+      ctx.emit({
+        kind: "mail.changed",
+        entityId: i.threadId,
+        payload: {
+          bundle: now!.bundle,
+          moved: now!.moved,
+          from: previous.bundle,
+          fromMoved: previous.moved,
+        },
+      });
       return { threadId: i.threadId, ...now!, previous };
     },
   }),

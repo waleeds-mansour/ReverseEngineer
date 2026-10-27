@@ -130,7 +130,11 @@ export const waitingActions = [
     async handler(i, ctx) {
       // Only conversations: any other id is ignored.
       const rows = await ctx.tx
-        .select({ id: mailThread.entityId })
+        .select({
+          id: mailThread.entityId,
+          said: mailThread.noReplyCount,
+          count: mailThread.messageCount,
+        })
         .from(mailThread)
         .where(inArray(mailThread.entityId, i.ids));
       const ids = rows.map((r) => r.id);
@@ -144,7 +148,10 @@ export const waitingActions = [
         )
         .where(inArray(mailThread.entityId, ids));
       if (i.needed) for (const t of ids) await recomputeThread(ctx, t);
-      ctx.emit({ kind: "mail.changed", payload: { noReply: !i.needed, count: ids.length } });
+      // Each one this changed, for its Undo (activity/undo-mail.ts): one already so has none.
+      for (const r of rows)
+        if ((r.said !== null && r.said >= r.count) === i.needed)
+          ctx.emit({ kind: "mail.changed", entityId: r.id, payload: { noReply: !i.needed } });
       return { changed: ids.length };
     },
   }),

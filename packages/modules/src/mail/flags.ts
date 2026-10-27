@@ -189,6 +189,11 @@ export async function changeFlags(
     });
     if (touched.length === 0) continue;
     changed++;
+    // Which of these flags each message had before, for an Undo that puts back just those.
+    const flags = [...add, ...remove];
+    const before = Object.fromEntries(
+      touched.map((m) => [m.entityId, m.labels.filter((l) => flags.includes(l))]),
+    );
     for (const m of touched)
       await ctx.tx
         .update(mailMessage)
@@ -209,7 +214,7 @@ export async function changeFlags(
       });
     }
     await recomputeThread(ctx, threadId);
-    ctx.emit({ kind: "mail.changed", entityId: threadId, payload: { add, remove } });
+    ctx.emit({ kind: "mail.changed", entityId: threadId, payload: { add, remove, before } });
   }
   return changed;
 }

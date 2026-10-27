@@ -40,13 +40,16 @@ export interface Undid {
 }
 
 /**
- * Puts one thing back. What Pip made goes to the trash, so the toast can bring it back again.
+ * Puts one thing back. What Pip made goes to the trash, so the toast can bring it back again; not
+ * an event it added, which comes off your calendar instead.
  * Returns false when it didn't go through (the error shows as a toast).
  */
-export async function undoIt(u: Pick<UndoView, "ref" | "did" | "how" | "entityId">) {
+export async function undoIt(
+  u: Pick<UndoView, "ref" | "did" | "how" | "entityId"> & { entityType?: string | null },
+) {
   const r = await act<{ did: string }>("activity.undo", { ref: u.ref });
   if (!r) return false;
-  const id = u.how === "made" ? u.entityId : null;
+  const id = u.how === "made" && u.entityType !== "event" ? u.entityId : null;
   toast.show(
     `You undid: ${r.did}`,
     "info",

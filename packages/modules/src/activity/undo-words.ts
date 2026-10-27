@@ -18,6 +18,8 @@ export const WHY_NOT = {
   offCalendar: "It's not on your calendar any more",
   backOnCalendar: "It's back on your calendar",
   answered: "You've answered it yourself since",
+  purged: "Gone for good: Gmail empties its trash after 30 days",
+  guests: "It has guests now, so Undo would tell them",
 } as const;
 
 /** Said beside an Undo that tells someone else, so it shows on a phone too. */
@@ -149,4 +151,148 @@ export function calendarLabel(u: NotificationUndo, eventTitle: string | null): s
     case "unremove":
       return `Undo: put ${quoted(u.before.title)} back on ${u.before.when}`;
   }
+}
+
+/** What Pip did to a conversation's flags (mail/flags.ts), by the change it made. */
+export type FlagOp = "archive" | "trash" | "unarchive" | "read" | "unread" | "star" | "unstar";
+
+/** A conversation's subject, or what's said for one without. */
+const subject = (s: string) => s.trim() || "(no subject)";
+
+type Words = [did: string, undo: (q: string) => string, alt?: (q: string) => string];
+const FLAG_WORDS: Record<FlagOp, Words> = {
+  archive: ["Archived", (q) => `put ${q} back in the inbox`],
+  trash: [
+    "Moved to the trash",
+    (q) => `bring ${q} back from the trash`,
+    (q) => `bring ${q} back to the inbox`,
+  ],
+  unarchive: [
+    "Moved back to the inbox",
+    (q) => `take ${q} out of the inbox again`,
+    (q) => `put ${q} back in the trash`,
+  ],
+  read: ["Marked read", (q) => `mark ${q} unread again`],
+  unread: ["Marked unread", (q) => `mark ${q} read again`],
+  star: ["Starred", (q) => `unstar ${q}`],
+  unstar: ["Unstarred", (q) => `star ${q} again`],
+};
+
+/**
+ * `alt`: a trash whose Undo puts it back in the inbox too, or moving back to the inbox one that
+ * was in the trash, whose Undo puts it back there.
+ */
+export function flagWords(op: FlagOp, title: string, alt = false) {
+  const [did, undo, other] = FLAG_WORDS[op];
+  const q = quoted(subject(title));
+  return { did: `${did}: ${subject(title)}`, label: `Undo: ${(alt && other ? other : undo)(q)}` };
+}
+
+/** A conversation moved to another bundle (`to`), or let the rules sort it again (null). */
+export function bundleWords(title: string, to: string | null, from: string) {
+  return {
+    did: to
+      ? `Moved to ${to}: ${subject(title)}`
+      : `Let the rules sort it again: ${subject(title)}`,
+    label: `Undo: move ${quoted(subject(title))} back to ${from}`,
+  };
+}
+
+/** Said it needs no reply (`said`), or that it needs one after all. */
+export function noReplyWords(title: string, said: boolean) {
+  const q = quoted(subject(title));
+  return said
+    ? {
+        did: `Said it needs no reply: ${subject(title)}`,
+        label: `Undo: put ${q} back as needing your reply`,
+      }
+    : {
+        did: `Said it needs a reply: ${subject(title)}`,
+        label: `Undo: say ${q} needs no reply again`,
+      };
+}
+
+/** Many conversations done the same way in one go, by what was done (undo-mail.ts's op). */
+const MANY: Record<string, [did: (n: string) => string, undo: (them: string) => string]> = {
+  archive: [(n) => `Archived ${n}`, (t) => `put ${t} back in the inbox`],
+  trash: [(n) => `Moved ${n} to the trash`, (t) => `bring ${t} back from the trash`],
+  unarchive: [(n) => `Moved ${n} back to the inbox`, (t) => `take ${t} out of the inbox again`],
+  read: [(n) => `Marked ${n} read`, (t) => `mark ${t} unread again`],
+  unread: [(n) => `Marked ${n} unread`, (t) => `mark ${t} read again`],
+  star: [(n) => `Starred ${n}`, (t) => `unstar ${t}`],
+  unstar: [(n) => `Unstarred ${n}`, (t) => `star ${t} again`],
+  no_reply: [(n) => `Said ${n} need no reply`, (t) => `put ${t} back as needing your reply`],
+  needs_reply: [(n) => `Said ${n} need a reply`, (t) => `say ${t} need no reply again`],
+};
+
+/**
+ * One line for `n` conversations done the same way; `open` of them are still as Pip left them,
+ * which is all Undo puts back. A bundle's op names where they went ("bundle:Updates").
+ */
+export function manyWords(op: string, n: number, open: number) {
+  const all = `${n} conversations`;
+  const them = open === n || open === 0 ? `the ${all}` : `${open} of the ${all}`;
+  const left = n - open;
+  const rest =
+    open === 0 || left === 0
+      ? ""
+      : left === 1
+        ? "; 1 changed since stays as it is"
+        : `; ${left} changed since stay as they are`;
+  const to = op.startsWith("bundle:") ? op.slice("bundle:".length) : null;
+  const [did, undo] =
+    to === null
+      ? (MANY[op] ?? [(x: string) => `Changed ${x}`, (t: string) => `put ${t} back`])
+      : [
+          (x: string) => (to ? `Moved ${x} to ${to}` : `Let the rules sort ${x} again`),
+          (t: string) => `move ${t} back where they were`,
+        ];
+  return { did: did(all), label: `Undo: ${undo(them)}${rest}` };
+}
+
+const LANE: Record<string, string> = { signal: "Signal", noise: "Noise" };
+
+/**
+ * A sender sent to a lane: what their rule was (`was`), how many conversations its Undo moves back
+ * (`moving`), and how many it moved (`moved`): past MOVED_BACK, Undo moves back only the first.
+ */
+export function laneWords(
+  pattern: string,
+  lane: string,
+  was: string | null,
+  moving: number,
+  moved = moving,
+) {
+  const back = LANE[lane === "noise" ? "signal" : "noise"];
+  const them =
+    moved > moving
+      ? `the first ${moving} of its ${moved} conversations`
+      : moving === 1
+        ? "its conversation"
+        : `its ${moving} conversations`;
+  const q = quoted(pattern);
+  return {
+    did: `Sent mail from ${pattern} to ${LANE[lane]}`,
+    label:
+      was === lane
+        ? `Undo: move ${them.replace("its", "the")} from ${q} back to ${back}`
+        : was
+          ? `Undo: send mail from ${q} back to ${LANE[was]}${moved > moving ? ` and move ${them} back` : ""}`
+          : `Undo: forget the ${LANE[lane]} rule for ${q}${moving ? ` and move ${them} back to ${back}` : ""}`,
+  };
+}
+
+export function discardWords(title: string) {
+  return {
+    did: `Threw away a draft: ${subject(title)}`,
+    label: `Undo: bring back the draft ${quoted(subject(title))}`,
+  };
+}
+
+/** An event Pip put on your calendar on its own, or a task's block of time (`block`). */
+export function addedWords(title: string, block: boolean) {
+  return {
+    did: SAID.event!(title),
+    label: `Undo: take ${block ? "the block " : ""}${quoted(title)} off your calendar`,
+  };
 }

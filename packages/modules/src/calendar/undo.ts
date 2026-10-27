@@ -77,7 +77,7 @@ const undoShape = z.discriminatedUnion("kind", [
 export type Since = "gone" | "moved" | "back" | "answered";
 
 /** The same time, said as a day (all day) or an instant. */
-const same = (a: string, b: string) =>
+export const same = (a: string, b: string) =>
   a.length === 10 || b.length === 10 ? a === b : Date.parse(a) === Date.parse(b);
 
 const EVENT_NOW = {

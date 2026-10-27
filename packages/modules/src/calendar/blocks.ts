@@ -2,7 +2,7 @@
 // due, never over a meeting and never in your evening. Done or dropped tasks give their future
 // blocks back. No model turn; plain rules (PLAN.md section 6.2).
 import { isClosedStatus } from "@hearth/core";
-import { calendar, calendarEvent, type DbOrTx, entity, task } from "@hearth/db";
+import { calendar, calendarEvent, type DbOrTx, entity, event, task } from "@hearth/db";
 import {
   type ActionContext,
   defineAction,
@@ -10,7 +10,7 @@ import {
   type ReflexDef,
   type RoutineDef,
 } from "@hearth/kernel";
-import { and, asc, eq, gt, gte, isNull, lte, ne, notInArray } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, isNull, lte, ne, notInArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { id } from "../shared.ts";
 import { loadTask } from "../tasks/view.ts";
@@ -25,6 +25,37 @@ const MIN_BLOCK_MINUTES = 30;
 const BUFFER_MINUTES = 10;
 /** A task with no due date gets its time within this many days. */
 const UNDATED_HORIZON_DAYS = 7;
+/** You took back a block of a task's with its Undo (calendar.take_back). */
+export const BLOCK_TAKEN_BACK = "calendar.block_taken_back";
+
+/**
+ * Whether you took back a block of this task's, and nothing that calls for time again has changed
+ * since: its due date or its estimate. Then the planner doesn't put it back.
+ */
+async function tookBack(ctx: ActionContext, taskId: string): Promise<boolean> {
+  const [back] = await ctx.tx
+    .select({ seq: event.seq })
+    .from(event)
+    .where(and(eq(event.kind, BLOCK_TAKEN_BACK), eq(event.entityId, taskId)))
+    .orderBy(desc(event.seq))
+    .limit(1);
+  if (!back) return false;
+  // An update that doesn't say what changed counts, as for the reflex below.
+  const estimate = sql`(${event.payload} -> 'changed' IS NULL
+    OR ${event.payload} -> 'changed' @> '["estimateMinutes"]'::jsonb)`;
+  const [since] = await ctx.tx
+    .select({ seq: event.seq })
+    .from(event)
+    .where(
+      and(
+        eq(event.entityId, taskId),
+        gt(event.seq, back.seq),
+        or(eq(event.kind, "task.due_changed"), and(eq(event.kind, "entity.updated"), estimate)),
+      ),
+    )
+    .limit(1);
+  return !since;
+}
 
 async function futureBlocks(ctx: ActionContext, taskId: string) {
   return ctx.tx
@@ -85,7 +116,7 @@ export async function blockTask(ctx: ActionContext, taskId: string): Promise<Blo
     past.reduce((n, p) => n + minutes(p.s, p.e), 0) +
     kept.reduce((n, k) => n + minutes(k.startsAt, k.endsAt), 0);
   let need = (t.estimateMinutes ?? 0) - have;
-  if (need < MIN_BLOCK_MINUTES) return result;
+  if (need < MIN_BLOCK_MINUTES || (await tookBack(ctx, taskId))) return result;
   const rules = await getSetting(ctx.tx, "owner.dayRules");
   const start = new Date(ctx.now.getTime() + 30 * 60_000);
   if (deadline <= start) {

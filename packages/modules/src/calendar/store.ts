@@ -325,11 +325,13 @@ export function emitChange(
   ctx: ActionContext,
   id: string,
   change: Change,
-  m: Pick<Mapped, "title" | "startsAt" | "endsAt" | "status">,
+  m: Pick<Mapped, "title" | "startsAt" | "endsAt" | "status"> & Partial<Pick<Mapped, "attendees">>,
   created?: string,
   was?: string | null,
 ) {
   if (!change) return;
+  // Whether it came with guests: only one Pip added with none has an Undo (activity/undo-added.ts).
+  const guests = change === "added" && m.attendees ? m.attendees.filter((a) => !a.self).length : 0;
   ctx.emit({
     kind: "calendar.event_changed",
     entityId: id,
@@ -342,6 +344,7 @@ export function emitChange(
       ...(created ? { created } : {}),
       // A series asked again: your earlier answer to it, the least yes of its times (D71).
       ...(was !== undefined ? { was } : {}),
+      ...(change === "added" && m.attendees ? { guests } : {}),
     },
   });
 }

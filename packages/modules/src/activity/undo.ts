@@ -7,20 +7,13 @@
 import { PRINCIPAL } from "@hearth/core";
 import { entity, event, notification, type Tx } from "@hearth/db";
 import { ActionError, defineAction } from "@hearth/kernel";
-import { and, desc, eq, gt, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, lt, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { id, isoDateTime } from "../shared.ts";
 import type { TimelineGroup, UndoRef } from "./shape.ts";
-import {
-  CHANGE_KINDS,
-  edgeOf,
-  shown,
-  UNDONE,
-  type Undoable,
-  undoneSince,
-  undosOf,
-  viewsOf,
-} from "./undo-read.ts";
+import { edgeOf, undoneSince, undosOf } from "./undo-list.ts";
+import { MAIL_CHANGED, MAX_MAIL, mailUndoable } from "./undo-mail-facts.ts";
+import { CHANGE_KINDS, refKey, shown, UNDONE, type Undoable, viewsOf } from "./undo-read.ts";
 
 /** How far back a call's own events can sit from the one Undo is for (a big trash, say). */
 const TOGETHER = 25_000;
@@ -72,26 +65,49 @@ export async function undoableOf(
   }
   const [e] = await tx.select().from(event).where(eq(event.id, r.id));
   if (!e || e.actor !== PRINCIPAL.jarvis || !CHANGE_KINDS.includes(e.kind)) return null;
+  const mail = e.kind === MAIL_CHANGED;
+  if (lock) {
+    // A sender's lane has no record to hold, and one line can stand for a whole triage, so this
+    // holds the Undo itself: for mail, every line of the call that did it.
+    const key = mail ? `mail:${e.correlationId ?? e.id}` : refKey(r);
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`undo:${key}`}))`);
+  }
   if (lock && e.entityId)
     await tx.select({ id: entity.id }).from(entity).where(eq(entity.id, e.entityId)).for("update");
-  // What the same call did just before: the record it made, or the one it trashed this under.
-  const together = e.correlationId
-    ? await tx
-        .select()
-        .from(event)
-        .where(
-          and(
-            gte(event.seq, e.seq - TOGETHER),
-            lt(event.seq, e.seq),
-            eq(event.correlationId, e.correlationId),
-            eq(event.at, e.at),
-            inArray(event.kind, ["entity.created", "entity.deleted"]),
-          ),
-        )
-    : [];
+  // What the same call did just before: the record it made, or the one it trashed this under. For
+  // mail, the rest of what it did, which may be one line with this.
+  const together = !e.correlationId
+    ? []
+    : mail
+      ? await tx
+          .select()
+          .from(event)
+          .where(
+            and(
+              eq(event.correlationId, e.correlationId),
+              eq(event.actor, PRINCIPAL.jarvis),
+              ne(event.id, e.id),
+              mailUndoable,
+            ),
+          )
+          .orderBy(desc(event.seq))
+          .limit(MAX_MAIL)
+      : await tx
+          .select()
+          .from(event)
+          .where(
+            and(
+              gte(event.seq, e.seq - TOGETHER),
+              lt(event.seq, e.seq),
+              eq(event.correlationId, e.correlationId),
+              eq(event.at, e.at),
+              inArray(event.kind, ["entity.created", "entity.deleted"]),
+            ),
+          );
   const edge = await edgeOf(tx, e.at);
   const views = await viewsOf(tx, [e, ...together], [], await undoneSince(tx, edge), now);
-  return views.find((v) => v.ref.kind === "event" && v.ref.id === e.id) ?? null;
+  const is = (v: Undoable) => v.ref.id === e.id || !!v.members?.includes(e.id);
+  return views.find((v) => v.ref.kind === "event" && is(v)) ?? null;
 }
 
 /** Each Undo you pressed in the window, as a card of its own: "You undid: …". */
@@ -154,7 +170,7 @@ export const undoActions = [
   defineAction({
     name: "activity.undo",
     description:
-      "Put back one thing Pip did without asking, from its line on Today or in What Pip did: move what it made to the trash, bring back what it trashed, put a task or a memory back as it was, or the calendar's own Undo. The button says exactly what it does.",
+      "Put back one thing Pip did without asking, from its line on Today or in What Pip did: move what it made to the trash, bring back what it trashed, put a task, a memory or a conversation back as it was, take an event it added off your calendar, or the calendar's own Undo. It never sends anything. The button says exactly what it does.",
     input: z.object({ ref }),
     risk: "internal",
     // Your button only: Pip doesn't take back its own work behind your back.
@@ -167,13 +183,14 @@ export const undoActions = [
           "conflict",
           u.undone ? "You've undone this already." : `${u.blocked}.`,
         );
-      await ctx.call(u.inverse.action, u.inverse.input);
+      // One line for many conversations puts back each of them still as Pip left them.
+      for (const inv of [u.inverse].flat()) await ctx.call(inv.action, inv.input);
       ctx.emit({
         kind: UNDONE,
         entityId: u.entityId,
         // Its words may be outside content's, which whatever reacts to it must wrap (D58).
         payload: {
-          ref: i.ref,
+          ref: u.ref,
           did: u.did,
           type: u.entityType,
           ...(u.outside ? { outside: true } : {}),

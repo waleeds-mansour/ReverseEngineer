@@ -103,6 +103,19 @@ const POLICY: [string, string[], Want][] = [
   ["who an address belongs to", ["person.add_email"], "ask"],
   ["meeting notes in your voice", ["meeting.start", "meeting.update"], "ask"],
   ["credentials", ["vault.save", "github.connect", "slack.connect"], "never"],
+  // Undo is your button: Pip doesn't take back its own work behind your back.
+  [
+    "your Undo of what Pip did",
+    [
+      "activity.undo",
+      "calendar.undo",
+      "calendar.take_back",
+      "mail.untrash",
+      "mail.rearchive",
+      "mail.lane_back",
+    ],
+    "never",
+  ],
 ];
 
 describe("Pip on its own, after reading an email", () => {
