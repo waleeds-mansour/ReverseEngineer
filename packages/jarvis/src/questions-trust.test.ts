@@ -46,6 +46,8 @@ const DESK: Caller = { ...DEVICE, desk: true };
 
 const questions = () => h.tdb.db.select().from(question).orderBy(asc(question.createdAt));
 const turns = () => h.tdb.db.select().from(jarvisTurn).orderBy(asc(jarvisTurn.queuedAt));
+/** The latest turn your answer started: the asking turn can share its millisecond, so not just the last. */
+const resumes = async () => (await turns()).filter((t) => t.trigger === "approval");
 const cards = (kind: string) =>
   h.tdb.db
     .select()
@@ -86,7 +88,7 @@ describe("answering Pip's questions", () => {
     expect((await h.kernel.execute("question.answer", words, DESK)).status).toBe("ok");
     h.brain.next([MAKE_TASK, { say: "Made a task to call Ana today." }]);
     await h.settle();
-    const resumed = (await turns()).at(-1)!;
+    const resumed = (await resumes()).at(-1)!;
     expect(resumed).toMatchObject({ trigger: "approval", origin: "system" });
     expect(resumed.prompt).toContain("in their own words: and say hi");
     // So the card for the work it finished isn't marked as outside content's.
@@ -99,7 +101,8 @@ describe("answering Pip's questions", () => {
     expect(sent.status).toBe("ok");
     h.brain.next([MAKE_TASK, { say: "Made another task." }]);
     await h.settle();
-    const after = (await turns()).at(-1)!;
+    const after = (await resumes()).at(-1)!;
+    expect(await resumes()).toHaveLength(2);
     expect(after.origin).toBe("untrusted");
     expect(after.prompt).toContain('<untrusted source="answer">');
     // Its card joined the unseen one, and now carries words a device sent.
