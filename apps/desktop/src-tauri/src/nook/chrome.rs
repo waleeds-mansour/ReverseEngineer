@@ -180,6 +180,9 @@ pub struct AgentDot {
     pub state: AgentState,
     /// Its last line, shown with the label when the dot is hovered.
     pub line: String,
+    /// How many things behind this dot wait for the owner: the yeses, and what Pip asks. The dock's
+    /// count badge is these added up.
+    pub waiting: u32,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Type)]
@@ -190,9 +193,15 @@ pub struct DockView {
     pub shown: bool,
     /// Why there is no dock although the switch is on.
     pub why_not: Option<String>,
-    /// The pointer is over the dock, and its card has room to open.
+    /// The pointer is over the dock, and its open pill has room.
     pub open: bool,
     pub edge: Edge,
+    /// The dock's short tones, from its menu: something new waits, a service has trouble, Pip
+    /// finished.
+    pub sounds: bool,
+    /// The dots' counts and services come from Hearth's notify feed, not the tray. The sounds
+    /// start over when this changes, so the feed coming back is no news.
+    pub feed: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Type)]
@@ -296,10 +305,12 @@ mod tests {
             kind: AgentKind::Pip,
             state: AgentState::NeedsYou,
             line: "1 thing waits for you".into(),
+            waiting: 1,
         };
         let json = serde_json::to_value(&dot).unwrap();
         assert_eq!(json["kind"], "pip");
         assert_eq!(json["state"], "needs_you");
+        assert_eq!(json["waiting"], 1);
     }
 
     #[test]

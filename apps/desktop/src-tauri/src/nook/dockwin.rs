@@ -4,14 +4,18 @@
 // Its page says when it has drawn (the readiness handshake); one that doesn't within DRAW_WITHIN
 // is made again, once. While the dock is made it reads Windows every LOOK_EVERY: whether something
 // fullscreen is in front, where the primary monitor is, and Windows' text size, which WebView2
-// draws the page at, and it ends a rest from its menu once the hour is up. While its card is open
-// it reads where the pointer is every WATCH_EVERY, and closes the card once the pointer has left.
+// draws the page at, and it ends a rest from its menu once the hour is up. While its pill is open
+// it reads where the pointer is every WATCH_EVERY, and closes the pill once the pointer has left.
+// After every change to the window its region is set again (dockclip.rs), so it takes clicks only
+// on what its page draws: the tab, and while open the pill and the label where the page says.
 // With its switch off, none of this starts a thread. What the owner does to the dock itself, its
-// menu, dragging it and its card's buttons, is dockact.rs.
+// menu, dragging it, its sounds and its pill's buttons, is dockact.rs.
 
 use super::bar::Place;
 use super::barwin;
 use super::dock::{self, DockRun, DockStep, DOCK_LABEL, DOCK_PAGE};
+use super::dockclip::LabelBox;
+use super::docksize::{rest_long, DOCK_DEEP};
 use super::host::{self, Shared};
 use super::probe::{Hwnd, Rect};
 use super::view::NookState;
@@ -32,11 +36,11 @@ use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
 const DRAW_WITHIN: Duration = Duration::from_secs(3);
 /// How often the dock reads Windows while it is made.
 const LOOK_EVERY: Duration = Duration::from_secs(2);
-/// How often the pointer is read while the card is open.
+/// How often the pointer is read while the pill is open.
 const WATCH_EVERY: Duration = Duration::from_millis(150);
 /// Each making of the window, so a late check or reading for one never acts on the next.
 static MAKES: AtomicU64 = AtomicU64::new(0);
-/// Each opening of the card, so only the latest one's watch goes on.
+/// Each opening of the pill, so only the latest one's watch goes on.
 static OPENS: AtomicU64 = AtomicU64::new(0);
 
 /// Brings the dock to what its switch and Nook's status say.
@@ -207,8 +211,8 @@ pub(super) fn cursor() -> Option<(i32, i32)> {
     Some((p.x, p.y))
 }
 
-/// The primary monitor, which always holds the point (0, 0), in physical px.
-fn primary() -> Option<Place> {
+/// The primary monitor, which always holds the point (0, 0), and its work area, in physical px.
+fn primary() -> Option<(Place, Rect)> {
     let h = unsafe { MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY) };
     let mut info = MONITORINFO {
         cbSize: std::mem::size_of::<MONITORINFO>() as u32,
@@ -219,22 +223,23 @@ fn primary() -> Option<Place> {
     }
     let (mut dx, mut dy) = (96u32, 96u32);
     let _ = unsafe { GetDpiForMonitor(h, MDT_EFFECTIVE_DPI, &mut dx, &mut dy) };
-    let r = info.rcMonitor;
-    Some(Place {
-        rect: Rect {
-            left: r.left,
-            top: r.top,
-            right: r.right,
-            bottom: r.bottom,
-        },
+    let rect = |r: windows::Win32::Foundation::RECT| Rect {
+        left: r.left,
+        top: r.top,
+        right: r.right,
+        bottom: r.bottom,
+    };
+    let at = Place {
+        rect: rect(info.rcMonitor),
         dpi: dx,
-    })
+    };
+    Some((at, rect(info.rcWork)))
 }
 
 /// The dock's window, hidden, and its handle: topmost, never activated, with no glass of its
-/// own (its page draws the strip).
+/// own (its page draws the tab).
 fn make(shared: &Shared) -> Result<Vec<Hwnd>, String> {
-    let at = primary();
+    let at = primary().map(|(at, _)| at);
     let (x, y) = at.map_or((0.0, 0.0), |p| {
         let s = f64::from(p.dpi.max(1)) / 96.0;
         (f64::from(p.rect.left) / s, f64::from(p.rect.top) / s)
@@ -243,7 +248,7 @@ fn make(shared: &Shared) -> Result<Vec<Hwnd>, String> {
         .title("Nook dock")
         .always_on_top(true)
         .position(x, y)
-        .inner_size(f64::from(dock::DOCK_DEEP), f64::from(dock::strip_long(1)))
+        .inner_size(f64::from(DOCK_DEEP), f64::from(rest_long(1)))
         .build()
         .map_err(|e| e.to_string())?;
     let ours = w.hwnd().ok().map(|h| h.0 as Hwnd).into_iter().collect();
@@ -284,7 +289,7 @@ pub fn drawn(shared: &Shared) {
     nudge(&shared.app);
 }
 
-/// The pointer came over the dock, or left it. While the card is open, the pointer is watched.
+/// The pointer came over the dock, or left it. While the pill is open, the pointer is watched.
 pub fn hover(shared: &Arc<Shared>, open: bool) {
     let (changed, opened) = {
         let mut run = shared.dock();
@@ -301,8 +306,8 @@ pub fn hover(shared: &Arc<Shared>, open: bool) {
     }
 }
 
-/// Every WATCH_EVERY while this opening of the card lasts: once the pointer has left the window,
-/// the card closes and the window narrows, and the page hears it in the chrome's dock.open.
+/// Every WATCH_EVERY while this opening of the pill lasts: once the pointer has left the window,
+/// the pill closes and the window narrows, and the page hears it in the chrome's dock.open.
 fn watch_pointer(shared: &Arc<Shared>) {
     let open = OPENS.fetch_add(1, Ordering::SeqCst) + 1;
     let s = shared.clone();
@@ -329,13 +334,28 @@ fn watch_pointer(shared: &Arc<Shared>) {
     });
 }
 
-/// How many dots Nook's chrome shows now: the strip grows or shrinks to fit them.
-pub fn dots(shared: &Shared, n: usize) {
+/// How many dots Nook's chrome shows now, and whether anything waits: the tab grows or shrinks to
+/// fit them, and its region takes in the count badge while it shows.
+pub fn dots(shared: &Shared, n: usize, waiting: bool) {
     let changed = {
         let mut run = shared.dock();
-        let was = run.dots;
-        run.dots = n;
-        run.made && was != n
+        let was = (run.dots, run.waiting);
+        (run.dots, run.waiting) = (n, waiting);
+        run.made && was != (n, waiting)
+    };
+    if changed {
+        nudge(&shared.app);
+    }
+}
+
+/// Where the open pill's status label is now, as its page says, so the window's region takes it
+/// in while the pill is open.
+pub fn label(shared: &Shared, top: i32, bottom: i32, wide: i32) {
+    let changed = {
+        let mut run = shared.dock();
+        let was = run.label;
+        run.label = LabelBox::read(top, bottom, wide);
+        run.made && was != run.label
     };
     if changed {
         nudge(&shared.app);
@@ -353,7 +373,10 @@ fn reconcile(app: &AppHandle) {
     let Some(shared) = host::shared(app) else {
         return;
     };
-    let steps = shared.dock().plan();
+    let (steps, clip) = {
+        let mut run = shared.dock();
+        (run.plan(), run.clip())
+    };
     let Some(w) = app.get_webview_window(DOCK_LABEL) else {
         return;
     };
@@ -368,5 +391,8 @@ fn reconcile(app: &AppHandle) {
             DockStep::Hide => surface::hide(&w),
             DockStep::Sleep => surface::sleep(&w),
         }
+    }
+    if let Some(shapes) = clip {
+        surface::clip(&w, &shapes);
     }
 }

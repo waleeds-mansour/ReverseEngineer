@@ -1,23 +1,27 @@
 // What the agent dock should be doing, decided without touching a window so it can be tested
-// anywhere; dockwin.rs carries the decisions out. The dock is a short strip of status dots on a
-// side of the primary monitor, the right unless the owner chose the left, as far down it as they
-// last dragged it (dockplace.rs), topmost and never activated: a dot for Pip, one for what waits
-// for the owner's yes, and one for each of Hearth's services that needs the owner (agents.rs). It
-// is made with its switch, which starts on, and shown once its page says it drew (the readiness
-// handshake: a page that never says so is made again once). Over something fullscreen or a game
-// it hides: Windows' own notification state says when, and while Nook observes for the bar or the
+// anywhere; dockwin.rs carries the decisions out. At rest the dock is the edge tab: a solid black
+// tab flush with a side of the primary monitor, the right unless the owner chose the left, as far
+// down it as they last dragged it (dockplace.rs), topmost and never activated, holding a dot for
+// Pip, one for what waits for the owner's yes, and one for each of Hearth's services that needs
+// the owner (agents.rs), with a count badge for what waits. Its sizes are docksize.rs's. It is
+// made with its switch, which starts on, and shown once its page says it drew (the readiness
+// handshake: a page that never says so is made again once). Over something fullscreen or a game it
+// hides: Windows' own notification state says when, and while Nook observes for the bar or the
 // panel, nook-wm's game guard and the window in front say it too, monitor by monitor. Its menu can
-// hide it for an hour, after which it comes back on its own. Hovering it opens a card beside the
-// strip, toward the middle of the screen, with the hovered dot's label, last line and a button;
-// while the card is open the pointer is watched too, so a card the page never heard the pointer
-// leave still closes. Its sizes are the page's CSS px, and WebView2 draws those at the monitor's
-// DPI scale times Windows' text size, so the window is sized by both (drawn_at). The disabled
-// file and safe start keep it off, as they keep the bar off. It needs no hook and no observer of
-// its own.
+// hide it for an hour, after which it comes back on its own, and turn its sounds off. Hovering the
+// tab opens the pill: the page asks for room, the window widens toward the middle of the screen
+// for the column of capsules and the status label beside it, and while it is open the pointer is
+// watched too, so a pill the page never heard the pointer leave still closes. Its sizes are the
+// page's CSS px, and WebView2 draws those at the monitor's DPI scale times Windows' text size, so
+// the window is sized by both (drawn_at). It stays within the monitor's work area, so its pill
+// never opens under the taskbar, and the window is clipped to what its page draws (dockclip.rs),
+// so the room around the tab and the pill takes no clicks. The disabled file and safe start keep
+// it off, as they keep the bar off. It needs no hook and no observer of its own.
 
-use super::bar::{beside_rect, in_front, strip_rect, Place};
+use super::bar::{in_front, Place};
 use super::chrome::{DockView, Edge};
-use super::dockplace::{along_at, window_at, DockPlace};
+use super::dockclip::{ClipKey, LabelBox};
+use super::dockplace::{along_at, top_at, usable, window_at, DockPlace};
 use super::probe::{Hwnd, Rect};
 use super::start::Status;
 use super::view::{ModeName, NookState};
@@ -25,17 +29,6 @@ use std::time::Instant;
 
 pub const DOCK_LABEL: &str = "nook_dock";
 pub const DOCK_PAGE: &str = "src/nook/dock.html";
-/// dock-width in dock.css: how deep the strip is from its edge, in logical px.
-pub const DOCK_DEEP: i32 = 28;
-/// How far the strip floats in from the screen's edge.
-pub const DOCK_INSET: i32 = 6;
-/// Room above the first dot and below the last.
-pub const DOCK_PAD: i32 = 6;
-/// Each dot's row.
-pub const DOT_ROW: i32 = 24;
-/// The hover card beside the strip, with room for its shadow: --card-w and --card-h in dock.css,
-/// plus 12.
-pub const CARD_SIZE: (i32, i32) = (248, 92);
 /// What the view says while the dock's menu has hidden it.
 pub const RESTING: &str = "Hidden from the dock's menu for an hour; it comes back on its own";
 /// Windows' text size runs from 100 % to 225 % (Settings > Accessibility > Text size).
@@ -50,7 +43,7 @@ pub fn text_size(raw: Option<u32>) -> u32 {
 /// The monitor as the dock's page is drawn on it. WebView2 draws a page at its rasterization
 /// scale, the monitor's DPI scale times Windows' text size, so above 100 % every CSS px of the
 /// page is bigger than the monitor's DPI alone says: a window sized by the DPI alone clips its
-/// strip and card. Sizing by both keeps the window and its page the same size.
+/// tab and pill. Sizing by both keeps the window and its page the same size.
 pub fn drawn_at(at: &Place, text: u32) -> Place {
     let text = text.clamp(TEXT_SIZES.0, TEXT_SIZES.1);
     Place {
@@ -77,33 +70,6 @@ pub fn wanted(on: bool, status: Status) -> Result<(), &'static str> {
         }
         Status::Off | Status::NotInThisVersion if !on => Err("The dock is off"),
         Status::Off | Status::NotInThisVersion => Ok(()),
-    }
-}
-
-/// How long the strip is for `dots` dots, in logical px; one row even with none.
-pub fn strip_long(dots: usize) -> i32 {
-    2 * DOCK_PAD + DOT_ROW * (dots.max(1) as i32)
-}
-
-/// The strip on `edge`, centred along it.
-pub fn dock_rect(at: &Place, edge: Edge, dots: usize) -> Rect {
-    strip_rect(at, edge, DOCK_DEEP, Some(strip_long(dots)), DOCK_INSET)
-}
-
-/// The dock's window: the strip, and while it is open, the card's room beside it as well, as
-/// tall as the strip or the card, whichever is taller. The strip stays where it was.
-pub fn window_rect(at: &Place, edge: Edge, dots: usize, open: bool) -> Rect {
-    let strip = dock_rect(at, edge, dots);
-    if !open {
-        return strip;
-    }
-    let tall = strip_long(dots).max(CARD_SIZE.1);
-    let card = beside_rect(at, edge, &strip, (CARD_SIZE.0, tall));
-    Rect {
-        left: strip.left.min(card.left),
-        top: strip.top,
-        right: strip.right.max(card.right),
-        bottom: strip.bottom.max(card.bottom),
     }
 }
 
@@ -143,16 +109,23 @@ pub struct DockRun {
     pub place: DockPlace,
     /// Hidden from its menu until then.
     pub resting: Option<Instant>,
-    /// Being dragged along its edge: the strip's top and the pointer's height when it began.
+    /// Being dragged along its edge: the window's top and the pointer's height when it began.
     pub drag: Option<(i32, i32)>,
-    /// How many dots the page shows.
+    /// How many dots the page shows, and whether its count badge shows (anything waits).
     pub dots: usize,
-    /// The pointer is over the dock, so its card has room.
+    pub waiting: bool,
+    /// The pointer is over the dock, so its open pill has room.
     pub open: bool,
+    /// Where the open pill's status label is, as its page last said; it counts only while open.
+    pub label: Option<LabelBox>,
+    /// The owner's switch for its sounds, as last read or saved.
+    pub sounds: bool,
     /// Windows' text size in percent, as last read; below 100 reads as 100 (drawn_at).
     pub text: u32,
-    /// The primary monitor: nook-wm's while it observes, otherwise as the dock read it.
+    /// The primary monitor: nook-wm's while it observes, otherwise as the dock read it; and its
+    /// work area, without the taskbar.
     pub monitor: Option<Place>,
+    pub work: Option<Rect>,
     /// What the latest NookState said.
     pub observing: bool,
     /// Windows says something fullscreen is in front (busy above).
@@ -165,6 +138,7 @@ pub struct DockRun {
     pub shown: bool,
     pub asleep: bool,
     pub placed: Option<Rect>,
+    pub clipped: Option<ClipKey>,
     /// The window was made a second time because its page didn't draw the first.
     pub remade: bool,
 }
@@ -173,6 +147,7 @@ impl DockRun {
     pub fn new(setting: bool) -> DockRun {
         DockRun {
             setting,
+            sounds: true,
             ..DockRun::default()
         }
     }
@@ -204,14 +179,24 @@ impl DockRun {
         )
     }
 
-    /// A run with no window yet, keeping what the owner chose: the switch, the place and a rest.
+    /// A run with no window yet, keeping what the owner chose (the switches, the place and a
+    /// rest) and the dots it shows, so a window made again is as long as they need at once.
     pub fn kept(&self) -> DockRun {
         DockRun {
             setting: self.setting,
+            sounds: self.sounds,
             place: self.place,
             resting: self.resting,
+            dots: self.dots,
+            waiting: self.waiting,
             ..DockRun::default()
         }
+    }
+
+    /// The monitor as the page is drawn on it, kept to its work area (dockplace.rs's usable).
+    pub fn at(&self) -> Option<Place> {
+        let at = usable(&self.monitor?, self.work);
+        Some(drawn_at(&at, self.text))
     }
 
     /// The owner's switch. Turning it either way ends a rest, so the switch is what counts.
@@ -242,24 +227,26 @@ impl DockRun {
         over
     }
 
-    /// The strip was pressed and moved with the pointer at height `y`: from now it follows the
-    /// pointer along its edge, with its card closed. Whether it can (it shows, where it was put).
+    /// The tab or pill was pressed and moved with the pointer at height `y`: from now the tab
+    /// follows the pointer along its edge, with its pill closed. Whether it can (it shows, where it
+    /// was put). It starts from where the resting window's top is, never the open window's, which
+    /// reaches higher.
     pub fn drag_start(&mut self, y: i32) -> bool {
-        let Some(r) = self.placed.filter(|_| self.visible()) else {
+        let (Some(_), Some(at)) = (self.placed.filter(|_| self.visible()), self.at()) else {
             return false;
         };
-        self.drag = Some((r.top, y));
+        let top = top_at(&at, self.place.edge, self.dots, self.place.along());
+        self.drag = Some((top, y));
         self.open = false;
         true
     }
 
-    /// The pointer is at height `y` while dragging: the strip moves with it, kept on the monitor.
+    /// The pointer is at height `y` while dragging: the tab moves with it, kept on the work area.
     /// Whether it moved.
     pub fn drag_to(&mut self, y: i32) -> bool {
-        let (Some((top, from)), Some(at)) = (self.drag, self.monitor) else {
+        let (Some((top, from)), Some(at)) = (self.drag, self.at()) else {
             return false;
         };
-        let at = drawn_at(&at, self.text);
         let along = along_at(&at, self.place.edge, self.dots, top + y - from);
         let was = self.place;
         self.place = self.place.moved(along);
@@ -283,32 +270,41 @@ impl DockRun {
         let seen = in_front(state, &self.ours);
         if seen.monitor.is_some() {
             self.monitor = seen.monitor;
+            let primary = state.monitors.iter().find(|m| m.primary);
+            self.work = primary.map(|m| Rect {
+                left: m.work.x,
+                top: m.work.y,
+                right: m.work.x + m.work.width,
+                bottom: m.work.y + m.work.height,
+            });
         }
         self.game_here = seen.game_here;
         self.covered = seen.covered;
         self.open = self.open && self.visible();
     }
 
-    /// The dock's own reading of Windows, every few seconds. Its monitor counts only while
-    /// nook-wm isn't observing.
-    pub fn read(&mut self, busy: bool, monitor: Option<Place>) {
+    /// The dock's own reading of Windows, every few seconds: the primary monitor and its work
+    /// area, which count only while nook-wm isn't observing.
+    pub fn read(&mut self, busy: bool, monitor: Option<(Place, Rect)>) {
         self.busy = busy;
-        if !self.observing && monitor.is_some() {
-            self.monitor = monitor;
+        if let Some((at, work)) = monitor.filter(|_| !self.observing) {
+            self.monitor = Some(at);
+            self.work = Some(work);
         }
         self.open = self.open && self.visible();
     }
 
-    /// The pointer came over the dock, or left it. No card while the strip is dragged.
+    /// The pointer came over the dock, or left it. No pill while the tab is dragged.
     pub fn hover(&mut self, open: bool) {
         self.open = open && self.visible() && self.drag.is_none();
     }
 
-    /// Where the pointer is, read while the card is open. One that has left the window closes
-    /// the card, whatever its page heard: a pointer that leaves fast, or a window that shrinks or
-    /// hides under it, can leave the page none the wiser. Whether that closed it.
+    /// Where the pointer is, read while the pill is open. One that has left what the window's
+    /// region covers closes the pill, whatever its page heard: a pointer that leaves fast, or a
+    /// window that shrinks or hides under it, can leave the page none the wiser. Whether that
+    /// closed it.
     pub fn pointer(&mut self, cursor: Option<(i32, i32)>) -> bool {
-        if !self.open || holds(self.placed, cursor) {
+        if !self.open || self.reach().into_iter().any(|r| holds(Some(r), cursor)) {
             return false;
         }
         self.open = false;
@@ -321,8 +317,7 @@ impl DockRun {
         if !self.made {
             return steps;
         }
-        if let Some(at) = self.monitor {
-            let at = drawn_at(&at, self.text);
+        if let Some(at) = self.at() {
             let (edge, along) = (self.place.edge, self.place.along());
             let rect = window_at(&at, edge, self.dots, self.open, along);
             if self.placed != Some(rect) {
@@ -383,6 +378,9 @@ impl DockRun {
             },
             open: self.open,
             edge: self.place.edge,
+            sounds: self.sounds,
+            // look.rs knows where the dots come from.
+            feed: false,
         }
     }
 }

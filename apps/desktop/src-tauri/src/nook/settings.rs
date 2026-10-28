@@ -3,9 +3,9 @@
 // can't read turns Nook off without touching the rest. Every switch starts off but the agent
 // dock's. This version can't arrange anything yet, so the arranging switches only decide what
 // Nook's status says; the ones it acts on are `observe`, which watches windows and writes nothing,
-// `bar`, the strip along the top of DISPLAY1 that observes too, and `dock`, the strip of status
-// dots on the left edge, which observes nothing and starts on. The theme Hearth's window last
-// showed is kept beside them.
+// `bar`, the strip along the top of DISPLAY1 that observes too, and `dock`, the edge tab of status
+// dots, which observes nothing and starts on, with `dock_sounds`, its short tones, on as well. The
+// theme Hearth's window last showed is kept beside them.
 
 use super::chrome::ThemeId;
 use log::warn;
@@ -43,15 +43,19 @@ pub struct NookSettings {
     pub safe_start_cleared_at: u64,
     /// Observing without the panel open (P1): hooks, verdicts and gates, with every write refused.
     pub observe: bool,
-    /// The agent dock: Pip's and the services' status dots on the left edge, topmost. It needs no
-    /// hook and writes nothing, so it starts on.
+    /// The agent dock: Pip's and the services' status dots on a side of the screen, topmost. It
+    /// needs no hook and writes nothing, so it starts on.
     pub dock: bool,
+    /// The dock's short tones (its menu's Sounds): something new waits, a service has trouble,
+    /// Pip finished. Quiet and rare, so they start on.
+    pub dock_sounds: bool,
 }
 
 impl Default for NookSettings {
     fn default() -> NookSettings {
         NookSettings {
             dock: true,
+            dock_sounds: true,
             ..NookSettings::off()
         }
     }
@@ -74,6 +78,7 @@ impl NookSettings {
             safe_start_cleared_at: 0,
             observe: false,
             dock: false,
+            dock_sounds: false,
         }
     }
 
@@ -91,11 +96,12 @@ impl NookSettings {
             cloak,
             display2,
             safe_start_cleared_at: _,
-            // Observing changes no window, the bar only observes and the dock only shows, so none
-            // of them is arranging.
+            // Observing changes no window, the bar only observes and the dock only shows (and
+            // chimes), so none of them is arranging.
             observe: _,
             bar: _,
             dock: _,
+            dock_sounds: _,
         } = self;
         [
             enabled,
@@ -155,6 +161,16 @@ pub fn save_dock(app: &AppHandle, on: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// Turns the dock's sounds on or off, the same way.
+pub fn save_dock_sounds(app: &AppHandle, on: bool) -> Result<(), String> {
+    let store = store(app)?;
+    store.set(
+        STORE_KEY,
+        with_switch(store.get(STORE_KEY), "dock_sounds", on),
+    );
+    Ok(())
+}
+
 pub fn with_switch(value: Option<serde_json::Value>, key: &str, on: bool) -> serde_json::Value {
     let mut map = match value {
         Some(serde_json::Value::Object(map)) => map,
@@ -198,12 +214,16 @@ mod tests {
         assert!(!settings.any_on());
         assert!(!settings.observe && !settings.bar);
         assert!(settings.dock, "the agent dock starts on");
+        assert!(settings.dock_sounds, "and so do its sounds");
         assert_eq!(from_value(None), settings);
-        // A store from before the dock keeps its switches and gets the dock on.
+        // A store from before the dock keeps its switches and gets the dock on, sounds and all.
         let older = from_value(Some(json!({ "bar": true })));
-        assert!(older.bar && older.dock);
+        assert!(older.bar && older.dock && older.dock_sounds);
         let off = from_value(Some(json!({ "dock": false })));
-        assert!(!off.dock);
+        assert!(!off.dock && off.dock_sounds);
+        let quiet = from_value(Some(json!({ "dock_sounds": false })));
+        assert!(quiet.dock && !quiet.dock_sounds);
+        assert!(!NookSettings::off().dock_sounds);
         assert_eq!(
             with_switch(Some(json!({ "bar": true })), "dock", false),
             json!({ "bar": true, "dock": false })

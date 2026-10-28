@@ -2,9 +2,9 @@ name: Desktop
 
 # Builds Hearth for Windows (apps/desktop, a fork of Handy; D53) and keeps the installer
 # (Hearth_1.0.<run>_x64-setup.exe, installed per user) as an artifact, so the PC can install it
-# without a Rust toolchain. Runs Hearth's own Rust tests first, Nook's among them, and checks
-# nook-restore (the crate the guard and the restore CLI are built from) on its own, since it is a
-# workspace of its own. The Windows steps follow Handy's build.yml.
+# without a Rust toolchain. Runs Nook's page tests and Hearth's own Rust tests first, Nook's among
+# them, and checks nook-restore (the crate the guard and the restore CLI are built from) on its
+# own, since it is a workspace of its own. The Windows steps follow Handy's build.yml.
 
 on:
   pull_request:
@@ -82,6 +82,17 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Lint and typecheck the settings UI
         run: bun run lint && bunx tsc --noEmit
+
+      # Nook's page tests are plain bun scripts that throw on a failed assertion, which the root
+      # vitest leaves out. Among them, dockShape.test.ts keeps the edge tab the size docksize.rs
+      # sizes its window for. A few seconds, and nothing on the screen.
+      - name: Nook's page tests
+        shell: pwsh
+        run: |
+          foreach ($t in Get-ChildItem src/nook -Filter *.test.ts) {
+            bun $t.FullName
+            if ($LASTEXITCODE -ne 0) { throw "$($t.Name) failed" }
+          }
 
       - name: Hearth's Rust tests
         working-directory: apps/desktop/src-tauri

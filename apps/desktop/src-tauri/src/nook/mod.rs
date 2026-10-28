@@ -5,7 +5,7 @@
 // writes to none: each write goes to nook-restore's seam in its read-only mode and is refused.
 // It runs only while the panel is open or the owner's observing switch is on, which starts off.
 // P1's bar along the top of DISPLAY1 has a switch of its own, also off, and observes while it is
-// on. The agent dock, a strip of status dots for Pip and Hearth's services on a side of the
+// on. The agent dock, an edge tab of status dots for Pip and Hearth's services on a side of the
 // screen, has a switch that starts on; it is one window that reads Windows every few seconds, with
 // no hook and no observer of its own. Otherwise Nook installs no hook, registers no hotkey, creates
 // no window and starts no thread, except to finish a restore that an earlier run left owing. That
@@ -29,9 +29,13 @@ mod dock;
 #[cfg(windows)]
 mod dockact;
 #[cfg(windows)]
+mod dockclip;
+#[cfg(windows)]
 mod dockmenu;
 #[cfg(windows)]
 mod dockplace;
+#[cfg(windows)]
+mod docksize;
 #[cfg(windows)]
 mod dockwin;
 #[cfg(windows)]
