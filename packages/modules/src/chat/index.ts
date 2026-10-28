@@ -1,6 +1,6 @@
 // Chat with Jarvis, and comment threads on any record. Jarvis answers chat messages and
 // @mentions wherever they appear. Its own routines' runs stay out of the conversation list.
-import { formatDateTime, MEMBER_CONVERSATION } from "@hearth/core";
+import { asUntrusted, formatDateTime, MEMBER_CONVERSATION } from "@hearth/core";
 import { conversation, conversationLog, entity, jarvisTurn } from "@hearth/db";
 import {
   ActionError,
@@ -32,6 +32,16 @@ function authorOf(kind: string, payload: Record<string, unknown>): string {
   if (kind !== "user_message") return "Pip";
   if (!String(payload.by ?? "").startsWith("member:")) return "You";
   return typeof payload.name === "string" && payload.name ? payload.name : "Someone in Slack";
+}
+
+/** The app window the desktop's quick-ask box opened over: someone else may have written its name
+ * or title (a mail's subject), so Pip reads them as outside data, apart from the owner's words. */
+const windowText = (max: number) => z.string().trim().max(max).optional();
+function askedFrom(c: { app?: string | undefined; title?: string | undefined }): string {
+  const flat = (s: string | undefined) => (s ?? "").replace(/\p{Cc}+/gu, " ").trim();
+  const lines = [c.app && `App: ${flat(c.app)}`, c.title && `Window: ${flat(c.title)}`];
+  const data = asUntrusted(lines.filter(Boolean).join("\n"), "desktop window");
+  return `(Asked from the desktop over this app's window, whose name and title aren't the owner's words.)\n${data}`;
 }
 
 /** A paired device (the desktop app) only sees the conversations it started (D42). */
@@ -197,6 +207,8 @@ export const chatModule = defineModule({
               .optional(),
           })
           .optional(),
+        /** The app the desktop's quick-ask box opened over (askedFrom): never in `text`. */
+        context: z.object({ app: windowText(200), title: windowText(300) }).optional(),
       }),
       risk: "internal",
       callers: ["owner"],
@@ -236,6 +248,7 @@ export const chatModule = defineModule({
         // Heard, or sent by a device on its own say-so (D42): kept as such, so the nightly memory
         // update doesn't take it for your words (D58).
         const heard = i.heard === true || ctx.caller.origin === "untrusted";
+        const from = i.context?.app || i.context?.title ? { context: i.context } : {};
         const [idx] = await appendLog(
           ctx.tx,
           conversationId,
@@ -248,6 +261,7 @@ export const chatModule = defineModule({
                 ...(heard ? { heard } : {}),
                 ...fromSlack,
                 ...(looking ? { looking } : {}),
+                ...from,
               },
             },
           ],
@@ -270,6 +284,7 @@ export const chatModule = defineModule({
             heard: i.heard === true,
             ...fromSlack,
             ...(looking ? { looking } : {}),
+            ...from,
           },
         });
         return { conversationId, idx };
@@ -330,6 +345,7 @@ export const chatModule = defineModule({
           idx: number;
           via?: string;
           looking?: OnScreen;
+          context?: { app?: string; title?: string };
         };
         // You pressed Stop before Jarvis saw this (it was down): let it go (D54).
         const [stopped] = await ctx.db
@@ -348,6 +364,7 @@ export const chatModule = defineModule({
         // Said to the chat mic in your own session, not sent by a device on its own (D42): still
         // untrusted (D46), but your ask, for a reminder's cap.
         const spoken = p.heard === true && event.origin === "owner";
+        const asked = p.context && askedFrom(p.context);
         const context = {
           ...(p.via === "slack" ? { via: "slack" } : {}),
           ...(spoken ? { spoken } : {}),
@@ -357,15 +374,14 @@ export const chatModule = defineModule({
           {
             kind: "turn",
             trigger: "chat",
-            ...(p.heard ? { untrusted: true } : {}),
+            // A window's title in the prompt is outside content too (D25).
+            ...(p.heard || asked ? { untrusted: true } : {}),
             ...(Object.keys(context).length ? { context } : {}),
             lane: p.lane,
             conversationId: p.conversationId,
-            prompt: p.looking
-              ? `${p.text}
-
-${onScreenLine(p.looking)}`
-              : p.text,
+            prompt: [p.text, p.looking && onScreenLine(p.looking), asked]
+              .filter(Boolean)
+              .join("\n\n"),
             dedupeKey: `chat:${event.id}`,
           },
         ];

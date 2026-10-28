@@ -14,6 +14,7 @@
 
 #[cfg(windows)]
 mod agents;
+pub mod askbox;
 #[cfg(windows)]
 mod bar;
 #[cfg(windows)]
@@ -141,12 +142,16 @@ pub async fn nook_ui(webview: tauri::Webview, cmd: UiCmd) -> Result<UiReply, Str
     ui::command(webview, cmd).await
 }
 
-/// Whether a page may call an app command: Nook's pages, by their nook_ label, only nook_ui.
-/// Their capability (capabilities/nook.json) lets them listen for events and nothing more, but
-/// this app has no app manifest, so its own commands aren't held to capabilities; lib.rs's invoke
-/// handler asks this first. Plugin commands never reach it and stay with the capability.
+/// Whether a page may call an app command: Nook's pages, by their nook_ label, only nook_ui, and
+/// the quick-ask box only ask_pip. Their capability (capabilities/nook.json) lets them listen for
+/// events and nothing more, but this app has no app manifest, so its own commands aren't held to
+/// capabilities; lib.rs's invoke handler asks this first. Plugin commands never reach it and stay
+/// with the capability.
 pub fn may_invoke(label: &str, command: &str) -> bool {
-    !label.starts_with("nook_") || command == "nook_ui"
+    match label {
+        crate::hearth::quick_ask::LABEL => command == "ask_pip",
+        _ => !label.starts_with("nook_") || command == "nook_ui",
+    }
 }
 
 /// Opens Nook's panel, from the hearth://nook-panel link in Settings.
@@ -299,6 +304,12 @@ fn nooks_pages_may_call_nook_ui_and_nothing_else() {
     }
     assert!(may_invoke("main", "get_app_settings"));
     assert!(may_invoke("hearth", "prepare_update"));
+    // The quick-ask box sends to Pip and nothing more; no other page calls its command.
+    assert!(may_invoke("nook_ask", "ask_pip"));
+    for other in ["nook_ui", "get_app_settings", "change_hearth_settings"] {
+        assert!(!may_invoke("nook_ask", other), "{other}");
+    }
+    assert!(!may_invoke("nook_dock", "ask_pip"));
 }
 
 #[cfg(all(test, windows))]

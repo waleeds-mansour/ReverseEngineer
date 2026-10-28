@@ -1,0 +1,174 @@
+/* The quick-ask box: a glass-strong card, near-opaque and with no DWM backdrop, so it keeps its
+   rounded corners over any app. Its window (quick_ask_parts.rs, BOX_SIZE: 560 by 148) has room for
+   a line of context wrapped to three lines, and around the card for its shadow; the card is as
+   tall as what it shows. */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  padding: 8px 12px 12px;
+  font: 400 13px/18px var(--font-sans);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+.na {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  max-height: 100%;
+  padding: 8px var(--space-4) 8px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge),
+    var(--shadow-3);
+}
+
+/* Where it was asked, whole: it wraps rather than hiding the end of a title. */
+.na-from-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.na-from {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.na-drop {
+  all: unset;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-xs);
+  font: 500 14px/16px var(--font-sans);
+  text-align: center;
+  color: var(--ink-subtle);
+  cursor: pointer;
+}
+
+.na-drop:hover {
+  color: var(--ink);
+}
+
+.na-from-row[hidden],
+.na-drop[hidden] {
+  display: none;
+}
+
+.na-input {
+  all: unset;
+  width: 100%;
+  font: 400 16px/24px var(--font-sans);
+  color: var(--ink);
+  caret-color: var(--accent);
+}
+
+.na-input::placeholder {
+  color: var(--ink-subtle);
+}
+
+/* Waiting or going: what was typed stays in sight, greyed, until Undo puts it back. */
+.na[data-phase="waiting"] .na-input,
+.na[data-phase="sending"] .na-input {
+  color: var(--ink-muted);
+}
+
+.na-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 22px;
+  font: 500 12px/16px var(--font-sans);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+/* What it says about a send wraps, whole, like the line of context. */
+.na-said {
+  min-width: 0;
+  white-space: normal;
+}
+
+.na-said:empty {
+  display: none;
+}
+
+.na[data-tone="bad"] .na-said {
+  color: var(--danger);
+}
+
+.na-answer {
+  all: unset;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: var(--radius-xs);
+  font: 500 13px/18px var(--font-sans);
+  color: var(--accent-ink);
+  cursor: pointer;
+}
+
+.na-answer:hover {
+  text-decoration: underline;
+}
+
+.na-answer:focus-visible,
+.na-undo:focus-visible,
+.na-drop:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.na-hint {
+  margin-left: auto;
+  color: var(--ink-subtle);
+}
+
+.na-answer[hidden],
+.na-undo[hidden],
+.na-meter[hidden] {
+  display: none;
+}
+
+/* What is left of the wait for an Undo, emptying from the right. Without motion it stays full,
+   and "Sending…" with its Undo says the same. */
+.na-meter {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+  transform-origin: left center;
+}
+
+.na-meter--run {
+  animation: na-empty var(--undo-ms, 2000ms) linear forwards;
+}
+
+@keyframes na-empty {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}

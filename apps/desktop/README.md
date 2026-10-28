@@ -40,8 +40,10 @@ All of it lives in `src-tauri/src/hearth/`, `src-tauri/src/nook/` and
 - **Tray status** (`hearth/status.rs`): "Server ✓ Worker ✓ Jarvis ✓" on the first line, a warning
   icon when something's wrong, and **Restart Hearth services** and **Update Hearth…**
   (`hearth/services.rs`, which finds the Hearth folder from the hearth-server service).
-- **Quick capture** (Ctrl+Alt+N) and **Ask Jarvis** (Ctrl+Alt+K): small windows on Hearth's
-  `/capture` and `/chat?compact=1` pages. Esc or clicking elsewhere tucks them away.
+- **Quick capture** (Ctrl+Alt+N): a small window on Hearth's `/capture` page. **Ask Pip**
+  (Ctrl+Alt+K): a small box of this app's own over the app you're in (`hearth/quick_ask.rs`).
+  What you type goes to Pip after two seconds to undo, with that app's name and window title
+  beside it as outside data, never as your words. Esc or clicking elsewhere tucks them away.
 - **Dictation** (Handy's hotkey) goes to Hearth's `voice.clean` with the program and window you
   were in. Hearth applies your dictionary, snippets and the app's style, and keeps it in your
   dictation history. If Hearth can't be reached, Handy's own processing is used.

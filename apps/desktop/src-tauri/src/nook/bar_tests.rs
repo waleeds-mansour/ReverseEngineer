@@ -130,6 +130,33 @@ fn the_bar_spans_display1_and_scales_with_it() {
 }
 
 #[test]
+fn the_bar_and_popover_are_sized_as_webview2_draws_them_at_windows_text_size() {
+    let mut run = drawn();
+    run.take(&observing());
+    run.text = 150;
+    let Step::Place { bar, popover } = run.plan()[0] else {
+        panic!("placed first");
+    };
+    // 28 CSS px of bar at 150 % text on a 100 % monitor: 42 physical px, as at 150 % DPI.
+    assert_eq!(
+        (bar.left, bar.top, bar.width(), bar.height()),
+        (0, 0, 2560, 42)
+    );
+    // The popover's 304 by 236 grows the same, under the taller bar, 12 px in from the right.
+    let p = (
+        popover.top,
+        popover.right,
+        popover.width(),
+        popover.height(),
+    );
+    assert_eq!(p, (42, 2548, 456, 354));
+    // A new text size moves both; at 100 % they are the DPI's alone.
+    run.text = 100;
+    let (bar, popover) = (bar_rect(&owners_pc()), popover_rect(&owners_pc()));
+    assert_eq!(run.plan(), vec![Step::Place { bar, popover }]);
+}
+
+#[test]
 fn it_shows_only_once_drawn_and_observing_on_a_managed_primary() {
     let mut run = BarRun {
         made: true,

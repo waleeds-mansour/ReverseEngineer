@@ -16,7 +16,7 @@ pub enum Link {
     Settings,
     /// `hearth://retry`: the "Hearth isn't running" page's Retry button.
     Retry,
-    /// `hearth://close`: a small window (quick capture, ask Jarvis) closing itself.
+    /// `hearth://close`: a small window (quick capture) closing itself.
     Close,
     /// `hearth://nook-panel`: Nook's panel, from Settings > Desktop. A link from anywhere can at
     /// most open it, and the panel only observes.

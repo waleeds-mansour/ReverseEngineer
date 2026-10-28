@@ -7,7 +7,8 @@
 //
 // It's also how Hearth lives on the PC (D53): Hearth's own window (window.rs, sight.rs),
 // hearth:// links (deeplink.rs), Windows notifications (notify.rs), and the tray's status line and
-// service controls (status.rs, services.rs).
+// service controls (status.rs, services.rs). A fourth hotkey opens the quick-ask box over any app,
+// to ask Pip by typing (quick_ask.rs).
 
 pub mod bakeoff;
 pub mod capture;
@@ -21,6 +22,9 @@ pub mod meeting;
 pub mod notify;
 pub mod offline;
 pub mod overlay_ready;
+pub mod quick_ask;
+pub mod quick_ask_flow;
+pub mod quick_ask_parts;
 pub mod relay;
 pub mod selection;
 pub mod services;
@@ -239,8 +243,9 @@ async fn talk(app: AppHandle, h: Hearth, text: &str) -> Result<(), String> {
     });
     let sent = match h.send(text, current.as_deref()).await {
         Ok(s) => s,
-        // The old conversation may be gone; start a new one.
-        Err(_) if current.is_some() => h.send(text, None).await?,
+        // The old conversation may be gone; start a new one. Not after a timeout, which may have
+        // sent it.
+        Err(e) if current.is_some() && e != client::TIMED_OUT => h.send(text, None).await?,
         Err(e) => return Err(e),
     };
     if let Ok(mut t) = TALKING.lock() {
@@ -334,8 +339,8 @@ pub fn unpair_hearth(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Hotkeys that open Hearth's windows (D53): Hearth itself, quick capture, and asking Jarvis by
-/// typing.
+/// Hotkeys that open Hearth's windows (D53): Hearth itself, quick capture, and the quick-ask box
+/// to ask Pip by typing.
 pub struct WindowHotkey;
 
 impl crate::actions::ShortcutAction for WindowHotkey {
@@ -343,7 +348,7 @@ impl crate::actions::ShortcutAction for WindowHotkey {
         match binding_id {
             OPEN_BINDING => window::open(app, "/"),
             CAPTURE_BINDING => window::capture(app),
-            ASK_BINDING => window::ask(app),
+            ASK_BINDING => quick_ask::open(app),
             _ => {}
         }
     }

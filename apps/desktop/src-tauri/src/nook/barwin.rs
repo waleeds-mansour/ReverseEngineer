@@ -4,7 +4,8 @@
 // hidden and suspended until the bar asks for it. Turning the switch off destroys both. Making
 // and destroying windows waits on the main thread, so it runs on a blocking thread, one sync at a
 // time and with no lock of Nook's held; everything done to a window that exists runs on the main
-// thread, in order. With the switch off, none of this starts a thread.
+// thread, in order. With the switch off, none of this starts a thread. Windows' text size, which
+// WebView2 draws both pages at, is read when they are made and with each new state from nook-wm.
 
 use super::bar::{self, Step, Which, BAR_HEIGHT, BAR_LABEL, BAR_PAGE, POPOVER_LABEL, POPOVER_PAGE};
 use super::diag::{self, Event};
@@ -12,7 +13,7 @@ use super::host::{self, Shared};
 use super::probe::Hwnd;
 use super::view::NookState;
 use super::wm::Cmd;
-use super::{dockmenu, focus, look, observe, surface, ui};
+use super::{dockmenu, dockwin, focus, look, observe, surface, ui};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -60,6 +61,7 @@ fn sync_now(shared: &Arc<Shared>) {
                     let mut run = shared.bar();
                     run.made = true;
                     run.ours = ours;
+                    run.text = dockwin::text_now();
                 }
                 tell_own(shared);
                 must_draw(shared, MAKES.fetch_add(1, Ordering::SeqCst) + 1);
@@ -266,9 +268,12 @@ pub fn on_state(shared: &Shared, state: &NookState) {
                 r.popover_visible(),
                 r.monitor,
                 r.game_anywhere,
+                r.text,
             )
         };
         let before = seen(&run);
+        // A quick registry read: the text size may have changed in Settings since.
+        run.text = dockwin::text_now();
         run.take(state);
         before != seen(&run)
     };
