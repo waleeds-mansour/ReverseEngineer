@@ -1,7 +1,8 @@
-/* Nook's agent dock: a short glass-strong strip of status dots floating by the screen's left edge,
-   and, while the pointer is over it, a card beside it with the hovered dot's label and last line.
-   The window is exactly the strip until Nook widens it for the card, so the strip has a hairline
-   edge and no outer shadow. The sizes match dock.rs (DOCK_DEEP, DOCK_PAD, DOT_ROW, CARD_SIZE).
+/* Nook's agent dock: a short glass-strong strip of status dots floating by a side of the screen,
+   and, while the pointer is over it, a card beside it, toward the middle of the screen, with the
+   hovered dot's label, last line and one button. The window is exactly the strip until Nook widens
+   it for the card, so the strip has a hairline edge and no outer shadow. The sizes match dock.rs
+   (DOCK_DEEP, DOCK_PAD, DOT_ROW, CARD_SIZE).
    A working dot breathes; nothing moves when Windows or the page asks for less motion
    (nook.css), or while the page is hidden. */
 
@@ -31,7 +32,7 @@ body {
   --dot-row: 24px;
   --card-gap: 6px;
   --card-w: 236px;
-  --card-h: 60px;
+  --card-h: 80px;
 }
 
 .nd {
@@ -136,6 +137,7 @@ body {
   display: none;
   flex-direction: column;
   justify-content: center;
+  align-items: flex-start;
   gap: 2px;
   width: var(--card-w);
   height: var(--card-h);
@@ -162,9 +164,31 @@ body {
 }
 
 .nd-line {
+  max-width: 100%;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
   font: 500 11px/14px var(--font-sans);
   color: var(--ink-muted);
+}
+
+.nd-act {
+  margin: 4px 0 0 -6px;
+  height: 22px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: 600 11px/22px var(--font-sans);
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.nd-act:hover {
+  background: var(--surface-3);
+}
+
+.nd-act:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }

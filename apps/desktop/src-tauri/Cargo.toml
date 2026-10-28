@@ -149,6 +149,8 @@ windows = { version = "0.61.3", features = [
   "Win32_UI_Accessibility",
   "Win32_UI_HiDpi",
   "Win32_UI_Shell",
+  # The agent dock follows the mouse button while it is dragged (src/nook/dockact.rs).
+  "Win32_UI_Input_KeyboardAndMouse",
   # Windows Hello signs Hearth's window in (src/hearth/hello.rs, D80).
   "Security_Credentials",
   "Security_Cryptography",

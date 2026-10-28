@@ -1,9 +1,12 @@
-// GET /api/desktop/notify: what the desktop app shows as Windows notifications (D53). The inbox
-// items your phone is told about (push.ts decides which) and Hearth's health changing, as
-// server-sent events. The desktop app's token may read it; nothing here can approve anything,
-// and a notification only opens a page.
+// GET /api/desktop/notify: what the desktop app shows as Windows notifications (D53), and what its
+// dock shows. As `notify` events, the inbox items your phone is told about (push.ts decides which)
+// and Hearth's health changing; as `status` events, what Pip is doing, how many things wait for
+// your yes and Nook's health (deskLite), when the feed opens and whenever that reads differently.
+// The desktop app's token may read it; nothing here can approve anything, a notification only
+// opens a page, and a status is counts, states and a few words of label, never anyone's words.
 import { notification } from "@hearth/db";
 import { type HearthEvent, latestSeq, readEventsAfter } from "@hearth/kernel";
+import { DESK_LITE_KINDS, type DeskLite, deskLite } from "@hearth/modules";
 import { inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
@@ -15,7 +18,14 @@ import { messageFor, PUSH_KINDS, type PushMessage, worthPushing } from "../push.
 const KEEP_ALIVE_MS = 20_000;
 /** A reconnect catches up on what it missed, but nothing older than this: it's news, not a log. */
 const REPLAY_MS = 10 * 60_000;
-const KINDS = [...PUSH_KINDS, "system.health_changed"];
+const KINDS = [...new Set([...PUSH_KINDS, "system.health_changed", ...DESK_LITE_KINDS])];
+/**
+ * While Pip is on something, the status is read this often as well: a turn with no conversation
+ * ends without an event, and the dock should still see it end within a couple of seconds.
+ */
+const WHILE_BUSY_MS = 2_000;
+/** How long one read of the dock's status serves every feed on this server. */
+const SHARE_MS = 1_000;
 
 const NAMES: Record<string, string> = {
   worker: "Nook's worker",
@@ -83,6 +93,84 @@ export async function stillSignedIn(
   return (await checkToken(db, token, new Date(), { touch: false })).ok;
 }
 
+type Stream = Parameters<Parameters<typeof streamSSE>[1]>[0];
+
+/** Where the dock's status is read from; a test can hold a read open here. */
+export const statusReads = { deskLite };
+
+const readings = new WeakMap<object, { seen: number; at: number; status: Promise<DeskLite> }>();
+
+/**
+ * The dock's status, one read shared by every feed on this server for SHARE_MS, so each PC's feed
+ * doesn't add queries of its own. A read serves only a feed that has seen no event newer than the
+ * ones the feed that began it had seen, so what an event changed is never answered by a read
+ * begun before it.
+ */
+export function sharedStatus(deps: ServerDeps, seen: number): Promise<DeskLite> {
+  const db = deps.kernel.db;
+  const at = performance.now();
+  const last = readings.get(db);
+  if (last && last.seen >= seen && at - last.at < SHARE_MS) return last.status;
+  const status = statusReads.deskLite(db, deps.kernel.clock.now());
+  const reading = { seen, at, status };
+  readings.set(db, reading);
+  // A read that failed isn't shared with the next feed.
+  status.catch(() => {
+    if (readings.get(db) === reading) readings.delete(db);
+  });
+  return status;
+}
+
+/**
+ * The dock's status on one feed: read when asked, after the events the feed has `seen`, and sent
+ * only when it reads differently from the last one sent. One read at a time, so a late one never
+ * overtakes a newer one; asked again while one is under way, it reads once more after it, however
+ * many times it was asked. A status has no id: the app's place in the feed is its notifications'.
+ */
+export function dockStatus(
+  deps: ServerDeps,
+  token: string | null,
+  stream: Stream,
+  seen: () => number,
+) {
+  let said = "";
+  let busy = false;
+  let running: Promise<void> | null = null;
+  let again = false;
+  const once = async () => {
+    if (stream.aborted) return;
+    const status = await sharedStatus(deps, seen());
+    busy = status.pip.state !== "idle";
+    const data = JSON.stringify(status);
+    if (data === said) return;
+    // The feed outlives the request that checked its token (stillSignedIn).
+    if (said && !(await stillSignedIn(deps.kernel.db, token))) return stream.abort();
+    said = data;
+    await stream.writeSSE({ event: "status", data });
+  };
+  const run = async () => {
+    for (;;) {
+      again = false;
+      await once().catch(() => {});
+      // Nothing is awaited between this look and letting go, so no ask falls between them.
+      if (!again || stream.aborted) {
+        running = null;
+        return;
+      }
+    }
+  };
+  return {
+    tell: (): Promise<void> => {
+      if (running) again = true;
+      else running = run();
+      return running;
+    },
+    busy: () => busy,
+    /** Once the read under way, if any, is done. */
+    settled: (): Promise<void> => running ?? Promise.resolve(),
+  };
+}
+
 export function desktopRoutes() {
   const app = new Hono<AppEnv>();
   app.get("/notify", requireCaller(["owner"]), (c) => {
@@ -96,10 +184,12 @@ export function desktopRoutes() {
       let cursor = Number.isInteger(from) && from >= 0 && from <= latest ? from : latest;
       let pumping: Promise<void> | null = null;
       let again = false;
+      const status = dockStatus(deps, token, stream, () => cursor);
 
       const pump = async () => {
         do {
           again = false;
+          let moved = false;
           for (;;) {
             const events = await readEventsAfter(deps.kernel.db, cursor, {
               limit: 200,
@@ -117,9 +207,13 @@ export function desktopRoutes() {
                 data: JSON.stringify(message),
               });
             }
+            if (events.some((e) => DESK_LITE_KINDS.includes(e.kind))) moved = true;
             if (events.length) cursor = events[events.length - 1]!.seq;
             if (events.length < 200 || stream.aborted) break;
           }
+          // Before `again` is looked at: an event that comes while the status is read is read in
+          // its turn, rather than waiting for one after it.
+          if (moved) await status.tell();
         } while (again && !stream.aborted);
       };
       const wake = () => {
@@ -144,19 +238,27 @@ export function desktopRoutes() {
       const keepAlive = setInterval(() => {
         void stillSignedIn(deps.kernel.db, token)
           .then(async (ok) => {
-            if (ok) await stream.write(": keep-alive\n\n");
-            else stream.abort();
+            if (!ok) return stream.abort();
+            await stream.write(": keep-alive\n\n");
+            // What no event announces: a component that stopped reporting, an approval run out.
+            await status.tell();
           })
           .catch(() => {});
       }, KEEP_ALIVE_MS);
+      const whileBusy = setInterval(() => {
+        if (status.busy()) void status.tell();
+      }, WHILE_BUSY_MS);
       const done = new Promise<void>((resolve) => stream.onAbort(resolve));
 
       await stream.writeSSE({ event: "ready", id: String(cursor), data: "{}" });
+      await status.tell();
       wake();
       await done;
       clearInterval(keepAlive);
+      clearInterval(whileBusy);
       unsubscribe();
       await pumping;
+      await status.settled();
     });
   });
   return app;

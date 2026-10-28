@@ -16,9 +16,11 @@ export const copy = {
   barLabel: "Show the Nook bar along the top of your main screen",
   barHint:
     "The app in front, Nook's services, Pip and the time. It observes while it's on, hides over games and fullscreen video, and changes no window.",
-  dockLabel: "Show the agent dock on the left edge of your main screen",
+  dockLabel: "Show the agent dock on the side of your main screen",
   dockHint:
-    "A dot for Pip, and one for any of Nook's services that needs you. It stays on top, hides over games and fullscreen video, and changes no window.",
+    "A dot for Pip, one for what waits for your yes, and one for any of Nook's services that needs you. It stays on top, hides over games and fullscreen video, and changes no window. Drag it up or down; right-click it for more.",
+  dockSide: "Side",
+  dockEdges: { left: "Left edge", right: "Right edge" },
   elevated:
     "Hearth is running as administrator, so Nook will only ever observe. Elevated arrangers can move windows that other apps can't, which Nook won't do.",
   writesTitle: "Changes to your windows",

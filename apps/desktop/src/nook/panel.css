@@ -140,6 +140,40 @@ p {
   accent-color: var(--accent);
 }
 
+/* The agent dock's side, under its switch. */
+.sides {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0;
+  padding: 0 0 0 1.5rem;
+  border: 0;
+}
+
+.sides legend {
+  float: left;
+  padding: 0;
+  margin-right: 0.25rem;
+  color: var(--ink-muted);
+}
+
+.sides label {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  cursor: pointer;
+}
+
+.sides input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.sides:disabled label {
+  cursor: default;
+  opacity: 0.6;
+}
+
 ul.plain {
   margin: 0;
   padding-left: 1.125rem;

@@ -1,8 +1,11 @@
 // The dev-only preview's stand-in for Nook (never built: vite.config.ts lists only the real
 // pages). It answers the bar, popover and dock with a fixture state and chrome taken from the
 // address:
-//   ?theme=dusk&mood=thinking&waiting=2&services=down&glass=0&reduced=1&popover=1&quiet=1&app=Figma&edge=right
-// and keeps every command it was asked in window.__nookAsked, for the screenshot script.
+//   ?theme=dusk&mood=thinking&waiting=2&services=down&glass=0&reduced=1&popover=1&quiet=1&app=Figma&edge=left
+// and, for the dock, what Hearth's feed says: &turn=working (or thinking) and &yes=2. The dock
+// sits on the right edge, as it starts, unless &edge says otherwise. It keeps
+// every command it was asked in window.__nookAsked, for the screenshot script, and makes room for
+// the dock's card when asked, as Nook does.
 
 import type {
   AgentDot,
@@ -68,6 +71,8 @@ export const state: NookState = {
 const mood = (q.get("mood") ?? "idle") as PipMood;
 const waiting = Number(q.get("waiting") ?? 0);
 const services = q.get("services") ?? "ok";
+const turn = q.get("turn");
+const yes = Number(q.get("yes") ?? 0);
 
 /** The dock's dots, roughly as agents.rs picks them. */
 function fixtureAgents(): AgentDot[] {
@@ -88,12 +93,25 @@ function fixtureAgents(): AgentDot[] {
   const all = [
     mood === "listening" || mood === "thinking"
       ? pip("working", "Thinking")
-      : waiting > 0
+      : waiting > 0 && !turn
         ? pip("needs_you", `${waiting} things wait for you`)
         : mood === "happy"
           ? pip("done", "Answered")
-          : pip("idle", "Resting"),
+          : turn === "working"
+            ? pip("working", "Working on your morning brief")
+            : turn === "thinking"
+              ? pip("working", "Thinking about what you asked")
+              : pip("idle", "Resting"),
   ];
+  if (yes > 0) {
+    all.push({
+      id: "approvals",
+      label: "Needs your yes",
+      kind: "approvals",
+      state: "needs_you",
+      line: `${yes} things wait for your yes`,
+    });
+  }
   if (services === "down") {
     all.push(service("server", "Nook's server", "Not answering"));
   }
@@ -137,7 +155,7 @@ export const chrome: ChromeView = {
     shown: true,
     why_not: null,
     open: false,
-    edge: (q.get("edge") ?? "left") as Edge,
+    edge: (q.get("edge") ?? "right") as Edge,
   },
 };
 
@@ -151,7 +169,15 @@ window.__nookAsked = [];
 export const fakeLink: Link = {
   ask: async (cmd) => {
     window.__nookAsked.push(cmd);
-    return { state, saved: null, chrome };
+    if (cmd.kind === "dock_hover" && chrome.dock.open !== cmd.open) {
+      chrome.dock.open = cmd.open;
+      chrome.seq += 1;
+    }
+    return {
+      state,
+      saved: null,
+      chrome: { ...chrome, dock: { ...chrome.dock } },
+    };
   },
   onState: () => {},
   onChrome: () => {},

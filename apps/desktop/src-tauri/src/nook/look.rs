@@ -1,12 +1,13 @@
 // What Nook's chrome shows besides the windows, put together (chrome.rs has the shapes): the
 // theme Hearth's window chose, what Windows says about transparency, high contrast and
 // animation, Hearth's services as the tray reads them, Pip, the bar's switch, and the agent dock's
-// dots (agents.rs) and switch. A new view goes to Nook's pages only when something in it changed,
-// and nothing here runs while the bar and the dock are both off except remembering a theme, which
-// is a store write.
+// dots (agents.rs, from all of that and what the notify feed says, live.rs) and switch. A new view
+// goes to Nook's pages only when something in it changed, and nothing here runs while the bar and
+// the dock are both off except remembering a theme, which is a store write.
 
 use super::chrome::{key_caps, ChromeView, Health, PipMood, ServicesView, ThemeId};
 use super::host::{self, Shared};
+use super::live::Live;
 use super::pip::Pip;
 use super::surface::{self, Readings};
 use super::{agents, barwin, dockwin, settings, ui};
@@ -18,6 +19,8 @@ pub struct Chrome {
     /// The theme Hearth's window last showed; none until it has told Nook one.
     pub chosen: Option<ThemeId>,
     pub pip: Pip,
+    /// What the notify feed last said Pip and Nook are doing, while it is open.
+    pub live: Option<Live>,
     readings: Readings,
     last: Option<ChromeView>,
     seq: u64,
@@ -28,6 +31,7 @@ impl Chrome {
         Chrome {
             chosen,
             pip: Pip::default(),
+            live: None,
             readings: Readings::default(),
             last: None,
             seq: 0,
@@ -85,7 +89,7 @@ fn view(shared: &Shared) -> (ChromeView, bool) {
         theme: ThemeId::resolve(c.chosen, r.dark, r.high_contrast),
         glass: r.transparency && !r.high_contrast,
         reduced_motion: r.reduced_motion,
-        agents: agents::dots(&pip, &services),
+        agents: agents::dots(&pip, &services, c.live.as_ref()),
         services,
         pip,
         bar,
@@ -174,6 +178,23 @@ pub fn services_changed(app: &AppHandle) {
         if shared.chrome_shown() {
             emit(&shared);
         }
+    }
+}
+
+/// The notify feed said what Pip and Nook are doing, or closed (None). It is kept whether or not
+/// the bar or the dock is up, so either starts with the latest.
+pub fn live(app: &AppHandle, status: Option<Live>) {
+    let Some(shared) = host::shared(app) else {
+        return;
+    };
+    let changed = {
+        let mut c = shared.chrome();
+        let changed = c.live != status;
+        c.live = status;
+        changed
+    };
+    if changed && shared.chrome_shown() {
+        emit(&shared);
     }
 }
 

@@ -3,7 +3,7 @@
 // It carries app names, verdicts and reasons, never a window's title. The panel gets the window
 // list; every other Nook window gets the state without it.
 
-use super::chrome::ChromeView;
+use super::chrome::{ChromeView, Edge};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -180,6 +180,26 @@ pub enum UiCmd {
     SetDock { on: bool },
     /// The pointer came over the agent dock, or left it: its card opens or closes.
     DockHover { open: bool },
+    /// The side the agent dock sits on, left or right.
+    SetDockEdge { edge: Edge },
+    /// A right click on the agent dock's strip: its menu, at the pointer.
+    DockMenu,
+    /// The agent dock's strip was pressed and moved: it follows the pointer until let go.
+    DockDrag,
+    /// A button on the agent dock's card: a page of Hearth's window.
+    DockOpen { page: DockPage },
+}
+
+/// What a button on the agent dock's card opens in Hearth's window.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum DockPage {
+    /// Pip's conversation, with its Stop.
+    Conversation,
+    /// Today, where what waits for the owner's yes is listed.
+    Approvals,
+    /// Hearth's health, in Settings.
+    Status,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Type)]
@@ -217,6 +237,17 @@ mod tests {
             read(r#"{"kind":"dock_hover","open":true}"#),
             UiCmd::DockHover { open: true }
         );
+        assert_eq!(
+            read(r#"{"kind":"set_dock_edge","edge":"right"}"#),
+            UiCmd::SetDockEdge { edge: Edge::Right }
+        );
+        assert_eq!(
+            read(r#"{"kind":"dock_open","page":"status"}"#),
+            UiCmd::DockOpen {
+                page: DockPage::Status
+            }
+        );
+        assert!(serde_json::from_str::<UiCmd>(r#"{"kind":"dock_open","page":"/api"}"#).is_err());
         assert!(serde_json::from_str::<UiCmd>(r#"{"kind":"theme","id":"dark"}"#).is_err());
     }
 

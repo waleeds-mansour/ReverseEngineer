@@ -31,7 +31,12 @@ import { keepSendingDrafts } from "../lib/keptDrafts.ts";
 import { live, queryClient, toast } from "../lib/live.ts";
 import { narrow } from "../lib/narrow.ts";
 import { type ListView, layout, type Pane, type PaneRoute } from "../lib/panes.ts";
-import { openSettings, windowAsked } from "../lib/settingsNav.ts";
+import {
+  openSettings,
+  SETTINGS_SECTIONS,
+  settingsTarget,
+  windowAsked,
+} from "../lib/settingsNav.ts";
 import { rememberSignedIn, showHearth } from "../lib/signedIn.ts";
 import { sendKeptOnRestore } from "../lib/trash.ts";
 import { Inbox } from "../views/Inbox.tsx";
@@ -161,6 +166,21 @@ function Shell(props: { onSignOut: () => void; covered: boolean }) {
       windowAsked.set(true);
       openSettings("desktop");
       history.replaceState(null, "", location.pathname);
+    }
+    // Settings at one of its sections, as the desktop dock's "Open status" asks for Health. It
+    // only scrolls there, so this too is safe from any website, and the rest of the address
+    // stays as it was.
+    const section = SETTINGS_SECTIONS.find((s) => s.id === query.get("section"))?.id;
+    if (section && location.pathname.replace(/\/+$/, "") === "/settings") {
+      settingsTarget.set(section);
+      const rest = new URLSearchParams(location.search);
+      rest.delete("section");
+      const search = rest.toString();
+      history.replaceState(
+        null,
+        "",
+        `${location.pathname}${search ? `?${search}` : ""}${location.hash}`,
+      );
     }
   });
   onCleanup(() => live.stop());

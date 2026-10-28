@@ -13,7 +13,7 @@ use super::dock::DOCK_LABEL;
 use super::host::{self, Shared};
 use super::view::{NookState, UiCmd, UiReply, STATE_EVENT};
 use super::wm::Cmd;
-use super::{barwin, dockwin, look, observe, settings};
+use super::{barwin, dockact, dockwin, look, observe, settings};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, Url, WebviewUrl, WebviewWindowBuilder};
 
@@ -38,10 +38,13 @@ fn allowed(label: &str, cmd: &UiCmd) -> bool {
         | UiCmd::SetObserve { .. }
         | UiCmd::SetBar { .. }
         | UiCmd::SetDock { .. }
+        | UiCmd::SetDockEdge { .. }
         | UiCmd::SaveFixtures
         | UiCmd::ExportDiag => label == PANEL,
         UiCmd::Drawn | UiCmd::OpenToday | UiCmd::Popover { .. } => chrome,
-        UiCmd::DockHover { .. } => label == DOCK_LABEL,
+        UiCmd::DockHover { .. } | UiCmd::DockMenu | UiCmd::DockDrag | UiCmd::DockOpen { .. } => {
+            label == DOCK_LABEL
+        }
     }
 }
 
@@ -226,9 +229,11 @@ fn handle(shared: &Arc<Shared>, label: &str, cmd: UiCmd) -> Result<UiReply, Stri
             None
         }
         UiCmd::SetDock { on } => {
-            settings::save_dock(&shared.app, on)?;
-            shared.dock().setting = on;
-            dockwin::sync(shared);
+            dockact::switch(shared, on)?;
+            None
+        }
+        UiCmd::SetDockEdge { edge } => {
+            dockact::to_edge(shared, edge)?;
             None
         }
         UiCmd::Drawn if label == DOCK_LABEL => {
@@ -241,6 +246,18 @@ fn handle(shared: &Arc<Shared>, label: &str, cmd: UiCmd) -> Result<UiReply, Stri
         }
         UiCmd::DockHover { open } => {
             dockwin::hover(shared, open);
+            None
+        }
+        UiCmd::DockMenu => {
+            dockact::menu(shared);
+            None
+        }
+        UiCmd::DockDrag => {
+            dockact::drag(shared);
+            None
+        }
+        UiCmd::DockOpen { page } => {
+            dockact::open(shared, page);
             None
         }
         UiCmd::Popover { open } => {
@@ -328,17 +345,34 @@ mod tests {
 
     #[test]
     fn the_dock_may_ask_what_it_draws_and_opens_and_nothing_else() {
-        let hover = UiCmd::DockHover { open: true };
-        for cmd in [
+        let page = super::super::view::DockPage::Approvals;
+        let own = [
+            UiCmd::DockHover { open: true },
+            UiCmd::DockMenu,
+            UiCmd::DockDrag,
+            UiCmd::DockOpen { page },
+        ];
+        let mut all = vec![
             UiCmd::Ready,
             UiCmd::Drawn,
             UiCmd::OpenToday,
             UiCmd::Popover { open: true },
-            hover.clone(),
-        ] {
+        ];
+        all.extend(own.clone());
+        for cmd in all {
             assert!(allowed(DOCK_LABEL, &cmd), "{cmd:?}");
         }
-        assert!(!allowed(BAR_LABEL, &hover) && !allowed(PANEL, &hover));
+        for cmd in own {
+            assert!(
+                !allowed(BAR_LABEL, &cmd) && !allowed(PANEL, &cmd),
+                "{cmd:?}"
+            );
+        }
+        // Its side is the panel's to set; the dock's own menu sets it without asking.
+        let side = UiCmd::SetDockEdge {
+            edge: super::super::chrome::Edge::Left,
+        };
+        assert!(allowed(PANEL, &side) && !allowed(DOCK_LABEL, &side));
         assert!(stays(DOCK_LABEL));
     }
 }
