@@ -9,7 +9,7 @@ const DISPLAY1: RectView = RectView {
     height: 1440,
 };
 
-fn rect(left: i32, top: i32, right: i32, bottom: i32) -> Rect {
+pub(super) fn rect(left: i32, top: i32, right: i32, bottom: i32) -> Rect {
     Rect {
         left,
         top,
@@ -18,7 +18,7 @@ fn rect(left: i32, top: i32, right: i32, bottom: i32) -> Rect {
     }
 }
 
-fn owners_pc() -> Place {
+pub(super) fn owners_pc() -> Place {
     Place {
         rect: rect(0, 0, 2560, 1440),
         dpi: 96,
@@ -40,7 +40,7 @@ fn observing() -> NookState {
 }
 
 /// A dock that is on, made, drawn and has read the owner's monitor, with nothing in front.
-fn up() -> DockRun {
+pub(super) fn up() -> DockRun {
     let mut run = DockRun::new(true);
     run.made = true;
     run.drawn = true;
@@ -90,13 +90,13 @@ fn the_open_card_has_room_beside_the_strip_which_stays_put() {
     let at = owners_pc();
     let strip = dock_rect(&at, Edge::Left, 1);
     let open = window_rect(&at, Edge::Left, 1, true);
-    assert_eq!(open, rect(6, 702, 282, 774));
+    assert_eq!(open, rect(6, 702, 282, 794));
     assert_eq!((open.left, open.top), (strip.left, strip.top));
     assert_eq!(window_rect(&at, Edge::Left, 1, false), strip);
     // On the right edge the card opens leftward.
     assert_eq!(
         window_rect(&at, Edge::Right, 1, true),
-        rect(2278, 702, 2554, 774)
+        rect(2278, 702, 2554, 794)
     );
     // With more dots than the card is tall, the window is as tall as the strip.
     let four = window_rect(&at, Edge::Left, 4, true);
@@ -127,7 +127,7 @@ fn it_shows_once_drawn_and_hides_and_sleeps_over_something_fullscreen() {
     let mut run = DockRun::new(true);
     run.made = true;
     run.read(false, Some(owners_pc()));
-    let placed = DockStep::Place(dock_rect(&owners_pc(), Edge::Left, 0));
+    let placed = DockStep::Place(dock_rect(&owners_pc(), Edge::Right, 0));
     assert_eq!(
         run.plan(),
         vec![placed],
@@ -202,10 +202,10 @@ fn hovering_opens_the_card_only_while_it_shows() {
     run.plan();
     run.hover(true);
     assert!(run.view().open);
-    let open = window_rect(&owners_pc(), Edge::Left, 1, true);
+    let open = window_rect(&owners_pc(), Edge::Right, 1, true);
     assert_eq!(run.plan(), vec![DockStep::Place(open)]);
     run.hover(false);
-    let closed = window_rect(&owners_pc(), Edge::Left, 1, false);
+    let closed = window_rect(&owners_pc(), Edge::Right, 1, false);
     assert_eq!(run.plan(), vec![DockStep::Place(closed)]);
     // Something fullscreen comes in front while the pointer is over it: the card closes too.
     run.hover(true);
@@ -220,7 +220,7 @@ fn a_new_dot_moves_the_strip_and_a_dock_with_no_monitor_waits() {
     let mut run = up();
     run.plan();
     run.dots = 2;
-    let two = dock_rect(&owners_pc(), Edge::Left, 2);
+    let two = dock_rect(&owners_pc(), Edge::Right, 2);
     assert_eq!(run.plan(), vec![DockStep::Place(two)]);
     let mut nowhere = DockRun::new(true);
     nowhere.made = true;
@@ -231,7 +231,7 @@ fn a_new_dot_moves_the_strip_and_a_dock_with_no_monitor_waits() {
         "no monitor read yet: nothing to place or show, and its page sleeps"
     );
     nowhere.read(false, Some(owners_pc()));
-    let one = dock_rect(&owners_pc(), Edge::Left, 0);
+    let one = dock_rect(&owners_pc(), Edge::Right, 0);
     assert_eq!(
         nowhere.plan(),
         vec![DockStep::Place(one), DockStep::Wake, DockStep::Show]
@@ -263,4 +263,77 @@ fn the_view_says_why_only_while_the_switch_is_on_and_an_asleep_page_hears_nothin
     assert!(run.receives());
     run.asleep = true;
     assert!(!run.receives());
+}
+
+#[test]
+fn the_window_is_sized_as_webview2_draws_its_page_at_windows_text_size() {
+    assert_eq!(text_size(None), 100, "Windows keeps no factor at 100 %");
+    assert_eq!(text_size(Some(150)), 150);
+    assert_eq!(text_size(Some(40)), 100);
+    assert_eq!(text_size(Some(500)), 225);
+    let at = owners_pc();
+    assert_eq!(drawn_at(&at, 0), at, "not read yet: 100 %");
+    // 150 % text on a 100 % monitor: each CSS px is 1.5 physical px, as at 150 % DPI.
+    let big = drawn_at(&at, 150);
+    assert_eq!(big.dpi, 144);
+    assert_eq!(dock_rect(&big, Edge::Left, 1), rect(9, 693, 51, 747));
+    // The open card's room grows with it: the page's card, 34 + 236 CSS px from the window's
+    // left and 80 tall, ends at 414 and 813, inside the window.
+    assert_eq!(
+        window_rect(&big, Edge::Left, 1, true),
+        rect(9, 693, 423, 831)
+    );
+    // The DPI scale and the text size multiply: 125 % and 200 % draw at 250 %.
+    let hidpi = Place { dpi: 120, ..at };
+    assert_eq!(drawn_at(&hidpi, 200).dpi, 240);
+    assert_eq!(drawn_at(&hidpi, 115).dpi, 138);
+
+    // A run places its window by the text size it read, and a new one moves it.
+    let mut run = up();
+    run.text = 175;
+    let steps = run.plan();
+    let at175 = drawn_at(&owners_pc(), 175);
+    assert_eq!(steps[0], DockStep::Place(dock_rect(&at175, Edge::Right, 1)));
+    assert_eq!(
+        dock_rect(&at175, Edge::Right, 1).width(),
+        49,
+        "28 CSS px at 175 %"
+    );
+    let before = run.seen();
+    run.text = 100;
+    assert_ne!(before, run.seen(), "a new text size is a move");
+    assert_eq!(
+        run.plan(),
+        vec![DockStep::Place(dock_rect(&owners_pc(), Edge::Right, 1))]
+    );
+}
+
+#[test]
+fn an_open_card_closes_once_the_pointer_has_left_its_window() {
+    let mut run = up();
+    run.plan();
+    run.hover(true);
+    let open = window_rect(&owners_pc(), Edge::Right, 1, true);
+    assert_eq!(run.plan(), vec![DockStep::Place(open)]);
+    // Anywhere over the strip or the card's room, it stays open.
+    assert!(!run.pointer(Some((open.left, open.top))));
+    assert!(!run.pointer(Some((open.right - 1, open.bottom - 1))));
+    assert!(run.open);
+    // Just past the window, it closes, once, and the window narrows to the strip.
+    assert!(run.pointer(Some((open.right, open.top + 1))));
+    assert!(!run.open && !run.view().open);
+    assert!(
+        !run.pointer(Some((open.right, open.top + 1))),
+        "closed already"
+    );
+    let strip = dock_rect(&owners_pc(), Edge::Right, 1);
+    assert_eq!(run.plan(), vec![DockStep::Place(strip)]);
+    // Where Windows can't say where the pointer is (a secure desktop, say), it closes too.
+    run.hover(true);
+    assert!(run.pointer(None));
+    // A card that isn't open has nothing to close.
+    assert!(!run.pointer(Some((strip.left, strip.top))));
+    assert!(!holds(None, Some((0, 0))));
+    assert!(holds(Some(strip), Some((strip.left, strip.top))));
+    assert!(!holds(Some(strip), Some((strip.left, strip.bottom))));
 }

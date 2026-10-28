@@ -3,8 +3,11 @@
 // time under the bar's sync lock, and everything done to the window on the main thread, in order.
 // Its page says when it has drawn (the readiness handshake); one that doesn't within DRAW_WITHIN
 // is made again, once. While the dock is made it reads Windows every LOOK_EVERY: whether something
-// fullscreen is in front, and where the primary monitor is. With its switch off, none of this
-// starts a thread.
+// fullscreen is in front, where the primary monitor is, and Windows' text size, which WebView2
+// draws the page at, and it ends a rest from its menu once the hour is up. While its card is open
+// it reads where the pointer is every WATCH_EVERY, and closes the card once the pointer has left.
+// With its switch off, none of this starts a thread. What the owner does to the dock itself, its
+// menu, dragging it and its card's buttons, is dockact.rs.
 
 use super::bar::Place;
 use super::barwin;
@@ -15,7 +18,7 @@ use super::view::NookState;
 use super::{look, observe, surface, ui};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
 use windows::Win32::Foundation::POINT;
 use windows::Win32::Graphics::Gdi::{
@@ -23,13 +26,18 @@ use windows::Win32::Graphics::Gdi::{
 };
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 use windows::Win32::UI::Shell::SHQueryUserNotificationState;
+use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
 
 /// How long the dock's page has to draw its first frame before its window is made again, once.
 const DRAW_WITHIN: Duration = Duration::from_secs(3);
 /// How often the dock reads Windows while it is made.
 const LOOK_EVERY: Duration = Duration::from_secs(2);
+/// How often the pointer is read while the card is open.
+const WATCH_EVERY: Duration = Duration::from_millis(150);
 /// Each making of the window, so a late check or reading for one never acts on the next.
 static MAKES: AtomicU64 = AtomicU64::new(0);
+/// Each opening of the card, so only the latest one's watch goes on.
+static OPENS: AtomicU64 = AtomicU64::new(0);
 
 /// Brings the dock to what its switch and Nook's status say.
 pub fn sync(shared: &Arc<Shared>) {
@@ -67,6 +75,7 @@ fn sync_now(shared: &Arc<Shared>) {
                     run.made = true;
                     run.ours = ours;
                     run.read(busy, monitor);
+                    run.text = text_now();
                 }
                 barwin::tell_own(shared);
                 must_draw(shared, made);
@@ -89,9 +98,8 @@ fn sync_now(shared: &Arc<Shared>) {
             {
                 let mut run = shared.dock();
                 *run = DockRun {
-                    setting: run.setting,
                     why_not: run.why_not,
-                    ..DockRun::default()
+                    ..run.kept()
                 };
             }
             barwin::tell_own(shared);
@@ -152,7 +160,7 @@ fn keep_looking(shared: &Arc<Shared>, made: u64) {
             if MAKES.load(Ordering::SeqCst) != made {
                 return;
             }
-            let (busy, monitor) = (busy_now(), primary());
+            let (busy, monitor, text) = (busy_now(), primary(), text_now());
             let moved = {
                 let mut run = s.dock();
                 if !run.made {
@@ -160,6 +168,8 @@ fn keep_looking(shared: &Arc<Shared>, made: u64) {
                 }
                 let before = run.seen();
                 run.read(busy, monitor);
+                run.text = text;
+                run.wake(Instant::now());
                 before != run.seen()
             };
             if moved {
@@ -176,6 +186,25 @@ fn busy_now() -> bool {
         Ok(state) => dock::busy(state.0),
         Err(_) => false,
     }
+}
+
+/// Windows' text size (Settings > Accessibility > Text size), which it keeps as TextScaleFactor
+/// only while it is above 100 %.
+fn text_now() -> u32 {
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+    let raw = RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey("Software\\Microsoft\\Accessibility")
+        .and_then(|k| k.get_value::<u32, _>("TextScaleFactor"))
+        .ok();
+    dock::text_size(raw)
+}
+
+/// Where the pointer is, in physical px.
+pub(super) fn cursor() -> Option<(i32, i32)> {
+    let mut p = POINT::default();
+    unsafe { GetCursorPos(&mut p) }.ok()?;
+    Some((p.x, p.y))
 }
 
 /// The primary monitor, which always holds the point (0, 0), in physical px.
@@ -255,18 +284,49 @@ pub fn drawn(shared: &Shared) {
     nudge(&shared.app);
 }
 
-/// The pointer came over the dock, or left it.
-pub fn hover(shared: &Shared, open: bool) {
-    let changed = {
+/// The pointer came over the dock, or left it. While the card is open, the pointer is watched.
+pub fn hover(shared: &Arc<Shared>, open: bool) {
+    let (changed, opened) = {
         let mut run = shared.dock();
         let was = run.open;
         run.hover(open);
-        was != run.open
+        (was != run.open, run.open && !was)
     };
+    if opened {
+        watch_pointer(shared);
+    }
     if changed {
         nudge(&shared.app);
         look::emit(shared);
     }
+}
+
+/// Every WATCH_EVERY while this opening of the card lasts: once the pointer has left the window,
+/// the card closes and the window narrows, and the page hears it in the chrome's dock.open.
+fn watch_pointer(shared: &Arc<Shared>) {
+    let open = OPENS.fetch_add(1, Ordering::SeqCst) + 1;
+    let s = shared.clone();
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(WATCH_EVERY).await;
+            if OPENS.load(Ordering::SeqCst) != open {
+                return;
+            }
+            let at = cursor();
+            let closed = {
+                let mut run = s.dock();
+                if !run.open {
+                    return;
+                }
+                run.pointer(at)
+            };
+            if closed {
+                nudge(&s.app);
+                look::emit(&s);
+                return;
+            }
+        }
+    });
 }
 
 /// How many dots Nook's chrome shows now: the strip grows or shrinks to fit them.

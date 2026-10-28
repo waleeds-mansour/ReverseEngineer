@@ -5,11 +5,11 @@
 // writes to none: each write goes to nook-restore's seam in its read-only mode and is refused.
 // It runs only while the panel is open or the owner's observing switch is on, which starts off.
 // P1's bar along the top of DISPLAY1 has a switch of its own, also off, and observes while it is
-// on. The agent dock, a strip of status dots for Pip and Hearth's services on the left edge, has a
-// switch that starts on; it is one window that reads Windows every few seconds, with no hook and
-// no observer of its own. Otherwise Nook installs no hook, registers no hotkey, creates no window
-// and starts no thread, except to finish a restore that an earlier run left owing. That restore
-// is nook-restore's, the same one the --nook-restore-windows CLI, nook-guard.exe and the
+// on. The agent dock, a strip of status dots for Pip and Hearth's services on a side of the
+// screen, has a switch that starts on; it is one window that reads Windows every few seconds, with
+// no hook and no observer of its own. Otherwise Nook installs no hook, registers no hotkey, creates
+// no window and starts no thread, except to finish a restore that an earlier run left owing. That
+// restore is nook-restore's, the same one the --nook-restore-windows CLI, nook-guard.exe and the
 // installer run.
 
 #[cfg(windows)]
@@ -25,6 +25,12 @@ mod coalesce;
 mod diag;
 #[cfg(windows)]
 mod dock;
+#[cfg(windows)]
+mod dockact;
+#[cfg(windows)]
+mod dockmenu;
+#[cfg(windows)]
+mod dockplace;
 #[cfg(windows)]
 mod dockwin;
 #[cfg(windows)]
@@ -43,6 +49,7 @@ mod hooks;
 mod host;
 #[cfg(all(test, windows))]
 mod itest;
+pub mod live;
 #[cfg(windows)]
 mod look;
 #[cfg(windows)]
@@ -198,6 +205,12 @@ pub fn pip_notified(app: &AppHandle) {
     look::pip(app, |p| (p.notified(), None));
 }
 
+/// What Hearth's server says Pip and Nook are doing, from a status on the notify feed; None once
+/// the feed has closed, so the agent dock goes back to what this PC knows itself.
+pub fn live_status(app: &AppHandle, status: Option<live::Live>) {
+    look::live(app, status);
+}
+
 /// Nook arranges windows only on Windows; elsewhere there is nothing to check or put back.
 #[cfg(not(windows))]
 mod host {
@@ -243,6 +256,7 @@ mod look {
     pub fn services_changed(_app: &AppHandle) {}
     pub fn set_mood(_app: &AppHandle, _mood: PipMood) {}
     pub fn pip(_app: &AppHandle, _f: impl FnOnce(&mut Pip) -> (bool, Option<()>)) {}
+    pub fn live(_app: &AppHandle, _status: Option<super::live::Live>) {}
 }
 
 #[cfg(not(windows))]

@@ -1,7 +1,8 @@
 // Nook's panel (docs/nook-wm.md, "OPT-IN FLOW", step 2): what Nook sees while it observes. The
 // monitors, every window with the verdict Nook would give it and why, and proof that nothing was
-// changed, and the bar's switch. It is a local page in Hearth's app; it talks only to nook_ui and
-// listens only for 'nook://state' and 'nook://chrome', which carries the theme.
+// changed, the bar's and the agent dock's switches, and the side the dock sits on. It is a local
+// page in Hearth's app; it talks only to nook_ui and listens only for 'nook://state' and
+// 'nook://chrome', which carries the theme.
 
 import React, { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom/client";
@@ -276,6 +277,23 @@ function Panel() {
             />
             <span>{copy.dockLabel}</span>
           </label>
+          <fieldset
+            className="sides"
+            disabled={busy || chrome === null || !chrome.dock.on}
+          >
+            <legend>{copy.dockSide}</legend>
+            {(["left", "right"] as const).map((edge) => (
+              <label key={edge}>
+                <input
+                  type="radio"
+                  name="dock-edge"
+                  checked={(chrome?.dock.edge ?? "right") === edge}
+                  onChange={() => void run({ kind: "set_dock_edge", edge })}
+                />
+                <span>{copy.dockEdges[edge]}</span>
+              </label>
+            ))}
+          </fieldset>
           <p className="muted">{chrome?.dock.why_not ?? copy.dockHint}</p>
         </section>
         {state.gates.length > 0 && (

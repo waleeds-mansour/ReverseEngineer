@@ -136,7 +136,7 @@ pub struct BarView {
 }
 
 /// The screen edge one of Nook's strips sits along: the bar the top, the agent dock a side.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Type)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum Edge {
     Top,
@@ -149,8 +149,10 @@ pub enum Edge {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentKind {
-    /// Pip, as far as this PC's own calls to it go.
+    /// Pip: this PC's own calls to it, and what Hearth's server says it is doing.
     Pip,
+    /// What waits for the owner's yes, shown while anything does.
+    Approvals,
     /// One of Hearth's services, shown while it needs the owner.
     Service,
 }

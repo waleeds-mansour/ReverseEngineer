@@ -1,11 +1,18 @@
-// The agent dock's dots, from what this PC already knows. Pip is always there: working while it
-// listens or thinks for this PC, needing the owner while something waits for them on Hearth or
-// its service isn't answering, done for the moment an answer comes back, and resting otherwise.
-// Hearth's own services join it only while they need the owner, one dot each: the server or the
-// background work having trouble or not answering, this app without Hearth's address, or
-// something else Hearth watches failing. Until the tray's first check comes back, Pip is alone.
+// The agent dock's dots. Pip is always there. This PC's own calls to Pip come first: working while
+// it listens or thinks for this PC, and done for the moment an answer comes back. A Pip that isn't
+// answering needs the owner. Otherwise, while Hearth's notify feed is open, Pip's dot says what the
+// server says (live.rs): thinking about something the owner asked, working on something else by
+// its few words of label, paused or resting; without the feed it needs the owner while
+// notifications wait on the bar's Pip chip, as before the feed said more. What waits for the
+// owner's yes has a dot of its own while anything does, and clicking it opens Today, where those
+// are listed. Hearth's own services join only while they need the owner, one dot each: the server
+// not answering or this app without its address, the background work or the syncs having trouble,
+// or something else Hearth watches failing. While the feed is open the server is answering and
+// the rest is the server's own reading; otherwise it is the tray's, and until the tray's first
+// check comes back, Pip is alone.
 
 use super::chrome::{AgentDot, AgentKind, AgentState, Health, PipMood, PipView, ServicesView};
+use super::live::{Live, Turn};
 
 fn dot(id: &str, label: &str, kind: AgentKind, state: AgentState, line: String) -> AgentDot {
     AgentDot {
@@ -25,19 +32,44 @@ fn waits(n: u32) -> String {
     }
 }
 
-/// Pip's dot. Work going on for this PC shows first, since the owner is in the middle of it;
-/// what waits for them shows as soon as it is over.
-pub fn pip_dot(pip: &PipView, services: &ServicesView) -> AgentDot {
+fn yeses(n: u32) -> String {
+    if n == 1 {
+        "1 thing waits for your yes".into()
+    } else {
+        format!("{n} things wait for your yes")
+    }
+}
+
+/// What the server says Pip is on, as its line: "Working on your morning brief".
+fn turn_line(live: &Live) -> Option<String> {
+    let (verb, alone) = match live.turn {
+        Turn::Idle => return None,
+        Turn::Thinking => ("Thinking about", "Thinking"),
+        Turn::Working => ("Working on", "Working"),
+    };
+    Some(if live.label.is_empty() {
+        alone.to_string()
+    } else {
+        format!("{verb} {}", live.label)
+    })
+}
+
+/// Pip's dot. Work going on for this PC shows first, since the owner is in the middle of it.
+pub fn pip_dot(pip: &PipView, services: &ServicesView, live: Option<&Live>) -> AgentDot {
+    let down = (services.checked && services.pip == Health::Down)
+        || live.is_some_and(|l| l.pip == Health::Down);
+    let paused = services.pip_paused || live.is_some_and(|l| l.paused);
     let (state, line) = match pip.mood {
         PipMood::Listening => (AgentState::Working, "Listening".to_string()),
         PipMood::Thinking => (AgentState::Working, "Thinking".to_string()),
-        _ if pip.waiting > 0 => (AgentState::NeedsYou, waits(pip.waiting)),
-        _ if services.checked && services.pip == Health::Down => {
-            (AgentState::NeedsYou, "Pip isn't answering".to_string())
-        }
+        _ if live.is_none() && pip.waiting > 0 => (AgentState::NeedsYou, waits(pip.waiting)),
+        _ if down => (AgentState::NeedsYou, "Pip isn't answering".to_string()),
         PipMood::Happy => (AgentState::Done, "Answered".to_string()),
-        PipMood::Idle if services.pip_paused => (AgentState::Idle, "Paused".to_string()),
-        PipMood::Idle => (AgentState::Idle, "Resting".to_string()),
+        PipMood::Idle => match live.and_then(turn_line) {
+            Some(line) => (AgentState::Working, line),
+            None if paused => (AgentState::Idle, "Paused".to_string()),
+            None => (AgentState::Idle, "Resting".to_string()),
+        },
     };
     dot("pip", "Pip", AgentKind::Pip, state, line)
 }
@@ -50,21 +82,50 @@ fn troubled(h: Health) -> Option<&'static str> {
     }
 }
 
-/// Every dot, Pip first.
-pub fn dots(pip: &PipView, services: &ServicesView) -> Vec<AgentDot> {
-    let mut all = vec![pip_dot(pip, services)];
+fn needs(id: &str, label: &str, line: &str) -> AgentDot {
+    dot(
+        id,
+        label,
+        AgentKind::Service,
+        AgentState::NeedsYou,
+        line.into(),
+    )
+}
+
+/// Every dot, Pip first, then what waits for a yes, then the services.
+pub fn dots(pip: &PipView, services: &ServicesView, live: Option<&Live>) -> Vec<AgentDot> {
+    let mut all = vec![pip_dot(pip, services, live)];
+    if let Some(n) = live.map(|l| l.approvals).filter(|n| *n > 0) {
+        all.push(dot(
+            "approvals",
+            "Needs your yes",
+            AgentKind::Approvals,
+            AgentState::NeedsYou,
+            yeses(n),
+        ));
+    }
+    if let Some(l) = live {
+        // The feed is open, so the server is answering.
+        if let Some(line) = troubled(l.worker) {
+            all.push(needs("worker", "Background work", line));
+        }
+        match l.sync {
+            Health::Down => all.push(needs("sync", "Nook's syncs", "Not syncing")),
+            Health::Trouble => all.push(needs("sync", "Nook's syncs", "Having trouble")),
+            Health::Ok | Health::Unknown => {}
+        }
+        if l.other == Health::Down {
+            all.push(needs(
+                "watched",
+                "Nook",
+                "Something Nook watches is failing",
+            ));
+        }
+        return all;
+    }
     if !services.checked {
         return all;
     }
-    let needs = |id: &str, label: &str, line: &str| {
-        dot(
-            id,
-            label,
-            AgentKind::Service,
-            AgentState::NeedsYou,
-            line.into(),
-        )
-    };
     if !services.address_set {
         all.push(needs("server", "Nook's server", "Not connected"));
     } else if let Some(line) = troubled(services.server) {
@@ -84,115 +145,5 @@ pub fn dots(pip: &PipView, services: &ServicesView) -> Vec<AgentDot> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn fine() -> ServicesView {
-        ServicesView {
-            checked: true,
-            address_set: true,
-            server: Health::Ok,
-            worker: Health::Ok,
-            pip: Health::Ok,
-            ..ServicesView::default()
-        }
-    }
-
-    fn pip(mood: PipMood, waiting: u32) -> PipView {
-        PipView {
-            mood,
-            waiting,
-            ..PipView::default()
-        }
-    }
-
-    fn states(dots: &[AgentDot]) -> Vec<(&str, AgentState)> {
-        dots.iter().map(|d| (d.id.as_str(), d.state)).collect()
-    }
-
-    #[test]
-    fn pip_works_needs_you_finishes_and_rests() {
-        let s = fine();
-        let at = |mood, waiting| pip_dot(&pip(mood, waiting), &s);
-        assert_eq!(at(PipMood::Listening, 0).state, AgentState::Working);
-        assert_eq!(at(PipMood::Thinking, 0).line, "Thinking");
-        assert_eq!(at(PipMood::Happy, 0).state, AgentState::Done);
-        assert_eq!(at(PipMood::Idle, 0).state, AgentState::Idle);
-        let waiting = at(PipMood::Idle, 2);
-        assert_eq!(waiting.state, AgentState::NeedsYou);
-        assert_eq!(waiting.line, "2 things wait for you");
-        assert_eq!(at(PipMood::Happy, 1).line, "1 thing waits for you");
-        assert_eq!(
-            at(PipMood::Thinking, 3).state,
-            AgentState::Working,
-            "work under way shows first"
-        );
-        assert_eq!(waiting.kind, AgentKind::Pip);
-    }
-
-    #[test]
-    fn pip_whose_service_is_down_needs_you_and_a_paused_one_rests() {
-        let down = ServicesView {
-            pip: Health::Down,
-            ..fine()
-        };
-        let dot = pip_dot(&pip(PipMood::Idle, 0), &down);
-        assert_eq!(dot.state, AgentState::NeedsYou);
-        assert_eq!(dot.line, "Pip isn't answering");
-        let paused = ServicesView {
-            pip_paused: true,
-            ..fine()
-        };
-        assert_eq!(pip_dot(&pip(PipMood::Idle, 0), &paused).line, "Paused");
-        // Before the first check, nothing is known to be down.
-        let unchecked = ServicesView {
-            pip: Health::Down,
-            ..ServicesView::default()
-        };
-        assert_eq!(
-            pip_dot(&pip(PipMood::Idle, 0), &unchecked).state,
-            AgentState::Idle
-        );
-    }
-
-    #[test]
-    fn services_join_the_dock_only_while_they_need_the_owner() {
-        let idle = pip(PipMood::Idle, 0);
-        assert_eq!(
-            states(&dots(&idle, &fine())),
-            vec![("pip", AgentState::Idle)]
-        );
-        assert_eq!(
-            dots(&idle, &ServicesView::default()).len(),
-            1,
-            "not checked yet"
-        );
-        let bad = ServicesView {
-            server: Health::Down,
-            worker: Health::Trouble,
-            other_failing: true,
-            ..fine()
-        };
-        let all = dots(&idle, &bad);
-        assert_eq!(
-            states(&all),
-            vec![
-                ("pip", AgentState::Idle),
-                ("server", AgentState::NeedsYou),
-                ("worker", AgentState::NeedsYou),
-                ("watched", AgentState::NeedsYou),
-            ]
-        );
-        assert_eq!(all[1].line, "Not answering");
-        assert_eq!(all[2].line, "Having trouble");
-        assert!(all[1..].iter().all(|d| d.kind == AgentKind::Service));
-        let unpaired = ServicesView {
-            address_set: false,
-            server: Health::Unknown,
-            ..fine()
-        };
-        let all = dots(&idle, &unpaired);
-        assert_eq!(all[1].id, "server");
-        assert_eq!(all[1].line, "Not connected");
-    }
-}
+#[path = "agents_tests.rs"]
+mod tests;

@@ -1010,9 +1010,13 @@ line: string }
  */
 export type AgentKind =
 /**
- * Pip, as far as this PC's own calls to it go.
+ * Pip: this PC's own calls to it, and what Hearth's server says it is doing.
  */
 "pip" |
+/**
+ * What waits for the owner's yes, shown while anything does.
+ */
+"approvals" |
 /**
  * One of Hearth's services, shown while it needs the owner.
  */
@@ -1158,6 +1162,22 @@ reduced_motion: boolean; services: ServicesView; pip: PipView; bar: BarView;
 agents: AgentDot[]; dock: DockView }
 export type ClipboardHandling = "dont_modify" | "copy_to_clipboard"
 export type CustomSounds = { start: boolean; stop: boolean }
+/**
+ * What a button on the agent dock's card opens in Hearth's window.
+ */
+export type DockPage = 
+/**
+ * Pip's conversation, with its Stop.
+ */
+"conversation" | 
+/**
+ * Today, where what waits for the owner's yes is listed.
+ */
+"approvals" | 
+/**
+ * Hearth's health, in Settings.
+ */
+"status"
 export type DockView = {
 /**
  * The owner's switch.
@@ -1471,7 +1491,23 @@ export type UiCmd =
 /**
  * The pointer came over the agent dock, or left it: its card opens or closes.
  */
-{ kind: "dock_hover"; open: boolean }
+{ kind: "dock_hover"; open: boolean } | 
+/**
+ * The side the agent dock sits on, left or right.
+ */
+{ kind: "set_dock_edge"; edge: Edge } | 
+/**
+ * A right click on the agent dock's strip: its menu, at the pointer.
+ */
+{ kind: "dock_menu" } | 
+/**
+ * The agent dock's strip was pressed and moved: it follows the pointer until let go.
+ */
+{ kind: "dock_drag" } | 
+/**
+ * A button on the agent dock's card: a page of Hearth's window.
+ */
+{ kind: "dock_open"; page: DockPage }
 export type UiReply = { state: NookState; 
 /**
  * Where a saved file went.

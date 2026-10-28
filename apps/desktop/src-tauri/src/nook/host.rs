@@ -154,7 +154,10 @@ pub fn init(app: &AppHandle) {
             setting: settings.bar,
             ..BarRun::default()
         }),
-        dock: Mutex::new(DockRun::new(settings.dock)),
+        dock: Mutex::new(DockRun {
+            place: super::dockplace::load(app),
+            ..DockRun::new(settings.dock)
+        }),
         chrome: Mutex::new(Chrome::new(settings::load_theme(app))),
         bar_sync: Mutex::new(()),
         focus: Arc::default(),

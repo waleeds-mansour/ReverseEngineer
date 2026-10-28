@@ -1,8 +1,10 @@
 // Windows notifications from Hearth (D53): the inbox items your phone is told about (approvals,
 // the morning brief, interruptions Jarvis may make) and Hearth's health changing. The app keeps
 // one stream open to GET /api/desktop/notify and shows each message, unless Hearth's window is
-// in front. Clicking one opens its page in Hearth's window. Nothing here can approve anything:
-// the device token can't, and a notification only opens a page.
+// in front. Clicking one opens its page in Hearth's window. The same stream says what Pip is
+// doing, how many things wait for the owner's yes and how Hearth's parts are, for Nook's agent
+// dock (nook/live.rs), whenever that changes; when it closes, the dock stops counting on it.
+// Nothing here can approve anything: the device token can't, and a notification only opens a page.
 
 use super::client::Hearth;
 use super::sse::Reader;
@@ -41,6 +43,7 @@ pub fn start(app: &AppHandle) {
             if let Err(e) = listen(&app, &h, &mut last_id).await {
                 log::debug!("Notifications: {e}");
             }
+            crate::nook::live_status(&app, None);
             wait = next_wait(wait, started.elapsed());
             tokio::time::sleep(wait).await;
         }
@@ -71,6 +74,13 @@ async fn listen(app: &AppHandle, h: &Hearth, last_id: &mut Option<String>) -> Re
         for event in reader.push(&chunk) {
             if let Some(id) = &event.id {
                 *last_id = Some(id.clone());
+            }
+            if event.event == "status" {
+                match crate::nook::live::parse(&event.data) {
+                    Some(status) => crate::nook::live_status(app, Some(status)),
+                    None => log::warn!("Notifications: odd status from Hearth"),
+                }
+                continue;
             }
             if event.event != "notify" {
                 continue;
