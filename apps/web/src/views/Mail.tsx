@@ -239,7 +239,8 @@ export function Mail(props: { pane: number }) {
           >
             Waiting
           </button>
-          <span class="mx-1 h-4 w-px bg-line" />
+          {/* On a phone the header wraps, and the line would start a row of its own. */}
+          <span class="mx-1 h-4 w-px bg-line max-md:hidden" />
         </Show>
         <select
           class="rounded-md border border-line bg-panel px-2 py-1 text-sm"
