@@ -22,6 +22,10 @@ const mail = (f: Partial<BundleFacts>): BundleFacts => ({
   known: false,
   replyKnown: false,
   noise: false,
+  tabNoise: false,
+  colleague: false,
+  toTeam: false,
+  discussion: false,
   ...f,
 });
 
@@ -280,6 +284,8 @@ describe("factsOf", () => {
     labels: PERSONAL,
     bulk: null,
     invite: null,
+    toAddresses: [{ address: ME }],
+    ccAddresses: [],
     ...m,
   });
 
@@ -305,6 +311,10 @@ describe("factsOf", () => {
       known: true,
       replyKnown: false,
       noise: false,
+      tabNoise: false,
+      colleague: false,
+      toTeam: false,
+      discussion: false,
     });
     // The conversation's lane comes along.
     expect(factsOf([msg({})], ME, new Set(), true).noise).toBe(true);

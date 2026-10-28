@@ -4,10 +4,13 @@
 // already keeps about the mail, never a model call per email: whether you wrote in it, a calendar
 // invitation, whether the sender (or Reply-To) is someone you know, Gmail's category, the list
 // and machine headers (a message's `bulk`), no-reply senders, receipt or shipping words in the
-// subject from senders that sell, and whether you sent the sender to Noise. This file is the rules
-// alone; bundle-sort.ts reads the facts.
+// subject from senders that sell, and whether you sent the sender to Noise. A person's mail through
+// a list, a group or an alias carries a list's headers too, so the surest signs of a conversation
+// decide first (M-02): a colleague, mail to a group of yours, two people talking. This file is
+// the rules alone; bundle-sort.ts reads the facts.
 import type { MailBundle, MailInvite } from "@hearth/db";
 import { baseDomain, isMachineAddress, isRoleAddress } from "../people/domains.ts";
+import { onDomains, ownDomains } from "./colleagues.ts";
 import { addressKey } from "./mine.ts";
 
 export type { MailBundle };
@@ -39,6 +42,14 @@ export interface BundleFacts {
   replyKnown: boolean;
   /** You sent its sender to Noise (mail.set_lane): it's never People, unless you write in it. */
   noise: boolean;
+  /** Its lane is Noise for Gmail's tab alone (a stranger outside Primary), not for a rule of yours. */
+  tabNoise: boolean;
+  /** The sender is a colleague: on one of your own Workspace domains (never free mail's). */
+  colleague: boolean;
+  /** Sent to someone at your own domain who isn't one of your accounts: a group or alias of yours. */
+  toTeam: boolean;
+  /** Two to MAX_TALKERS people (not you, machines, desks or mailings) wrote in it: a discussion. */
+  discussion: boolean;
 }
 
 /** Gmail's tab for a message, from its labels; null when Gmail gave none. */
@@ -86,6 +97,10 @@ const NEWS_SERVICES = new Set([
 const isNewsSender = (address: string) =>
   NEWS_NAME.test(localPart(address)) || NEWS_SERVICES.has(brandOf(address));
 
+/** Machines and desks, not people: nobody expects a reply (flags.ts; also in 0008_mail_waiting). */
+export const AUTOMATED =
+  /^(no-?reply|do-?not-?reply|notifications?|notify|mailer-daemon|postmaster|bounces?|alerts?|news(letter)?|updates?|info|hello|support|billing|receipts?|orders?|team|marketing)([+._-][^@]*)?@/i;
+
 /** Shops, stores and payment services you get receipts from, by the name they send under. */
 const SHOPS = new Set([
   "amazon",
@@ -129,6 +144,20 @@ const SHOP_NAME =
 const isShop = (address: string) =>
   SHOPS.has(brandOf(address)) || SHOP_NAME.test(localPart(address));
 
+/** Tools and services sending as themselves: trackers, CI, deploys, monitoring, cron, bots. */
+const TOOLS =
+  /^(jira|confluence|jenkins|gitlab|github|bitbucket|git|svn|sentry|ci|cd|builds?|builder|deploy(s|er|ments?)?|releases?|root|cron|crond|daemon|system|sysadmin|alerts?|alerting|alertmanager|monitor(ing|s)?|nagios|zabbix|grafana|prometheus|pagerduty|opsgenie|datadog|status|notifications?|notify|bots?|robot|automation|automated|auto|scheduler|backups?|reports?|reporting|mailer|www-data|apache|nginx|devops|ops|server|circleci|travis|buildkite|teamcity|bamboo|argocd|sonar(qube)?|dependabot|renovate|snyk)([+._-].*)?$|[._+-](bot|robot|ci|cron|daemon|alerts?|monitor(ing)?|builds?|deploy)$/;
+
+/** A person's own address: not a machine's, a tool's, a desk's (info@), a shop's or a newsletter's. */
+export const isPerson = (address: string) =>
+  address.includes("@") &&
+  !isNoReply(address) &&
+  !AUTOMATED.test(address) &&
+  !TOOLS.test(localPart(address)) &&
+  !isRoleAddress(address) &&
+  !isNewsSender(address) &&
+  !SHOP_NAME.test(localPart(address));
+
 /** A discussion's notices (notifications@github.com): a PR named "Fix receipts" is no receipt. */
 const NOTICES = /^(notifications?|notify|notices?|alerts?)([._+-]|$)/;
 /** A reply or a forward is talk about a thing, not the thing. */
@@ -149,7 +178,8 @@ const SHIPPING =
  * 1. People: you wrote in it, or it's an invitation (answered on the calendar, from a person).
  * 2. People: someone you know writing as themselves, not to many at once and not from a no-reply
  *    or a shop's address (orders@, billing@), wherever Gmail files it and whatever their company
- *    sells: their own "Invoice for September" is a conversation.
+ *    sells: their own "Invoice for September" is a conversation. And a person writing through a
+ *    list, a group or an alias, its headers notwithstanding (throughList).
  * 3. Updates: shipping words from a seller (a shop by name or orders@-style address, a no-reply
  *    sender, or mail Gmail files under Updates or Promotions), before "your order" makes it a
  *    receipt.
@@ -163,12 +193,16 @@ const SHIPPING =
  * 7. The rest: no-reply senders are Updates; Gmail's Promotions and Forums are Newsletters, its
  *    Updates and Social are Updates; a newsletter sender is Newsletters; anyone else is People.
  * Last, Noise is your word on a sender: what would be People is Newsletters if it went to many,
- * Updates if not. Only writing in it (or moving it by hand) makes it People again.
+ * Updates if not. Only writing in it (or moving it by hand) makes it People again. Noise only for
+ * Gmail's tab does the same, but to someone you know or a person through a list (a webinar's
+ * invitation in Promotions isn't People).
  */
 export function bundleOf(f: BundleFacts): MailBundle {
   if (f.youWrote) return "people";
   const sorted = byRules(f);
-  if (!f.noise || sorted !== "people") return sorted;
+  if (sorted !== "people") return sorted;
+  const spared = f.known || f.replyKnown || throughList(f, categoryOf(f.labels));
+  if (!f.noise && !(f.tabNoise && !spared)) return sorted;
   return f.bulk ? "newsletters" : "updates";
 }
 
@@ -177,6 +211,7 @@ function byRules(f: BundleFacts): MailBundle {
   const cat = categoryOf(f.labels);
   const machine = isNoReply(f.from);
   if (f.known && !f.bulk && !machine && !SHOP_NAME.test(localPart(f.from))) return "people";
+  if (throughList(f, cat)) return "people";
   const news = isNewsSender(f.from);
   // Who a receipt comes from: a shop, a no-reply sender, or mail Gmail calls Updates or
   // Promotions that isn't a list's or a tracker's (tagged). Never a discussion's notices.
@@ -201,6 +236,25 @@ function byRules(f: BundleFacts): MailBundle {
 }
 
 /**
+ * A person writing as themselves through a list, a group or an alias (M-02): its headers make it
+ * `bulk` like a mailing, so it takes a surer sign. From a person's own address, where Gmail says
+ * Personal or Forums or gives no tab (never Updates, Social or Promotions: a tool's or a
+ * company's), and one of: a discussion; a colleague's own mail, or their post to a group of
+ * yours; or an outsider's mail to a group or alias of yours, in Primary or no tab (in Forums it
+ * may be a newsletter to a catch-all alias, till a second person answers). A lone post to a list
+ * from a stranger can't be told from their own newsletter: its first answer tells.
+ */
+function throughList(f: BundleFacts, cat: Category | null): boolean {
+  if (!isPerson(f.from) || (cat !== null && cat !== "personal" && cat !== "forums")) return false;
+  if (f.discussion) return true;
+  if (f.colleague) return !f.bulk || f.toTeam;
+  return f.toTeam && cat !== "forums";
+}
+
+/** More senders than this in one conversation is a busy list's thread, not a discussion. */
+export const MAX_TALKERS = 8;
+
+/**
  * A person writing through a no-reply address (a contact form, a booking page): Reply-To is a
  * person's address at another company than the sender's, and Gmail files it as Personal or not
  * at all. A notification's Reply-To is its own service's (reply+abc@reply.github.com).
@@ -221,23 +275,36 @@ export interface BundleMessage {
   labels: readonly string[];
   bulk: boolean | null;
   invite: MailInvite | null;
+  toAddresses: readonly { address: string }[];
+  ccAddresses: readonly { address: string }[];
 }
 
 /**
  * A conversation's facts from its messages, oldest first: the newest one from someone else
  * decides, and anything you sent (or your own email that reached this account) makes it yours.
  * `known` holds the addresses that are someone you know (bundle-sort.ts looks them up); `noise`
- * says the conversation's lane is Noise.
+ * says you sent its sender to Noise, or "tab" that it's in Noise for Gmail's tab alone; `accounts`
+ * are all your accounts' addresses by addressKey (mine.ts accountAddresses): their domains make
+ * colleagues.
  */
 export function factsOf(
   msgs: readonly BundleMessage[],
   me: string,
   known: ReadonlySet<string>,
-  noise = false,
+  noise: boolean | "tab" = false,
+  accounts: ReadonlySet<string> = new Set(),
 ): BundleFacts {
   const mine = addressKey(me);
   const theirs = msgs.filter((m) => !m.outbound && addressKey(m.fromAddress) !== mine);
   const last = theirs.at(-1);
+  const ours = ownDomains([mine, ...accounts]);
+  const yours = (a: string) => addressKey(a) === mine || accounts.has(addressKey(a));
+  const team = (a: { address: string }) => onDomains(a.address, ours) && !yours(a.address);
+  const people = new Set(
+    theirs
+      .filter((m) => isPerson(m.fromAddress) && !yours(m.fromAddress))
+      .map((m) => addressKey(m.fromAddress)),
+  );
   const from = last?.fromAddress.toLowerCase() ?? "";
   // Reply-To naming the sender again says nothing more.
   const asked = last?.replyTo?.toLowerCase() ?? null;
@@ -252,6 +319,10 @@ export function factsOf(
     bulk: last?.bulk === true,
     known: from !== "" && known.has(from),
     replyKnown: replyTo !== null && known.has(replyTo),
-    noise,
+    noise: noise === true,
+    tabNoise: noise === "tab",
+    colleague: onDomains(from, ours),
+    toTeam: last ? [...last.toAddresses, ...last.ccAddresses].some(team) : false,
+    discussion: people.size > 1 && people.size <= MAX_TALKERS,
   };
 }

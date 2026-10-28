@@ -116,8 +116,9 @@ export async function syncAccount(
     work = { ...none, progressed: false, stopped: err };
   }
   const outcome = await recordOutcome(ctx, fresh, work);
-  // Conversations from before bundles (0058) are sorted a batch a round. It never holds up mail;
-  // a failure is said in the log, once a round, and tried again next round.
+  // Conversations from before bundles (0058) are sorted a batch a round, then the inbox once again
+  // after Nook starts. It never holds up mail; a failure is said in the log, once a round, and
+  // tried again next round.
   await savepoint(ctx, (sp) => sortSome(sp, fresh)).catch((err: unknown) => {
     console.warn(`[mail] sorting ${fresh.id} into bundles failed: ${String(err)}`);
     return 0;

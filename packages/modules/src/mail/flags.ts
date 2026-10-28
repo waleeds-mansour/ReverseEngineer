@@ -16,15 +16,12 @@ import { type ActionContext, newId, updateEntity } from "@hearth/kernel";
 import { and, asc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { personFor } from "../people/store.ts";
 import { bundleFor } from "./bundle-sort.ts";
+import { AUTOMATED } from "./bundles.ts";
 import { once } from "./copies.ts";
 import { accountAddresses, addressKey, toAnyOf, yourAddresses } from "./mine.ts";
 import { type MailProvider, MailProviderError } from "./provider.ts";
 
 type MessageRow = typeof mailMessage.$inferSelect;
-
-/** Senders that are machines, not people: nobody expects a reply. (Also in 0008_mail_waiting.) */
-const AUTOMATED =
-  /^(no-?reply|do-?not-?reply|notifications?|notify|mailer-daemon|postmaster|bounces?|alerts?|news(letter)?|updates?|info|hello|support|billing|receipts?|orders?|team|marketing)([+._-][^@]*)?@/i;
 
 type LastMessage = Pick<
   MessageRow,
