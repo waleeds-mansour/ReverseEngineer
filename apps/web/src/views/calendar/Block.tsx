@@ -41,6 +41,32 @@ export function ByEvent<P extends { item: CalEvent }>(props: {
 }
 
 /**
+ * A button on the grid that the kit has no part for, being a tile in a day's place: an event, or
+ * a time Pip suggests (Suggested.tsx). Named for a screen reader by `label`.
+ */
+export function GridButton(props: {
+  class: string;
+  style?: JSX.CSSProperties;
+  label: string;
+  onPointerDown?: (ev: PointerEvent) => void;
+  onClick: (el: HTMLElement) => void;
+  children: JSX.Element;
+}) {
+  return (
+    <button
+      type="button"
+      class={`min-w-0 text-left ${props.class}`}
+      style={props.style}
+      aria-label={props.label}
+      onPointerDown={(ev) => props.onPointerDown?.(ev)}
+      onClick={(ev) => props.onClick(ev.currentTarget)}
+    >
+      {props.children}
+    </button>
+  );
+}
+
+/**
  * The button every event on the grid is, whatever its shape: in its calendar's colour, named for a
  * screen reader by what and when, and opening its popover beside it.
  */
@@ -56,16 +82,15 @@ function Tile(props: {
 }) {
   const grab = () => (props.drag?.can ? "cursor-grab select-none" : "");
   return (
-    <button
-      type="button"
-      class={`min-w-0 text-left hover:shadow-2 ${props.held || grab()} ${props.class}`}
+    <GridButton
+      class={`hover:shadow-2 ${props.held || grab()} ${props.class}`}
       style={{ ...evColour(props.e), ...props.style }}
-      aria-label={eventLabel(props.e)}
+      label={eventLabel(props.e)}
       onPointerDown={(ev) => props.drag?.can && props.drag.press(ev)}
-      onClick={(ev) => props.onOpen(props.e, ev.currentTarget)}
+      onClick={(el) => props.onOpen(props.e, el)}
     >
       {props.children}
-    </button>
+    </GridButton>
   );
 }
 

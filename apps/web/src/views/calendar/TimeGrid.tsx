@@ -2,9 +2,9 @@
 // them. Events that overlap sit side by side; the line for now crosses today's column and moves
 // with the clock. It opens scrolled to 7 a.m., and keeps its place as you go from week to week.
 // An event you can change drags up, down and to another day, a quarter hour at a time, and its
-// bottom edge stretches; an all-day one drags to other days.
+// bottom edge stretches; an all-day one drags to other days. Times Pip suggests go over the days.
 
-import { createEffect, createMemo, For, on, onMount, Show } from "solid-js";
+import { createEffect, createMemo, For, type JSX, on, onMount, Show } from "solid-js";
 import { Button } from "../../components/ui.tsx";
 import {
   columnAt,
@@ -77,6 +77,8 @@ export function TimeGrid(props: {
   /** Whether an event can be dragged, and where one was dropped. */
   canMove: (e: CalEvent) => boolean;
   onMove: (e: CalEvent, to: Span, at: DOMRect) => void;
+  /** Drawn in a day's column besides its events (the times Pip suggests), `hour` px to an hour. */
+  over?: (day: Date, hour: number) => JSX.Element;
 }) {
   let scroller!: HTMLDivElement;
   onMount(() => {
@@ -167,6 +169,7 @@ export function TimeGrid(props: {
               kept={props.kept(d)}
               onOpen={props.onOpen}
               drag={dragging}
+              over={props.over}
             />
           )}
         </For>
@@ -244,6 +247,7 @@ function Column(props: {
   kept: boolean;
   onOpen: OpenEvent;
   drag: Dragging;
+  over?: (day: Date, hour: number) => JSX.Element;
 }) {
   const placed = createMemo(() => dayColumn(props.events, props.day));
   return (
@@ -252,6 +256,8 @@ function Column(props: {
       class={`relative border-l border-line ${props.kept ? "" : "bg-sunk/60"}`}
       style={LINES}
     >
+      {/* Under the events, so a suggestion just after a short one never runs over its name. */}
+      {props.over?.(props.day, HOUR)}
       <ByEvent each={placed()}>
         {(p) => (
           <Block
