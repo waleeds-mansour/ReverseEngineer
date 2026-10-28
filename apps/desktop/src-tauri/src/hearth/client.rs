@@ -186,9 +186,23 @@ impl Hearth {
     }
 
     pub async fn send(&self, text: &str, conversation: Option<&str>) -> Result<Sent, String> {
+        self.send_with(text, conversation, None).await
+    }
+
+    /// `context` is where a quick ask was typed (chat.send's `{ app, title }`), which Nook hands
+    /// Pip apart from your words, as outside data. A timeout (TIMED_OUT) may still have sent it.
+    pub async fn send_with(
+        &self,
+        text: &str,
+        conversation: Option<&str>,
+        context: Option<Value>,
+    ) -> Result<Sent, String> {
         let mut input = json!({ "text": clip(text, 20_000) });
         if let Some(id) = conversation {
             input["conversationId"] = json!(id);
+        }
+        if let Some(c) = context {
+            input["context"] = c;
         }
         let out = self
             .call("chat.send", input, Duration::from_secs(5))
@@ -232,10 +246,13 @@ impl Hearth {
 const SIGNED_OUT: &str = "Nook signed this PC out. In Nook's Settings, under Desktop app, \
                           choose Connect Nook on this PC.";
 
+/// What a request that timed out says: Nook may have done it all the same.
+pub const TIMED_OUT: &str = "Nook took too long to answer. Try again in a moment.";
+
 /// A request that never got an answer, said plainly.
 fn unreachable(e: &reqwest::Error) -> String {
     if e.is_timeout() {
-        "Nook took too long to answer. Try again in a moment.".into()
+        TIMED_OUT.into()
     } else {
         "Couldn't reach Nook. Is it running?".into()
     }

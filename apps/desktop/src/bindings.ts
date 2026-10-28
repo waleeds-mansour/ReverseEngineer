@@ -572,6 +572,17 @@ async nookUi(cmd: UiCmd) : Promise<Result<UiReply, string>> {
 }
 },
 /**
+ * The quick-ask box's one command. Only its own window, on this app's own page, gets an answer.
+ */
+async askPip(cmd: AskCmd) : Promise<Result<AskView, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("ask_pip", { cmd }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * The overlay's page answers: with no show when it starts listening, which sends it the show on
  * screen, and with each show it draws.
  */
@@ -1108,6 +1119,72 @@ vad_backend?: VadBackend;
  * `overlay_position` (position `none` → style `None`).
  */
 overlay_style?: OverlayStyle }
+/**
+ * What the box's page asks.
+ */
+export type AskCmd = 
+/**
+ * The page loaded or came up: the view as it is.
+ */
+{ kind: "ready" } | 
+/**
+ * Enter: the text goes to Pip once the wait for an Undo is over.
+ */
+{ kind: "send"; text: string } | 
+/**
+ * Undo, its button or Esc, while it says Sending…: the text goes back in the box.
+ */
+{ kind: "undo" } |
+/**
+ * The × on the line of context: the message goes without it.
+ */
+{ kind: "drop_context" } |
+/**
+ * Esc with nothing waiting: the box closes and the app it opened over gets the focus back.
+ */
+{ kind: "close" } | 
+/**
+ * A click on Pip's answer, or Enter on the empty box after it: Pip's conversation in Nook.
+ */
+{ kind: "open_conversation" }
+export type AskPhase = "typing" | 
+/**
+ * Sending… with Undo: nothing has gone yet.
+ */
+"waiting" | 
+/**
+ * On its way to Nook: too late to undo.
+ */
+"sending" | 
+/**
+ * Nook has it: the note is Pip's first words back, or "Sent to Pip".
+ */
+"sent" | 
+/**
+ * It didn't go: the text is back in the box and the note says why.
+ */
+"failed"
+export type AskView = { 
+/**
+ * Goes up with every change, so the page takes each one once.
+ */
+seq: number; phase: AskPhase; 
+/**
+ * The context the message goes with, whole: From Google Chrome: "Pull request…".
+ */
+from: string | null; 
+/**
+ * Text to put back in the box, after an Undo or a failure; none leaves the box as it is.
+ */
+draft: string | null; note: string | null; 
+/**
+ * How long is left to undo, while waiting.
+ */
+undo_ms: number; 
+/**
+ * Nook's theme, glass and motion, as its other pages draw them.
+ */
+chrome: ChromeView | null }
 export type AudioDevice = { index: string; name: string; is_default: boolean }
 export type AutoSubmitKey = "enter" | "ctrl_enter" | "cmd_enter"
 export type AvailableAccelerators = { transcribe: string[]; ort: string[]; gpu_devices: GpuDeviceOption[] }

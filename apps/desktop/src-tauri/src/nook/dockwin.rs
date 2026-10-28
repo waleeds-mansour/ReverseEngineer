@@ -189,8 +189,8 @@ fn busy_now() -> bool {
 }
 
 /// Windows' text size (Settings > Accessibility > Text size), which it keeps as TextScaleFactor
-/// only while it is above 100 %.
-fn text_now() -> u32 {
+/// only while it is above 100 %. The bar reads it too (barwin.rs).
+pub(super) fn text_now() -> u32 {
     use winreg::enums::HKEY_CURRENT_USER;
     use winreg::RegKey;
     let raw = RegKey::predef(HKEY_CURRENT_USER)

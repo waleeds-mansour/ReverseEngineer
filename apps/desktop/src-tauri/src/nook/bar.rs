@@ -6,8 +6,10 @@
 // another monitor it stays up but holds still, with its popover closed. The popover is
 // made with the bar and kept hidden and suspended until the bar asks for it. Turning the bar off
 // destroys both, and the observer it kept running stops unless the panel or its own switch wants it.
+// Both are sized as WebView2 draws their pages, at the DPI scale times Windows' text size (drawn_at).
 
 use super::chrome::{BarView, Edge};
+use super::dock::drawn_at;
 use super::probe::{Hwnd, Rect};
 use super::start::Status;
 use super::view::{FrontWindow, ModeName, NookState, RectView};
@@ -230,6 +232,8 @@ pub struct BarRun {
     /// The window in front covers the bar's whole monitor, fullscreen or not: the bar hides.
     pub covered: bool,
     pub monitor: Option<Place>,
+    /// Windows' text size in percent, as last read; below 100 reads as 100 (drawn_at).
+    pub text: u32,
     /// The window that was in front before the bar or popover, to hand the foreground back to:
     /// one of Hearth's own windows counts.
     pub before: Option<FrontWindow>,
@@ -293,7 +297,8 @@ impl BarRun {
         if !self.made {
             return steps;
         }
-        if let Some(at) = self.monitor.filter(|m| self.placed != Some(*m)) {
+        let drawn = self.monitor.map(|m| drawn_at(&m, self.text));
+        if let Some(at) = drawn.filter(|m| self.placed != Some(*m)) {
             steps.push(Step::Place {
                 bar: bar_rect(&at),
                 popover: popover_rect(&at),

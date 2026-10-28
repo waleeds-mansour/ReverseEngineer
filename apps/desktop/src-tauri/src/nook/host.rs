@@ -84,11 +84,12 @@ impl Shared {
         self.bar().made || self.dock().made
     }
 
-    /// The bar's, the popover's and the dock's own windows, never to be taken for the window in
-    /// front. Takes the bar's lock and then the dock's, one after the other.
+    /// The bar's, the popover's, the dock's and the quick-ask box's own windows, never to be
+    /// taken for the window in front. Takes the bar's lock and then the dock's, one after the other.
     pub(super) fn own_windows(&self) -> Vec<Hwnd> {
         let mut ours = self.bar().ours.clone();
         ours.extend(self.dock().ours.iter().copied());
+        ours.extend(crate::hearth::quick_ask::hwnd(&self.app));
         ours
     }
 

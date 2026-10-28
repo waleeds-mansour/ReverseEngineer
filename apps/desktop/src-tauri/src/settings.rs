@@ -973,7 +973,7 @@ pub fn get_default_settings() -> AppSettings {
         (
             crate::hearth::ASK_BINDING,
             "Ask Pip",
-            "A small window to ask Pip by typing.",
+            "A small box over any app to ask Pip by typing.",
             "ctrl+alt+k",
         ),
     ] {

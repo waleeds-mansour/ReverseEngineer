@@ -198,7 +198,7 @@
           },
           "hearth_ask": {
             "name": "Ask Pip",
-            "description": "A small window to ask Pip by typing."
+            "description": "A small box over any app to ask Pip by typing. Enter sends it, with two seconds to undo."
           }
         },
         "errors": {

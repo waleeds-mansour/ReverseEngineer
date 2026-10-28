@@ -1,5 +1,5 @@
-// Hearth's own windows (D53): the main one, and the two small ones the hotkeys open. Each loads
-// Hearth from the address in this app's settings, so it's Hearth's web app with a few desktop
+// Hearth's own windows (D53): the main one, and quick capture's small one its hotkey opens. Each
+// loads Hearth from the address in this app's settings, so it's Hearth's web app with a few desktop
 // manners: links elsewhere open in your browser, downloads go to Downloads, files can be dragged
 // in, and when the server doesn't answer it says so and tries again.
 //
@@ -7,7 +7,8 @@
 // windows named in capabilities/*.json ("main" and "recording_overlay") call into the app, and
 // remote pages never without a "remote" entry there. Keep it that way.
 //
-// How the main window comes into sight and goes out of it is sight.rs.
+// How the main window comes into sight and goes out of it is sight.rs. Asking Pip by typing is the
+// quick-ask box, a page of this app's own (quick_ask.rs).
 
 use super::links::{self, Nav};
 use super::offline::{self, is_waiting, stop_waiting};
@@ -19,13 +20,11 @@ use tauri::{AppHandle, Manager, Url, WebviewUrl, WebviewWindow, WebviewWindowBui
 
 pub const MAIN: &str = "hearth";
 pub const CAPTURE: &str = "hearth_capture";
-pub const ASK: &str = "hearth_ask";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Which {
     Main,
     Capture,
-    Ask,
 }
 
 impl Which {
@@ -33,7 +32,6 @@ impl Which {
         match self {
             Which::Main => MAIN,
             Which::Capture => CAPTURE,
-            Which::Ask => ASK,
         }
     }
 }
@@ -66,11 +64,6 @@ pub fn capture(app: &AppHandle) {
     spawn(app, Which::Capture, "/capture");
 }
 
-/// A small window to ask Jarvis by typing (Ctrl+Alt+K).
-pub fn ask(app: &AppHandle) {
-    spawn(app, Which::Ask, "/chat?compact=1");
-}
-
 /// Whether Hearth's main window is in front, so notifications can stay quiet.
 pub fn main_focused(app: &AppHandle) -> bool {
     app.get_webview_window(MAIN)
@@ -78,27 +71,20 @@ pub fn main_focused(app: &AppHandle) -> bool {
         .unwrap_or(false)
 }
 
-/// The small windows tuck away when you click elsewhere.
+/// The small windows, quick capture and the quick-ask box, tuck away when you click elsewhere.
 pub fn blurred(window: &tauri::Window) {
-    if matches!(window.label(), CAPTURE | ASK) {
-        let _ = window.hide();
-        if let Some(w) = window.app_handle().get_webview_window(window.label()) {
-            kept_out_of_sight(&w);
+    match window.label() {
+        CAPTURE => {
+            let _ = window.hide();
         }
-    }
-}
-
-/// The Ask window keeps its page between uses: put away, its page is told, so it moves itself on
-/// to a new Hearth then rather than as you start typing (Mini.tsx). Quick capture opens afresh.
-fn kept_out_of_sight(window: &WebviewWindow) {
-    if window.label() == ASK {
-        sight::out_of_sight(window);
+        super::quick_ask::LABEL => super::quick_ask::blurred(window),
+        _ => {}
     }
 }
 
 /// Closes every Hearth window, e.g. when Hearth's address changes.
 pub fn close_all(app: &AppHandle) {
-    for label in [MAIN, CAPTURE, ASK] {
+    for label in [MAIN, CAPTURE] {
         if let Some(w) = app.get_webview_window(label) {
             let _ = w.destroy();
         }
@@ -170,7 +156,6 @@ fn ready(app: &AppHandle, which: Which, path: &str) -> Option<(WebviewWindow, Op
         && match which {
             Which::Main => path == "/",
             Which::Capture => false,
-            Which::Ask => true,
         };
     let window = match existing {
         Some(w) => w,
@@ -291,14 +276,6 @@ fn build(app: &AppHandle, which: Which, home: &Url) -> tauri::Result<WebviewWind
             .always_on_top(true)
             .skip_taskbar(true)
             .center(),
-        Which::Ask => b
-            .title("Ask Pip")
-            .inner_size(480.0, 640.0)
-            .min_inner_size(360.0, 320.0)
-            .decorations(false)
-            .always_on_top(true)
-            .skip_taskbar(true)
-            .center(),
     };
 
     let window = b.build()?;
@@ -319,7 +296,6 @@ fn from_page(app: &AppHandle, label: &str, link: &str) {
                 if label == MAIN {
                     sight::out_of_sight(&w);
                 }
-                kept_out_of_sight(&w);
             }
         }
         Ok(links::Link::Retry) => offline::retry(app),

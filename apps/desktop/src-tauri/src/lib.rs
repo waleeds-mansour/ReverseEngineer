@@ -766,6 +766,7 @@ pub fn run(cli_args: CliArgs) {
             show_main_window_command,
             nook::prepare_update,
             nook::nook_ui,
+            hearth::quick_ask::ask_pip,
             overlay::overlay_ready,
             commands::cancel_operation,
             commands::is_portable,
@@ -835,11 +836,14 @@ pub fn run(cli_args: CliArgs) {
         .expect("Failed to export typescript bindings");
 
     let specta_handler = specta_builder.invoke_handler();
-    // Hearth: Nook's pages may call nook_ui and no other app command (nook::may_invoke).
+    // Hearth: Nook's pages may call nook_ui, and the quick-ask box ask_pip, and no other app
+    // command (nook::may_invoke).
     let invoke_handler = move |invoke: tauri::ipc::Invoke| {
         let message = &invoke.message;
         if !nook::may_invoke(message.webview_ref().label(), message.command()) {
-            invoke.resolver.reject("Nook's pages may call nook_ui only");
+            invoke
+                .resolver
+                .reject("Nook's pages may call their own command only");
             return true;
         }
         specta_handler(invoke)
@@ -1183,7 +1187,8 @@ pub fn run(cli_args: CliArgs) {
                     // No tray: keep the dock icon visible so the user can reopen
                 }
             }
-            // Hearth's small windows (quick capture, ask Jarvis) tuck away on clicking elsewhere.
+            // Hearth's small windows (quick capture, the quick-ask box) tuck away on clicking
+            // elsewhere.
             tauri::WindowEvent::Focused(false) => hearth::window::blurred(window),
             // Hearth: a click that activated Nook's bar hands the foreground back.
             tauri::WindowEvent::Focused(true) => nook::focused(window.app_handle(), window.label()),

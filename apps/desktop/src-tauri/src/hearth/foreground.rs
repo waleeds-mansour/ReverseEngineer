@@ -1,10 +1,29 @@
 // Which program and window you were typing in when you pressed the hotkey, so Hearth can pick
-// that app's style (casual in Slack, formal in email).
+// that app's style (casual in Slack, formal in email). The quick-ask box remembers the window too,
+// to give it the focus back (quick_ask.rs).
 
 use super::client::Target;
 
-#[cfg(windows)]
+/// The window in front: its handle and process, its program's path, and its title.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Front {
+    pub hwnd: isize,
+    pub pid: u32,
+    pub path: Option<String>,
+    pub title: Option<String>,
+}
+
 pub fn current() -> Target {
+    front()
+        .map(|f| Target {
+            app: f.path.as_deref().and_then(program_name),
+            window: f.title,
+        })
+        .unwrap_or_default()
+}
+
+#[cfg(windows)]
+pub fn front() -> Option<Front> {
     use windows::core::PWSTR;
     use windows::Win32::Foundation::CloseHandle;
     use windows::Win32::System::Threading::{
@@ -18,7 +37,7 @@ pub fn current() -> Target {
     unsafe {
         let hwnd = GetForegroundWindow();
         if hwnd.0.is_null() {
-            return Target::default();
+            return None;
         }
         let mut title = [0u16; 512];
         let n = GetWindowTextW(hwnd, &mut title).max(0) as usize;
@@ -41,19 +60,20 @@ pub fn current() -> Target {
                 let _ = CloseHandle(process);
                 ok.then(|| String::from_utf16_lossy(&buf[..len as usize]))
             });
-        Target {
-            app: path.as_deref().and_then(program_name),
-            window: (!window.trim().is_empty()).then_some(window),
-        }
+        Some(Front {
+            hwnd: hwnd.0 as isize,
+            pid,
+            path,
+            title: (!window.trim().is_empty()).then_some(window),
+        })
     }
 }
 
 #[cfg(not(windows))]
-pub fn current() -> Target {
-    Target::default()
+pub fn front() -> Option<Front> {
+    None
 }
 
-#[cfg_attr(not(windows), allow(dead_code))]
 /// The program's file name from its path, like `slack.exe`.
 pub fn program_name(path: &str) -> Option<String> {
     path.rsplit(['\\', '/'])
