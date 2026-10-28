@@ -4,9 +4,10 @@
 // phone the days are a list instead. The box at the top adds an event to your own calendar from a
 // line like "Dentist Fri 3pm 1h"; one with guests still goes through Pip, who asks first. An event
 // you can change drags to another time or day, and stretches by its bottom edge; a meeting's guests
-// would get an update, so dropping one asks first (lib/calMoves.ts). Keys, while Calendar's pane
-// has focus and nothing is being dragged: t today, ← and → earlier and later, d, w and m for day,
-// week and month.
+// would get an update, so dropping one asks first (lib/calMoves.ts). Find a time puts the times Pip
+// suggests in the days shown on the grid (calendar/FindTime.tsx); one with guests asks first too.
+// Keys, while Calendar's pane has focus and nothing is being dragged: t today, ← and → earlier and
+// later, d, w and m for day, week and month, f to find a time and Esc to clear what it found.
 
 import { batch, createMemo, createSignal, Match, Show, Switch } from "solid-js";
 import { QueryView } from "../components/QueryView.tsx";
@@ -34,23 +35,37 @@ import {
 } from "../lib/week.ts";
 import { Agenda } from "./calendar/Agenda.tsx";
 import { EventPopover } from "./calendar/EventPopover.tsx";
+import { FindTime } from "./calendar/FindTime.tsx";
+import { createFinder } from "./calendar/finder.ts";
 import { MonthGrid } from "./calendar/MonthGrid.tsx";
 import { MoveConfirm } from "./calendar/MoveConfirm.tsx";
 import { NewEvent, NoEvents, NotKept } from "./calendar/QuickAdd.tsx";
+import { Suggested } from "./calendar/Suggested.tsx";
 import { TimeGrid } from "./calendar/TimeGrid.tsx";
 import { Toolbar } from "./calendar/Toolbar.tsx";
 
 /**
  * What the agenda lists of what a view shows (the day, the week, or the month without its edges),
- * and what it says when that's empty though the days read around it aren't.
+ * what it says when that's empty though the days read around it aren't, and what it calls them.
  */
 function listed(view: CalView, s: Shown) {
   if (view === "day")
-    return { from: s.from, to: s.end, quiet: "Nothing on your calendar that day." };
-  if (!s.month) return { from: s.from, to: s.end, quiet: "Nothing on your calendar that week." };
+    return {
+      from: s.from,
+      to: s.end,
+      quiet: "Nothing on your calendar that day.",
+      where: "that day",
+    };
+  if (!s.month)
+    return {
+      from: s.from,
+      to: s.end,
+      quiet: "Nothing on your calendar that week.",
+      where: "that week",
+    };
   const name = s.month.toLocaleDateString("en-US", { month: "long" });
   const to = new Date(s.month.getFullYear(), s.month.getMonth() + 1, 1);
-  return { from: s.month, to, quiet: `Nothing on your calendar in ${name}.` };
+  return { from: s.month, to, quiet: `Nothing on your calendar in ${name}.`, where: `in ${name}` };
 }
 
 export function Calendar(props: { pane: number }) {
@@ -71,6 +86,9 @@ export function Calendar(props: { pane: number }) {
   const drawn = moves.shown;
   const list = createMemo(() => listed(view(), shown()));
   const kept = (d: Date) => d >= syncedFrom(day()) && d < syncedUntil(day());
+  // Pip's suggested times in the days listed, which are the days drawn but a month's edges.
+  const finder = createFinder(() => ({ from: list().from, to: list().to }));
+  let root!: HTMLDivElement;
 
   const go = (by: number | null) => {
     setOpen();
@@ -88,6 +106,21 @@ export function Calendar(props: { pane: number }) {
   // Not while an event is held: the days under it would change, and it would land where you
   // never put it.
   const focused = () => layout.focused() === props.pane && !holding();
+  /**
+   * Esc clears what Find a time found only when it's Calendar's: the focus is in its pane (or
+   * nowhere), and no sheet, menu or palette is open over it, whose own Esc it is.
+   */
+  const escHere = () => {
+    const at = document.activeElement;
+    const ours = !at || at === document.body || root.contains(at);
+    return ours && !document.querySelector('[aria-modal="true"]');
+  };
+  /** Opens Find a time, on a week if a month's grid is shown, and puts you in Who. */
+  const find = () => {
+    if (view() === "month" && !narrow()) show("week");
+    finder.show();
+    root.querySelector<HTMLElement>("[data-find-who]")?.focus();
+  };
   useHotkeys([
     { keys: "t", run: () => go(null), when: focused, label: "Calendar: today" },
     { keys: "arrowleft", run: () => go(-1), when: focused, label: "Calendar: earlier" },
@@ -95,6 +128,15 @@ export function Calendar(props: { pane: number }) {
     { keys: "d", run: () => show("day"), when: focused, label: "Calendar: day" },
     { keys: "w", run: () => show("week"), when: focused, label: "Calendar: week" },
     { keys: "m", run: () => show("month"), when: focused, label: "Calendar: month" },
+    { keys: "f", run: find, when: focused, label: "Calendar: find a time" },
+    {
+      keys: "escape",
+      run: finder.close,
+      // Not while an event or a question is open: Esc is theirs.
+      when: () =>
+        focused() && finder.open() && !open() && !moves.asking() && !finder.inviting() && escHere(),
+      label: "Calendar: clear the times Pip suggests",
+    },
   ]);
 
   // The open event as last read, so its answers and guests stay current while it's open.
@@ -119,14 +161,17 @@ export function Calendar(props: { pane: number }) {
   const notKept = () => <NotKept from={shown().from} to={shown().end} today={day()} />;
 
   return (
-    <div class="flex h-full flex-col" data-product="calendar">
+    <div ref={root} class="flex h-full flex-col" data-product="calendar">
       <PaneHeader
         title="Calendar"
         sub={<span aria-live="polite">{rangeLabel(view(), shown())}</span>}
       >
-        <Toolbar view={view()} onView={show} onStep={go} onToday={() => go(null)} />
+        <Toolbar view={view()} onView={show} onStep={go} onToday={() => go(null)} onFind={find} />
       </PaneHeader>
       <NewEvent />
+      <Show when={finder.open()}>
+        <FindTime finder={finder} where={list().where} list={narrow() || view() === "month"} />
+      </Show>
       <Show
         when={!narrow()}
         fallback={
@@ -191,6 +236,7 @@ export function Calendar(props: { pane: number }) {
                 onDay={(d) => show("day", d)}
                 canMove={moves.can}
                 onMove={moves.drop}
+                over={(d, hour) => <Suggested day={d} hour={hour} finder={finder} />}
               />
             </Match>
           </Switch>
@@ -205,6 +251,17 @@ export function Calendar(props: { pane: number }) {
             question={moveQuestion(a().e, a().to, a().guests)}
             at={a().at}
             onAnswer={moves.answer}
+          />
+        )}
+      </Show>
+      <Show when={finder.inviting()}>
+        {(i) => (
+          <MoveConfirm
+            question={i().question}
+            detail={i().everyone}
+            at={i().at}
+            yes="Invite"
+            onAnswer={finder.answer}
           />
         )}
       </Show>

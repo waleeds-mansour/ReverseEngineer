@@ -1,7 +1,10 @@
 // Calendar's drag (PR #185), end to end on the seeded day (apps/server/src/testing/seed-world.ts):
 // your own event saves where it's dropped, a meeting with guests asks first and Cancel puts it
 // back, Move saves it and has Google tell the guests, and someone else's meeting doesn't move.
-// What Google was sent is read from the seeded server's fake.
+// Then Find a time (lane K3): with nobody named, Pip suggests free times on the grid, and picking
+// one adds it to your calendar without telling anyone; with guests, changing Who drops what was
+// found, a time asks first naming each guest, Cancel invites nobody and Invite invites them once.
+// What Google was sent is read from the seeded server's fake: nothing reaches Google.
 
 import { atLocal } from "@hearth/core";
 import type { Locator, Page } from "playwright";
@@ -147,4 +150,102 @@ export async function calendarSteps(p: Page, seeded: Seeded, step: Step) {
     if (changes(theirs.id).length || atGoogle(theirs.id) !== at(theirs.from))
       throw new Error("Priya's meeting changed at Google");
   });
+
+  await findTimeStep(p, seeded, step);
+}
+
+/** Find a time, for just you and then with guests. */
+async function findTimeStep(p: Page, seeded: Seeded, step: Step) {
+  const title = "Write the report";
+  const bar = p.getByRole("region", { name: "Find a time" });
+  const suggested = p.getByRole("button", { name: /^Pip suggests / });
+  const none = bar.getByText(/^(?:Nothing free|No time) /);
+  /** Whether what was asked has come back with a suggestion in the days shown. */
+  const answered = async () => {
+    await until(
+      "Find a time answers",
+      async () => (await suggested.count()) + (await none.count()) > 0,
+    );
+    return (await suggested.count()) > 0;
+  };
+  /** Events Nook added at Google: quietly ("none"), or inviting their guests ("all"). */
+  const added = (send = "none") =>
+    seeded.sent.filter(
+      (s) =>
+        s.method === "POST" &&
+        s.url.pathname.endsWith("/events") &&
+        s.url.searchParams.get("sendUpdates") === send,
+    );
+  /** Asks and waits for a suggestion, going on a week where this one's working hours are over. */
+  const findSome = async () => {
+    await bar.getByRole("button", { name: "Find", exact: true }).click();
+    for (let weeks = 0; !(await answered()); weeks++) {
+      if (weeks === 2) throw new Error("no time suggested this week or the next two");
+      await p.getByRole("button", { name: "Next week", exact: true }).click();
+      await p.waitForTimeout(300);
+    }
+  };
+
+  await step(
+    "Find a time suggests free times, and picking one adds it, telling nobody",
+    async () => {
+      const before = added().length;
+      await p.getByRole("button", { name: "Find a time", exact: true }).click();
+      await bar.getByRole("textbox", { name: "Title" }).fill(title);
+      await findSome();
+      const label = (await suggested.first().getAttribute("aria-label")) ?? "";
+      if (!label.endsWith(": add it to your calendar"))
+        throw new Error(`the suggestion is named "${label}"`);
+      await suggested.first().click();
+      await tile(p, title).waitFor();
+      await suggested.first().waitFor({ state: "detached" });
+      if (await bar.count()) throw new Error("Find a time is still open after adding the time");
+      if (added().length !== before + 1)
+        throw new Error(`${added().length - before} events went to Google quietly, not 1`);
+    },
+  );
+
+  const meeting = "Plan the launch";
+  const ask = p.getByRole("alertdialog");
+  const who = bar.getByRole("textbox", { name: "Who" });
+  await step(
+    "with guests, changing Who drops the times; a time asks naming each, Cancel invites nobody, Invite once",
+    async () => {
+      const quiet = added().length;
+      const before = added("all").length;
+      await p.getByRole("button", { name: "Find a time", exact: true }).click();
+      await who.fill("sam@work.example, jo@work.example, pat@work.example");
+      await bar.getByRole("textbox", { name: "Title" }).fill(meeting);
+      await findSome();
+      // Taking Pat out: the times found with Pat go, so none can invite Pat.
+      await who.fill("sam@work.example, jo@work.example");
+      await suggested.first().waitFor({ state: "detached" });
+      await findSome();
+      const label = (await suggested.first().getAttribute("aria-label")) ?? "";
+      if (!label.endsWith(": invite Sam and Jo"))
+        throw new Error(`the suggestion is named "${label}"`);
+      await suggested.first().click();
+      await ask.waitFor();
+      const said = await ask.locator("p").first().innerText();
+      if (!said.startsWith(`Invite Sam and Jo to “${meeting}” `))
+        throw new Error(`the time asked "${said}"`);
+      await ask.getByRole("button", { name: "Cancel" }).click();
+      await ask.waitFor({ state: "detached" });
+      await p.waitForTimeout(500);
+      if (added("all").length !== before) throw new Error("Cancel still invited them");
+      await suggested.first().click();
+      await ask.getByRole("button", { name: "Invite" }).click();
+      await until("Google is asked to invite them", () => added("all").length > before);
+      await tile(p, meeting).waitFor();
+      await p.waitForTimeout(300);
+      if (added("all").length !== before + 1 || added().length !== quiet)
+        throw new Error(`${added("all").length - before} invitations went to Google, not 1`);
+      const made = [...(seeded.google.calendars.get(ME)?.events.values() ?? [])].find(
+        (e) => e.summary === meeting,
+      );
+      const guests = made?.attendees?.map((a) => a.email).sort();
+      if (guests?.join() !== "jo@work.example,sam@work.example")
+        throw new Error(`the meeting went to Google with ${guests}`);
+    },
+  );
 }

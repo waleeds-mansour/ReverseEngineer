@@ -1,8 +1,9 @@
 // What a meeting dragged somewhere new asks before it moves, beside where it was dropped, naming it
 // and where it goes: moving it sends its guests an update, so it waits for Move. Cancel has the
 // focus, so a stray Enter tells nobody; Cancel, Esc, a click elsewhere or a scroll put it back.
+// A time Pip suggests asks the same way before its guests are invited, its button Invite.
 
-import { createSignal, createUniqueId, onCleanup, onMount } from "solid-js";
+import { createSignal, createUniqueId, onCleanup, onMount, Show } from "solid-js";
 import { Portal } from "solid-js/web";
 import { Button } from "../../components/ui.tsx";
 import { popoverAt } from "../../lib/calLayout.ts";
@@ -14,6 +15,10 @@ export function MoveConfirm(props: {
   at: DOMRect;
   /** Move it and tell them, or put it back. */
   onAnswer: (move: boolean) => void;
+  /** The yes button's word: Move, or Invite. */
+  yes?: string;
+  /** What the question cuts short, in full: every guest, when it names only some. */
+  detail?: string;
 }) {
   let box!: HTMLDivElement;
   let cancel: HTMLElement | undefined;
@@ -45,6 +50,7 @@ export function MoveConfirm(props: {
         ref={box}
         role="alertdialog"
         aria-labelledby={id}
+        aria-describedby={props.detail ? `${id}-all` : undefined}
         data-product="calendar"
         class="glass-strong fixed z-(--z-popup) max-w-[calc(100vw-1rem)] rounded-lg p-3 text-sm shadow-4"
         // Drawn unseen first, to measure it, then put beside the meeting.
@@ -63,15 +69,20 @@ export function MoveConfirm(props: {
           }
         }}
       >
-        <p id={id} class="max-w-72 break-words">
+        <p id={id} class="max-w-72 break-words" title={props.detail}>
           {props.question}
         </p>
+        <Show when={props.detail}>
+          <p id={`${id}-all`} class="sr-only">
+            {props.detail}
+          </p>
+        </Show>
         <div class="mt-2.5 flex justify-end gap-2">
           <Button size="sm" ref={(el) => (cancel = el)} onClick={() => props.onAnswer(false)}>
             Cancel
           </Button>
           <Button size="sm" variant="primary" onClick={() => props.onAnswer(true)}>
-            Move
+            {props.yes ?? "Move"}
           </Button>
         </div>
       </div>
