@@ -1,8 +1,8 @@
 // What Nook lends the quick-ask box (hearth/quick_ask.rs), a page of this app's own like Nook's:
 // the check that a page is bundled with the app, the theme Nook's pages draw with, the DPI
 // WebView2 draws a page at with Windows' text size, the page of Hearth's window a dock card's
-// Open conversation opens, an app's name from its exe, the dock's check for a game in front, and
-// a place among Nook's own windows. Away from Windows, Nook has none of these to lend, and the
+// Open conversation opens, an app's name from its exe, the dock's check for a game in front and
+// nook-wm's game guard for the window in front, and a place among Nook's own windows. Away from Windows, Nook has none of these to lend, and the
 // box doesn't open.
 
 use super::chrome::ChromeView;
@@ -64,6 +64,25 @@ pub fn game_in_front(app: &AppHandle) -> bool {
     })
 }
 
+/// Whether the window in front, `hwnd` of the program at `path`, is a game by nook-wm's game
+/// guard (game.rs): an engine's or a launcher's class, a game folder, or borderless and filling
+/// its monitor. Judged here from user32 reads, so it holds while Nook arranges nothing.
+#[cfg(windows)]
+pub fn game_window(hwnd: isize, path: Option<&str>) -> bool {
+    let Some(f) = super::window::RealProbe::facts(hwnd) else {
+        return false;
+    };
+    let monitors = super::monitors::enumerate();
+    let front = super::game::Front {
+        class: &f.class,
+        style: f.style,
+        rect: f.rect,
+        monitor: super::monitors::holding(&monitors, &f.rect).map(|m| m.rect),
+        path,
+    };
+    super::game::judge(None, Some(&front)).is_some()
+}
+
 /// The box's window was made: nook-wm and the bar now count it as one of Nook's own.
 #[cfg(windows)]
 pub fn made(app: &AppHandle) {
@@ -102,6 +121,11 @@ pub fn page_link(_page: DockPage) -> Option<String> {
 
 #[cfg(not(windows))]
 pub fn game_in_front(_app: &AppHandle) -> bool {
+    false
+}
+
+#[cfg(not(windows))]
+pub fn game_window(_hwnd: isize, _path: Option<&str>) -> bool {
     false
 }
 

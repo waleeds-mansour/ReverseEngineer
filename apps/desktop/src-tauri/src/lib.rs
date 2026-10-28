@@ -236,6 +236,8 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     // Hearth's notifications, and the tray's status line (D53).
     hearth::notify::start(app_handle);
     hearth::status::start(app_handle);
+    // Double-tap Ctrl for Ask Pip, while its setting is on.
+    hearth::double_tap::sync(app_handle);
     // Nook (D75): its switches, its disabled file, and a restore an earlier run left owing.
     nook::init(app_handle);
 
@@ -730,6 +732,7 @@ pub fn run(cli_args: CliArgs) {
             shortcut::change_post_process_api_key_setting,
             hearth::change_hearth_settings,
             hearth::unpair_hearth,
+            hearth::double_tap::change_hearth_ask_double_tap_setting,
             shortcut::change_post_process_model_setting,
             shortcut::set_post_process_provider,
             shortcut::fetch_post_process_models,

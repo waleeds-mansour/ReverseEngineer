@@ -1066,6 +1066,16 @@ impl AudioRecordingManager {
         self.recording_active.load(Ordering::SeqCst)
     }
 
+    /// Whether the recording going now is `binding_id`'s. Hearth: the Ask Pip box records
+    /// under a binding of its own, so another binding's start that found it recording failed.
+    /// Takes the state mutex, so it is for workers, never the main thread.
+    pub fn is_recording_for(&self, binding_id: &str) -> bool {
+        matches!(
+            &*self.state.lock().unwrap(),
+            RecordingState::Recording { binding_id: active } if active == binding_id
+        )
+    }
+
     /// Cancel any ongoing recording without returning audio samples
     pub fn cancel_recording(&self) {
         self.invalidate_recording_readiness();
