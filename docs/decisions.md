@@ -2416,6 +2416,7 @@ and the job picks a tier and, for Sonnet, how hard it thinks. All of it is one m
 | A watch firing | Haiku | Sonnet |
 | Tidying what you said by voice | Haiku, low | Sonnet |
 | A few lines about people you talk with on Slack (D83) | Haiku, low | new |
+| Ready replies after Pip answers you (D85) | Haiku, low | new |
 | The health check's "are you there" | Haiku, low | Sonnet |
 
 **Code is always Opus.** A chat message or an @mention is about code when it has a code block,
@@ -2513,3 +2514,138 @@ mix Pip's words, drawn from other people's messages, with yours). Writing person
 **Why:** Asked for on 2026-10-23: Nook saves people from Slack and gives each a short persona.
 People had never had a person but "You", since Slack, where most of the owner's talk is, made no
 one, and Pip should know who people are and how the owner works with them.
+
+## D84. Windows Hello opens the desktop's desk, where the app may approve what Pip asks (2026-10-28)
+
+*This amends D42 and the desktop token's rule in docs/nook-extras.md (rule 4). The token on its own
+still can't decide anything, and reads of the inbox only what D53's feed tells it: for an approval
+or the brief, a heading and the item's title; for your day and a delivered interrupt, the title and
+the start of its text; for Pip's questions and finished work, a heading, the kind and the card's id.
+With Windows Hello and the desk's secret, the app can read the desk's cards and answer them, for a
+while.*
+
+**Decision:** The desktop app's edge overlay gets a desk: cards you answer from the keyboard.
+You approve or deny what Pip asks, pick one of Pip's numbered choices (D85), and clear finished
+work, the brief and your day. Once a sitting, the app asks Windows Hello to sign a fresh
+challenge with this PC's own key (D80). Windows asks for your face, finger or PIN, and the
+signature opens a desk for the app's token.
+- **Opening and closing:** `POST /api/desktop/desk/challenge`, then `POST /api/desktop/desk/unlock`
+  with `{challenge, signature}`, which answers `{secret, until, idleUntil}`. Challenges are D80's
+  kind (single-use, five minutes), kept apart from the window's, and each is good only for the
+  token that asked for it. The app calls `POST /api/desktop/desk/lock` when Windows locks or
+  sleeps. A lock also fences off every challenge issued before it, checked again after Windows
+  Hello's key is read, so an unlock already under way can't reopen the desk. `GET
+  /api/desktop/desk` answers `{open, until, idleUntil}`, and reads shut without the secret.
+- **The desk's secret:** unlocking gives the app 32 random bytes (base64url) that it keeps only
+  in memory, never on disk. Every desk action and `GET /api/desktop/desk` carries it in the
+  `x-hearth-desk` header, and the server compares its hash in constant time. Pip has commands on
+  this PC (D64), so a program that reads the token off the disk while the desk is open still
+  gets nothing. Unlocking again replaces it.
+- **How long:** the desk shuts 2 hours after the last desk action, and 8 hours after it opened
+  whatever happens. Looking at whether it's open doesn't keep it open.
+- **Kept in memory:** open desks are kept by the token's hash, with the secret's hash, in the
+  server's memory, never in the database. A restart forgets them, so Windows Hello asks again.
+  Pairing again or disconnecting revokes the token, and its desk with it.
+- **Only straight from this PC:** each desk route, and the desk being open for an action, takes
+  the app's token straight from this PC through no proxy (`directFromThisPc`, as D69 and D80).
+  That test relies on Tailscale Serve's HTTP mode, which adds its `Tailscale-*` and
+  `X-Forwarded-*` headers; a `--tcp` forward would add none, so Hearth is never served that way.
+- **No reconnecting:** at each start the server sets every live device token's scopes to this
+  build's `DEVICE_SCOPES` (`syncDeviceScopes`, part of nook-extras' X1 built early), so a PC
+  paired before the desk gets its scopes with the next deploy. Scopes taken off the list go too.
+  Only API sessions are touched. With the database out of reach it tries again in the
+  background, waiting longer each time, and the server starts meanwhile.
+- **The desk's actions:** `desk.list`, `desk.decide`, `desk.mark` and `desk.answer`. Each refuses
+  unless its caller is the desktop app with its desk open. The server's sign-in check, which alone
+  sees the token and the secret, sets `desk` on the app's caller then, and the kernel hands that
+  caller to each action. The actions are the owner's only, so Pip never has them as tools.
+- **What the actions do:**
+  - `desk.list` gives at most 30 cards, with counts. Approvals that wait for a yes or no come
+    first, then Pip's open questions, then the rest, each newest first, so no pile of finished
+    work pushes them out of view. Each card has a title of at most 120 characters and a line of at
+    most 200, never a whole email, and says `outside` when its words are outside content's. It
+    leaves no audit row, as your own reads don't (D56).
+  - `desk.decide` goes through the same `resolveApproval` as `POST /api/approvals/:id`. It never
+    takes Always allow: a request asking for it is refused, not quietly given a plain yes. Its
+    audit row (via `device`) carries the approval's id, so it stays with the approval for good,
+    and `approval.resolved` says `desk: true`.
+  - `desk.mark` follows `inbox.mark`'s rules: a card that waits for a yes or no, or an open
+    question's, is done only once it has its answer. Seen never reopens a card that's done. It
+    reaches only the desk's own cards.
+  - `desk.answer` answers through the questions' own `answerQuestion` (D85).
+- **The notification feed:** each notification now says its card's `kind`, so the overlay knows
+  which card arrived and which sound to play, and its `tag` is the card's id. Pip's questions and
+  finished work reach the feed as a heading only ("Pip asks you something", "Pip finished
+  something"), never the question or what Pip said it did; the overlay reads those with
+  `desk.list`. Finished work comes quietly (`quiet: true`: on the desk, no Windows notification).
+  Neither buzzes your phone. The status events still carry no one's words.
+
+**Alternatives:** Letting the token approve by itself: a leaked token could then approve whatever
+Pip asks, which D42 exists to prevent. The desk open for the token alone, without a secret of its
+own: anything that reads the token off the disk during the 8 hours could approve. Asking Windows
+Hello for every decision: a prompt per card defeats a keyboard desk. Opening the desk with
+Windows Hello's yes or no alone (`UserConsentVerifier`): Hearth couldn't tell that Windows Hello
+was asked at all, as D80 found. Keeping open desks in the database: a desk that outlives a
+restart outlives the sitting it was opened for. Passing "desk open" as an input field: the
+desktop could claim it; the caller is set only by the server's sign-in check.
+
+**Why:** The owner wants the desktop to be where Pip's asks are answered, without opening the
+window. The coordinator set the bounds on 2026-10-28: Windows Hello unlocks the desk once per
+sitting, for at most 8 hours; Windows locking ends it; Always allow is never taken from the
+desktop; and a token without the Hello key and the owner's face, finger or PIN still can't
+approve anything. A review the same day added the secret, the idle limit and the lock's fence,
+because Pip can run commands on this PC.
+
+## D85. Pip asks with choices, says what it finished, and offers replies you might send (2026-10-28)
+
+**Decision:** Three things the desktop's inbox needs from the server, so the owner can answer Pip
+from the keyboard.
+
+- **Questions with choices.** When a decision is the owner's and has 2 or 3 clear options, Pip
+  asks with `ask_owner` (the `ask.owner` action) instead of in its reply: a `question` row
+  (migration 0059) and a card of kind `question` whose title is the question, whose body is the
+  numbered choices with Pip's reason under them, and whose dedupe key is `question:<id>`. Its turn
+  ends there, told to wait. A turn asks at most once (a unique index on the open question's turn),
+  and at most 8 questions wait at once, 3 of them from turns that read outside content; past that,
+  `ask_owner` fails and Pip asks in its reply. `answerQuestion` (`packages/modules/src/questions`)
+  takes a choice by its place (from 0), the owner's own words, or both; it records the answer,
+  puts the card away, and `questions.resume_jarvis` starts Pip again in the same conversation,
+  lane and job, still background work if that's what it was. An answer given in Nook, or at the
+  desk with Windows Hello (D84), picks the work up as trusted as the asking turn was, as a decided
+  approval does; one from any other device is outside content, its words and the work after them.
+  The owner's `question.answer` and the desk's `desk.answer` both use it. A second answer, two at
+  once, or one after three days (when the question lapses and its card goes) is refused as a
+  conflict with a plain reason. Until then its card can't be marked done or snoozed, and only Nook
+  makes `question` and `finished` cards: `inbox_notify` refuses those kinds. It never stands in
+  for an approval: what needs a yes still asks for one.
+- **Finished-work cards.** A turn Pip ran on its own (a routine, the heartbeat, a reflex, a
+  watch, a trigger, work picked up again) that finished with the outcome "act" (it changed
+  records or sent or acted through its tools) leaves a quiet card of kind `finished`: "Pip
+  finished" and what it was about (the dock's label), the first line of its reply, and a link to
+  its record or conversation. While that card is unseen, more from the same routine, reflex or
+  trigger joins it ("Pip finished 4 things: its heartbeat", with the latest line) instead of
+  piling up; once seen, the next starts a new card. Its dedupe key, `finished:<group>:<turnId>`,
+  names the latest turn in it, so none counts twice. None for turns the owner started by
+  chatting, nor for work picked up again in a conversation the owner is in, since they see those
+  answers; none for a turn that only read, noted or asked; none for one that already put a card
+  in the inbox (the brief, a question), found by its correlation id; and none for Pip's own
+  upkeep (what it remembers, its lines about people). A turn that read outside content says so.
+- **Ready replies.** After Pip answers in a conversation the owner is in (a chat, the quick-ask,
+  work picked up again there), one Haiku step with no tools makes up to two replies in the
+  owner's voice, each under 60 characters, after the turn has ended so it never holds up the
+  answer, and its tokens go in the turn log as the `next` job's. They're kept as a `next` entry in
+  the conversation's log; `conversation.get` returns the ones to offer as `next: {replies,
+  outside}`, and they go stale once another turn starts or the owner writes, even while the turn
+  was still answering. None when the answer is short and closes the topic, the turn failed, or it
+  asked the owner something (a reply would race the answer and start the work twice). Outside
+  content the answer read can steer them; that's allowed because the owner sends them themselves,
+  they are marked `outside` for the overlay, and they are never sent for them.
+
+**Alternatives:** Questions as approvals of a do-nothing action (an approval is a yes or no on one
+exact call, not a pick among options). A finished card for every turn that used a tool (every
+heartbeat would leave one). Replies made inside the turn's own model call (it would hold up every
+answer, and change the prompt every turn caches).
+
+**Why:** The desktop's inbox (lane O5a, D84) answers cards from the keyboard: 1, 2 or 3 picks a
+choice and finished work can be cleared, and after Pip answers it offers ready replies. Pip could
+only ask through an approval or in its reply text, and nothing said when its own work was done.

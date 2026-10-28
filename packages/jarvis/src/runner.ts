@@ -12,6 +12,7 @@ import { classifyFailure, type Failure, failure } from "./failures.ts";
 import { reportJarvisHealth } from "./health.ts";
 import { type MemberTurnEnv, runMemberTurn } from "./member-turn.ts";
 import { modelFor } from "./models.ts";
+import { NextOffers, type NextReplies } from "./next.ts";
 import { turnSystemPrompt } from "./prompt.ts";
 import { keepTaint, readFrom, restoreTaint } from "./taint.ts";
 import { ensureConversation, recapConversation, streamer, withRecap, writeLog } from "./threads.ts";
@@ -57,6 +58,8 @@ export interface RunnerOptions {
   turnLog?: TurnLog;
   /** How often a running turn checks whether the owner pressed Stop, in case the signal was missed. */
   stopCheckMs?: number;
+  /** Makes ready replies after an answer (D85); without it, none are offered. */
+  nextReplies?: NextReplies;
 }
 
 const REPLY_IN_THREAD = new Set(["mention", "assignment", "watch", "approval"]);
@@ -75,6 +78,8 @@ export class TurnRunner {
   readonly stops = new TurnStops();
   /** Tools Claude rejected since this process started: left out of every turn until a restart. */
   readonly leftOut = new Set<string>();
+  /** Ready replies being made after answers, in the background (D85). */
+  readonly offers: NextOffers | null;
   private readonly startedAt = new Date();
 
   constructor(opts: RunnerOptions) {
@@ -85,6 +90,8 @@ export class TurnRunner {
     this.limits = { ...TURN_LIMIT_MS, ...opts.limits };
     this.turnLog = opts.turnLog;
     this.stopCheckMs = opts.stopCheckMs ?? 2000;
+    const suggest = opts.nextReplies;
+    this.offers = suggest ? new NextOffers({ ...this.env, suggest }) : null;
   }
 
   private get env() {
@@ -317,9 +324,10 @@ export class TurnRunner {
       if (posted.status !== "ok") this.log(`could not post reply for turn ${turn.id}`, posted);
     }
     end.durationMs = Math.round(performance.now() - started);
+    const outcome = classifyOutcome(state.calls);
     await recordEnd(this.env, end, {
       status: "done",
-      outcome: classifyOutcome(state.calls),
+      outcome,
       reply: reply || null,
       error: null,
       errorKind: null,
@@ -328,6 +336,9 @@ export class TurnRunner {
       firstTokenMs: result.firstTokenMs,
       durationMs: end.durationMs,
     });
+    // Answered: replies you might send next are made after, never holding this up (D85).
+    const outside = state.origin === "untrusted";
+    this.offers?.offer(turn, { conversationId: cid, reply, outside, outcome });
   }
 
   /**

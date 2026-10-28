@@ -51,7 +51,7 @@ export async function runIo<R>(
           outcome: "ok",
           durationMs: performance.now() - started,
           correlationId: caller.correlationId,
-          approvalId: hooks.approvalId ?? null,
+          approvalId: hooks.approvalId ?? def.auditApproval?.(input as never) ?? null,
           at: now,
         });
       // As in Kernel.run: the approval closes before the event log's lock is taken.
@@ -80,7 +80,7 @@ export async function runIo<R>(
       error: failure.message,
       durationMs: performance.now() - started,
       correlationId: caller.correlationId,
-      approvalId: hooks.approvalId ?? null,
+      approvalId: hooks.approvalId ?? def.auditApproval?.(input as never) ?? null,
       at: now,
     }).catch((e) => log(`Could not write audit row: ${logLine(e)}`));
     return { status: "error", ...failure };

@@ -39,6 +39,12 @@ export interface Caller {
   /** With `asked`: they said it to the chat mic, rather than typed it. For a reminder's words. */
   heard?: boolean;
   /**
+   * Set by the server's sign-in check, and only there, on the desktop app's call while its desk is
+   * open: Windows Hello unlocked it in the last 8 hours, Windows hasn't locked since, and the call
+   * came straight from this PC (D84). Only the desk's actions read it; it vouches for nothing else.
+   */
+  desk?: boolean;
+  /**
    * What Jarvis's turn knows for D25/D30: the addresses outside content showed it, the sites it
    * opened while still trusted, and the site lists it started with. A call made as Jarvis without
    * these (a reflex, a self-test) is checked as a turn that has seen no addresses (D58).
@@ -154,6 +160,11 @@ export interface ActionDef<S extends z.ZodType = z.ZodType, R = unknown> {
    * changed something are kept. Failures, refusals and approved calls are always kept.
    */
   auditWhen?(result: R): boolean;
+  /**
+   * The approval a call decides, kept on its audit row as an approved call's is (desk.decide, D84):
+   * so the row stays with the approval for good, and the audit shows where the yes came from.
+   */
+  auditApproval?(input: z.output<S>): string | null;
   /**
    * It waits on the world (Chrome, a site's pace): it runs without holding a transaction, its
    * reads committed one by one, and its events, audit row and approval recorded in one short

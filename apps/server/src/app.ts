@@ -16,6 +16,8 @@ import {
   BROWSER_SERVICE,
   blobsFromEnv,
   CONVEX_SERVICE,
+  DESK_SERVICE,
+  deskDecisions,
   GITHUB_SERVICE,
   GOOGLE_SERVICE,
   googleFromEnv,
@@ -119,6 +121,8 @@ export function createApp(opts: AppOptions) {
   opts.kernel.services[NOTION_SERVICE] ??= httpNotion();
   opts.kernel.services[BLOB_SERVICE] ??= blobsFromEnv();
   opts.kernel.services[POLISH_SERVICE] ??= polisherFromEnv();
+  // Deciding from the desktop's desk (D84): the kernel's own decision, never Always allow.
+  opts.kernel.services[DESK_SERVICE] ??= deskDecisions(opts.kernel);
   const live = new LiveView(bridge);
   const sendPush = opts.push ?? webPushSend;
   let push: ReturnType<typeof startPush> | null = null;

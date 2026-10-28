@@ -14,6 +14,7 @@ export * from "./memory.ts";
 export * from "./notion.ts";
 export * from "./people.ts";
 export * from "./push.ts";
+export * from "./questions.ts";
 export * from "./roles.ts";
 export * from "./sheets.ts";
 export * from "./slack.ts";

@@ -15,6 +15,7 @@ import type pg from "pg";
 import type { Brain } from "./brain.ts";
 import { ReflexEngine } from "./engine.ts";
 import { HEARTBEAT } from "./heartbeat.ts";
+import { brainReplies } from "./next.ts";
 import { type RunnerOptions, TurnRunner } from "./runner.ts";
 
 /**
@@ -33,7 +34,7 @@ export interface JarvisServiceOptions {
   /** How often Jarvis says it's alive and reports its health. */
   checkInMs?: number;
   log?: (msg: string, err?: unknown) => void;
-  runner?: Pick<RunnerOptions, "limits" | "turnLog" | "stopCheckMs">;
+  runner?: Pick<RunnerOptions, "limits" | "turnLog" | "stopCheckMs" | "nextReplies">;
 }
 
 /** Registers every routine (module routines plus the heartbeat) with the scheduler. */
@@ -63,6 +64,8 @@ export async function startJarvis(opts: JarvisServiceOptions) {
     brain: opts.brain,
     pool: opts.pool,
     log,
+    // Ready replies after an answer come from one cheap step of the same brain (D85).
+    nextReplies: brainReplies(opts.brain),
     ...opts.runner,
   });
   const pollMs = opts.pollMs ?? 2000;

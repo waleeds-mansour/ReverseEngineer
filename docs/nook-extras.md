@@ -140,8 +140,8 @@ Plan of 2026-10-17. It merges four designs and their critiques into one build pl
      - start Pip turns (`chat.send`, `voice.command`) and recordings (`meeting.record`)
      - read the conversations it started (`conversation.get`), your voice styles and `system.status`
    - It can't call any Soul or power action.
-   - New scopes from X1 on may only fetch jobs or report: readings, power jobs and power results. A report can at most cancel or fail the job it was handed. It never starts, requests or approves one.
-   - Its scopes follow `DEVICE_SCOPES.desktop` at every server start. A test pins the whole list, route entries included, and checks that every action it names is one `decide()` allows for the device caller.
+   - New scopes from X1 on may only fetch jobs or report: readings, power jobs and power results. A report can at most cancel or fail the job it was handed. It never starts, requests or approves one. The one exception is D84's desk: after Windows Hello opens it, for at most 8 hours, `desk.decide` may approve or deny what Pip asks, never with Always allow.
+   - Its scopes follow `DEVICE_SCOPES.desktop` at every server start (built early with D84). A test pins the whole list, route entries included, and checks that every action it names is one `decide()` allows for the device caller.
    - From X2, the token is stored sealed, not as plain JSON (rule 12).
 5. **Links start nothing.**
    - There are two new links:
@@ -402,10 +402,10 @@ Plan of 2026-10-17. It merges four designs and their critiques into one build pl
 - Size: M, about 450 lines, 1 day. No kit. Needs nothing.
 - Files:
   - `apps/server/src/auth/devices.ts`:
-    - `syncDesktopScopes(db)` sets `scopes` on unrevoked `device:desktop` sessions to `DEVICE_SCOPES.desktop` when they differ. It returns how many sessions it changed and which scopes it added.
-    - It writes only a non-empty array. The server refuses to start if `DEVICE_SCOPES.desktop` is missing or empty, because a null `scopes` would turn the device token into a full `cli` owner token.
+    - Built early with D84 as `syncDeviceScopes(db)`: it sets `scopes` on every unrevoked `device:<name>` session to `DEVICE_SCOPES[name]` when they differ, and leaves a name the list doesn't know alone. It returns, for each session it changed, the scopes it added and removed.
+    - It writes only a non-empty array. The server refuses to start if `DEVICE_SCOPES.desktop` is missing or empty, because a null `scopes` would turn the device token into a full `cli` owner token. That refusal is still to come; the pinned-list test guards the list meanwhile.
     - `scopeAllows` escapes regular-expression characters in route patterns, except `:id`.
-  - `apps/server/src/main.ts`: calls it once at start, and logs one line naming the added scopes when it changed something.
+  - `apps/server/src/main.ts` (built with D84): calls it at start through `keepDeviceScopes`, without holding up the first request, and logs one line per token it changed, naming the scopes added and removed. Only API sessions are touched. With the database out of reach it warns and tries again in the background after 1, 2, 5, 15, 30 and then every 60 seconds, until it succeeds or the server stops.
   - `apps/server/src/config.ts`:
     - `devAuth = env.HEARTH_DEV_AUTH === '1' && !asWindowsService(env, platform, user, home)`, with one log line when it turns dev sign-in off.
     - Outside the service, dev sign-in with an `HEARTH_ORIGIN` whose host ends in `.ts.net` throws at start. Not every https origin throws, because `e2e/window.ts` uses `https://hearth.example.test` with dev sign-in. Under the service it only turns off, so WinSW never crash-loops.
@@ -1386,7 +1386,7 @@ All six go in one message. "Reply defaults" takes every default.
 ## 8. What changed from the designs
 
 - **Decision numbers** are fixed now (D76 to D79), and every cross-reference uses them.
-- **Two 0050 migrations** are replaced by `syncDesktopScopes` (X1). There are no new migrations.
+- **Two 0050 migrations** are replaced by `syncDeviceScopes` (X1, built with D84). There are no new migrations.
 - **Power's server-start reconcile** moved into P2, so a first real restart can't leave a stuck job.
 - **The Activity claim** was dropped. The Recent list in This PC, read through `power.history`, replaces it.
 - **Clipboard history:**

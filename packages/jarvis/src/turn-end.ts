@@ -375,14 +375,19 @@ export async function recoverInterrupted(env: EndEnv): Promise<number> {
   return rows.length;
 }
 
-/** Tools that tell or note rather than act. */
-const QUIET_ACTIONS = new Set(["inbox.notify", "jarvis.observe", "record.read"]);
+/** Tools that tell, note or ask rather than act. */
+const QUIET_ACTIONS = new Set(["inbox.notify", "jarvis.observe", "record.read", "ask.owner"]);
 
-/** What a turn that finished came to, from the tools it ran. */
+/**
+ * What a turn that finished came to, from the tools it ran. Only "act" changed or sent anything:
+ * a finished-work card goes by it (D85).
+ */
 export function classifyOutcome(calls: ToolCallRecord[]): TurnOutcome {
   const ok = calls.filter((c) => c.status === "ok");
   if (ok.some((c) => c.risk !== "read" && !QUIET_ACTIONS.has(c.action))) return "act";
+  // Waiting for a yes, or for an answer to a question with choices (D85).
   if (calls.some((c) => c.status === "pending_approval")) return "ask";
+  if (ok.some((c) => c.action === "ask.owner")) return "ask";
   if (ok.some((c) => c.action === "inbox.notify")) return "tell";
   if (ok.some((c) => c.action === "jarvis.observe")) return "note";
   return "nothing";

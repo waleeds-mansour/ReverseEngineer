@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { foldConversation, type LogRecord } from "./conversation.ts";
+import { foldConversation, type LogRecord, readyReplies } from "./conversation.ts";
 
 let idx = 0;
 const at = (s: number) => new Date(Date.UTC(2026, 9, 1, 14, 0, s)).toISOString();
@@ -66,5 +66,45 @@ describe("foldConversation", () => {
       ),
     ];
     expect(notice(waiting)).toMatchObject([{ retry: false }]);
+  });
+});
+
+describe("ready replies (D85)", () => {
+  it("shows the latest ones after Pip's answer, and none once you write or a turn starts", () => {
+    idx = 0;
+    const answered = [
+      entry("user_message", { text: "draft a reply to Ana", by: "owner" }),
+      entry("turn_started", {}, "t1"),
+      entry("assistant_message", { text: "Here's a draft…" }, "t1"),
+      entry("turn_finished", { status: "done" }, "t1"),
+      entry("next", { replies: ["Send it", "Make it shorter"] }, "t1"),
+    ];
+    // Not a line of its own: the replies sit beside the conversation.
+    expect(foldConversation(answered).items).toHaveLength(2);
+    expect(foldConversation(answered).next).toEqual({
+      replies: ["Send it", "Make it shorter"],
+      outside: false,
+    });
+    // Only the latest, and never more than two.
+    const again = [...answered, entry("next", { replies: ["Yes", "No", "Maybe"] }, "t1")];
+    expect(readyReplies(again).replies).toEqual(["Yes", "No"]);
+    // Anything you write makes them stale; so does a turn that started since.
+    const none = { replies: [], outside: false };
+    expect(readyReplies([...answered, entry("user_message", { text: "Send it" })])).toEqual(none);
+    expect(readyReplies([...answered, entry("turn_started", {}, "t2")])).toEqual(none);
+    // Written after reading outside content: the overlay marks them (D58).
+    const read = [...answered, entry("next", { replies: ["Reply"], outside: true }, "t1")];
+    expect(readyReplies(read)).toEqual({ replies: ["Reply"], outside: true });
+  });
+
+  it("isn't made stale by a routine's prompt or a Slack member's line, and skips what isn't text", () => {
+    idx = 0;
+    const log = [
+      entry("next", { replies: ["Send it", 3, ""] }, "t1"),
+      entry("user_message", { text: "It's time.", by: "system" }, "r1"),
+      entry("user_message", { text: "hi", by: "member:slack:T1:U1" }),
+    ];
+    expect(readyReplies(log).replies).toEqual(["Send it"]);
+    expect(readyReplies([entry("next", { replies: "Send it" }, "t1")]).replies).toEqual([]);
   });
 });

@@ -4,6 +4,7 @@
 import { isQuietHours } from "@hearth/core";
 import { consumerCursor, event, notification, pushSubscription, setting } from "@hearth/db";
 import { getSetting, type Kernel, latestSeq, setCursor } from "@hearth/kernel";
+import { opensAt } from "@hearth/modules";
 import { and, eq, gt, inArray, lte } from "drizzle-orm";
 import webpush from "web-push";
 import type { EventHub } from "./hub.ts";
@@ -12,7 +13,12 @@ export interface PushMessage {
   title: string;
   body: string;
   url: string;
+  /** The inbox item's id, which is its desk card's (a health change's own tag): shown once. */
   tag: string;
+  /** The item's kind ("approval", "question", "health"…): which desk card came, and its sound (D84). */
+  kind?: string;
+  /** For the desktop's feed and desk, but no Windows notification: finished work (D84). */
+  quiet?: boolean;
 }
 
 export interface Subscription {
@@ -74,6 +80,17 @@ export function worthPushing(p: Record<string, unknown>): boolean {
   return p.urgency === "interrupt" && p.delivered === true;
 }
 
+/**
+ * Which inbox items the desktop's feed tells its desk about (D84): those worth your phone, and Pip's
+ * questions and finished work too. Those two don't buzz the phone; finished work comes quietly.
+ */
+export function worthTelling(p: Record<string, unknown>): boolean {
+  if (worthPushing(p)) return true;
+  if (p.kind !== "question" && p.kind !== "finished") return false;
+  // One held for quiet hours is told when it goes out, as any interrupt is.
+  return p.urgency !== "interrupt" || p.delivered === true;
+}
+
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 const HEADINGS: Record<string, string> = {
@@ -82,24 +99,34 @@ const HEADINGS: Record<string, string> = {
 };
 
 /**
- * Where tapping it opens; anything else opens the inbox. An approval opens on Today's Needs you,
- * which says when a send reaches someone who isn't in its conversation; the brief and the evening
- * card open there too, each in full with the rest of your day.
+ * Only the desktop's feed has these, and only as a heading, a kind and an id: a question's words
+ * and what Pip says it did stay off the feed, and the desk reads them with desk.list once Windows
+ * Hello has opened it (D84).
  */
-const OPENS: Record<string, string> = {
-  approval: "/today",
-  brief: "/today",
-  wrap: "/today",
+const WORDLESS: Record<string, string> = {
+  question: "Pip asks you something",
+  finished: "Pip finished something",
 };
 
-export function messageFor(row: { id: string; kind: string; title: string; body: string | null }) {
+/** Tapping it opens where its desk card does (opensAt): an approval and the brief on Today. */
+export function messageFor(row: {
+  id: string;
+  kind: string;
+  title: string;
+  body: string | null;
+  urgency?: string;
+}): PushMessage {
   const heading = HEADINGS[row.kind];
+  const wordless = WORDLESS[row.kind];
+  const quiet = row.kind === "finished" || row.urgency === "quiet";
   return {
-    title: heading ?? clip(row.title, 120),
-    body: clip(heading ? row.title : (row.body ?? ""), 240),
-    url: OPENS[row.kind] ?? "/inbox",
+    title: wordless ?? heading ?? clip(row.title, 120),
+    body: wordless ? "" : clip(heading ? row.title : (row.body ?? ""), 240),
+    url: opensAt(row.kind),
     tag: row.id,
-  } satisfies PushMessage;
+    kind: row.kind,
+    ...(quiet ? { quiet: true } : {}),
+  };
 }
 
 /** A send that gives up after `ms`, so one stuck push service can't hold up the rest. */

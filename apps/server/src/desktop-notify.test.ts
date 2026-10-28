@@ -1,8 +1,16 @@
 // Hearth on the PC (D53): the notification feed the desktop app shows as Windows notifications.
-import { jarvisCaller, latestSeq, readEventsAfter, systemCaller } from "@hearth/kernel";
+import { randomUUID } from "node:crypto";
+import { jarvisTurn } from "@hearth/db";
+import {
+  jarvisCaller,
+  latestSeq,
+  ownerCaller,
+  readEventsAfter,
+  systemCaller,
+} from "@hearth/kernel";
 import { afterEach, describe, expect, it } from "vitest";
 import { pairDevice, revokeDevice } from "./auth/devices.ts";
-import { PUSH_KINDS } from "./push.ts";
+import { PUSH_KINDS, worthPushing } from "./push.ts";
 import { healthMessage, messagesFor, stillSignedIn } from "./routes/desktop.ts";
 import { createTestServer, type TestServer } from "./testing/server.ts";
 
@@ -170,5 +178,59 @@ describe("the desktop notification feed", () => {
       url: "/settings",
     });
     expect(healthMessage({ component: "disk", status: "ok", previous: null }, 2)).toBeNull();
+  });
+
+  it("says each card's kind, and brings Pip's questions and, quietly, finished work, without their words (D84)", async () => {
+    await serve();
+    const chat = await t.kernel.execute("chat.send", { text: "hi" }, ownerCaller());
+    if (chat.status !== "ok") throw new Error(JSON.stringify(chat));
+    const { conversationId } = chat.result as { conversationId: string };
+    // A turn Pip ran on its own, that did something: finished.card puts its card in.
+    const turnId = randomUUID();
+    await t.kernel.db.insert(jarvisTurn).values({
+      id: turnId,
+      trigger: "reflex",
+      mode: "proactive",
+      lane: "fast",
+      origin: "system",
+      prompt: "Look at what came in.",
+      status: "done",
+      outcome: "act",
+      reply: "Tidied your inbox: 12 newsletters archived.",
+    });
+    const before = await latestSeq(t.kernel.db);
+    const asked = await t.kernel.execute(
+      "ask.owner",
+      { question: "Which room for Friday?", choices: ["Small", "Big"] },
+      jarvisCaller("owner", { turnId: randomUUID(), conversationId }),
+    );
+    expect(asked.status).toBe("ok");
+    const card = await t.kernel.execute("finished.card", { turnId }, systemCaller());
+    expect(card).toMatchObject({ status: "ok", result: { gathered: 1 } });
+    await t.kernel.execute("inbox.notify", { title: "Not worth a buzz" }, jarvisCaller("owner"));
+    await publishBrief();
+    const events = await readEventsAfter(t.kernel.db, before, { kinds: PUSH_KINDS });
+    const now = t.kernel.clock.now().getTime();
+    const told = (await messagesFor(t.kernel.db, events, now)).map((m) => m.message);
+    const ids = events.map((e) => String(e.payload.notificationId));
+    // A question's words and what Pip did stay off the feed: a heading, a kind and the card's id.
+    // The desk reads the rest with desk.list once Windows Hello has opened it.
+    expect(told).toEqual([
+      { kind: "question", title: "Pip asks you something", body: "", url: "/inbox", tag: ids[0] },
+      {
+        kind: "finished",
+        title: "Pip finished something",
+        body: "",
+        url: "/inbox",
+        tag: ids[1],
+        quiet: true,
+      },
+      expect.objectContaining({ kind: "brief", title: "Your brief is ready", tag: ids[3] }),
+    ]);
+    expect(JSON.stringify(told)).not.toMatch(/Friday|Small|Tidied|newsletters/);
+    // Your phone isn't buzzed for either.
+    expect(events.filter((e) => worthPushing(e.payload)).map((e) => e.payload.kind)).toEqual([
+      "brief",
+    ]);
   });
 });

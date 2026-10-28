@@ -4,16 +4,24 @@
 // your yes and Nook's health (deskLite), when the feed opens and whenever that reads differently.
 // The desktop app's token may read it; nothing here can approve anything, a notification only
 // opens a page, and a status is counts, states and a few words of label, never anyone's words.
+// Each notification says its card's kind, so the desk knows which card came and how it sounds;
+// Pip's questions and finished work come too, finished work quietly (D84).
+//
+// Below the feed: opening and closing the desk with Windows Hello (D84).
 import { notification } from "@hearth/db";
 import { type HearthEvent, latestSeq, readEventsAfter } from "@hearth/kernel";
 import { DESK_LITE_KINDS, type DeskLite, deskLite } from "@hearth/modules";
 import { inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
+import { z } from "zod";
+import { DESK_HEADER, desks } from "../auth/desk.ts";
+import { helloKey, signedByHello } from "../auth/hello.ts";
 import { requireCaller } from "../auth/middleware.ts";
 import { checkToken } from "../auth/tokens.ts";
 import type { AppEnv, ServerDeps } from "../env.ts";
-import { messageFor, PUSH_KINDS, type PushMessage, worthPushing } from "../push.ts";
+import { messageFor, PUSH_KINDS, type PushMessage, worthTelling } from "../push.ts";
+import { fromTheApp, NOT_THE_APP } from "./auth.ts";
 
 const KEEP_ALIVE_MS = 20_000;
 /** A reconnect catches up on what it missed, but nothing older than this: it's news, not a log. */
@@ -26,6 +34,9 @@ const KINDS = [...new Set([...PUSH_KINDS, "system.health_changed", ...DESK_LITE_
 const WHILE_BUSY_MS = 2_000;
 /** How long one read of the dock's status serves every feed on this server. */
 const SHARE_MS = 1_000;
+
+const unlockBody = z.object({ challenge: z.string().max(128), signature: z.string().max(1024) });
+const SHUT = { open: false, until: null, idleUntil: null };
 
 const NAMES: Record<string, string> = {
   worker: "Nook's worker",
@@ -41,13 +52,14 @@ export function healthMessage(p: Record<string, unknown>, seq: number): PushMess
   const tag = `health:${component}:${seq}`;
   if (p.status === "ok") {
     if (p.previous !== "degraded" && p.previous !== "failing") return null;
-    return { title: `${name}: working again`, body: "", url: "/settings", tag };
+    return { title: `${name}: working again`, body: "", url: "/settings", tag, kind: "health" };
   }
   return {
     title: p.status === "failing" ? `${name} isn't working` : `${name} needs a look`,
     body: "Open Nook's Settings to see what's wrong.",
     url: "/settings",
     tag,
+    kind: "health",
   };
 }
 
@@ -59,7 +71,7 @@ export async function messagesFor(
 ): Promise<{ seq: number; message: PushMessage }[]> {
   const fresh = events.filter((e) => now - e.at.getTime() <= REPLAY_MS);
   // An interrupt held for quiet hours has two events: only its delivery is worth one.
-  const worth = fresh.filter((e) => PUSH_KINDS.includes(e.kind) && worthPushing(e.payload));
+  const worth = fresh.filter((e) => PUSH_KINDS.includes(e.kind) && worthTelling(e.payload));
   const ids = worth.map((e) => String(e.payload.notificationId));
   const rows = ids.length
     ? await db.select().from(notification).where(inArray(notification.id, ids))
@@ -259,6 +271,64 @@ export function desktopRoutes() {
       unsubscribe();
       await pumping;
       await status.settled();
+    });
+  });
+
+  // The desk (D84, auth/desk.ts): Windows Hello signs a fresh challenge with this PC's key, as the
+  // window's sign-in does (D80), and the signature opens this token's desk and gives the app the
+  // desk's secret. Each of these takes the app itself: its token, straight from this PC through no
+  // proxy.
+  app.post("/desk/challenge", async (c) => {
+    if (!fromTheApp(c)) return c.json({ error: NOT_THE_APP }, 403);
+    if (!(await helloKey(c.get("deps").kernel.db)))
+      return c.json({ error: "Windows Hello isn't set up for this PC. Connect again." }, 409);
+    c.header("Cache-Control", "no-store");
+    return c.json({ challenge: desks.challenge(c.get("token")!) });
+  });
+
+  app.post("/desk/unlock", async (c) => {
+    if (!fromTheApp(c)) return c.json({ error: NOT_THE_APP }, 403);
+    const { kernel } = c.get("deps");
+    const token = c.get("token")!;
+    const body = unlockBody.safeParse(await c.req.json().catch(() => null));
+    const locks = body.success ? desks.takeChallenge(body.data.challenge, token) : null;
+    const key = await helloKey(kernel.db);
+    if (!body.success || locks === null || !key)
+      return c.json({ error: "That unlock ran out. Try again." }, 410);
+    if (!signedByHello(key, body.data.challenge, body.data.signature)) {
+      console.warn("[auth] desk unlock refused: not signed by this PC's Windows Hello key");
+      return c.json({ error: "Windows Hello's signature didn't match." }, 401);
+    }
+    // Checked again now, after the key was read: a lock while it was read wins.
+    const opened = desks.unlock(token, kernel.clock.now(), locks);
+    if (!opened) return c.json({ error: "Windows locked meanwhile. Unlock again." }, 410);
+    c.header("Cache-Control", "no-store");
+    return c.json({
+      secret: opened.secret,
+      until: opened.until.toISOString(),
+      idleUntil: opened.idleUntil.toISOString(),
+    });
+  });
+
+  // Windows locked or went to sleep: the desk stays shut until Windows Hello opens it again.
+  // Shutting it only takes power away, so it needs no secret.
+  app.post("/desk/lock", (c) => {
+    if (!fromTheApp(c)) return c.json({ error: NOT_THE_APP }, 403);
+    desks.lock(c.get("token")!);
+    return c.json(SHUT);
+  });
+
+  // Open only for whoever holds the desk's secret; to anyone else it reads shut.
+  app.get("/desk", (c) => {
+    if (!fromTheApp(c)) return c.json({ error: NOT_THE_APP }, 403);
+    const now = c.get("deps").kernel.clock.now();
+    const times = desks.check(c.get("token")!, c.req.header(DESK_HEADER), now);
+    c.header("Cache-Control", "no-store");
+    if (!times) return c.json(SHUT);
+    return c.json({
+      open: true,
+      until: times.until.toISOString(),
+      idleUntil: times.idleUntil.toISOString(),
     });
   });
   return app;
