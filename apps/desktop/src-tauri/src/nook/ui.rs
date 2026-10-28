@@ -42,9 +42,12 @@ fn allowed(label: &str, cmd: &UiCmd) -> bool {
         | UiCmd::SaveFixtures
         | UiCmd::ExportDiag => label == PANEL,
         UiCmd::Drawn | UiCmd::OpenToday | UiCmd::Popover { .. } => chrome,
-        UiCmd::DockHover { .. } | UiCmd::DockMenu | UiCmd::DockDrag | UiCmd::DockOpen { .. } => {
-            label == DOCK_LABEL
-        }
+        UiCmd::DockHover { .. }
+        | UiCmd::DockMenu
+        | UiCmd::DockDrag
+        | UiCmd::DockOpen { .. }
+        | UiCmd::DockTalk
+        | UiCmd::DockLabel { .. } => label == DOCK_LABEL,
     }
 }
 
@@ -260,6 +263,14 @@ fn handle(shared: &Arc<Shared>, label: &str, cmd: UiCmd) -> Result<UiReply, Stri
             dockact::open(shared, page);
             None
         }
+        UiCmd::DockTalk => {
+            dockact::talk(&shared.app);
+            None
+        }
+        UiCmd::DockLabel { top, bottom, wide } => {
+            dockwin::label(shared, top, bottom, wide);
+            None
+        }
         UiCmd::Popover { open } => {
             barwin::popover(shared, open);
             None
@@ -351,6 +362,12 @@ mod tests {
             UiCmd::DockMenu,
             UiCmd::DockDrag,
             UiCmd::DockOpen { page },
+            UiCmd::DockTalk,
+            UiCmd::DockLabel {
+                top: 0,
+                bottom: 32,
+                wide: 200,
+            },
         ];
         let mut all = vec![
             UiCmd::Ready,

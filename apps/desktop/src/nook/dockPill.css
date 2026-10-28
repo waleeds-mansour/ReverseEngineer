@@ -1,0 +1,322 @@
+/* Nook's agent dock, open (dock.css is the tab): a column of four floating capsules 14 px in from
+   the screen's edge, each a dark gradient with a bright top edge, a hairline and a close drop (the
+   window is clipped to what it draws, dockclip.rs, so a wider one would be cut off): the Inbox
+   button and its badge, the agents' dots, the tools (Pip's mark, the mic, and the "point at it"
+   slot), and "…". It springs in from the edge as the tab folds away and fades back out toward
+   it. Beside a hovered dot, toward the middle of the screen, a status label in the same material
+   says the dot's state and last line, glides from dot to dot, and is itself the button that opens
+   where that dot's agent is, as its chevron shows. The sizes match docksize.rs. */
+
+.nd-pill {
+  position: absolute;
+  top: 50%;
+  right: var(--pill-inset);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pill-gap);
+  width: var(--pill-wide);
+  translate: 0 -50%;
+  transform-origin: 100% 50%;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(calc(var(--out) * 18px)) scale(0.92);
+  transition:
+    opacity 200ms var(--ease-in),
+    transform 200ms var(--ease-in),
+    visibility 0s 200ms;
+}
+
+:root[data-edge="left"] .nd-pill {
+  right: auto;
+  left: var(--pill-inset);
+  transform-origin: 0 50%;
+}
+
+:root[data-open] .nd-pill {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    opacity 160ms var(--ease-out),
+    transform var(--spring-panel-ms) var(--spring-panel),
+    visibility 0s;
+}
+
+.nd-cap {
+  --nd-cap: linear-gradient(180deg, #48484c 0%, #2a2a2d 55%, #232326 100%);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: var(--pill-wide);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 17px;
+  background: var(--nd-cap);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.2),
+    inset 0 0 0 1px rgb(255 255 255 / 0.08),
+    0 1px 2px rgb(0 0 0 / 0.6);
+  color: rgb(255 255 255 / 0.9);
+}
+
+.nd-round {
+  justify-content: center;
+  height: var(--pill-wide);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    scale 120ms var(--ease-out),
+    background 120ms var(--ease-out);
+}
+
+.nd-round:hover {
+  background:
+    linear-gradient(rgb(255 255 255 / 0.07), rgb(255 255 255 / 0.07)),
+    var(--nd-cap);
+}
+
+.nd-round:active {
+  scale: 0.94;
+}
+
+.nd-inbox .nd-badge {
+  top: -4px;
+  right: -4px;
+}
+
+:root[data-edge="left"] .nd-inbox .nd-badge {
+  right: auto;
+  left: -4px;
+}
+
+.nd-agents {
+  gap: 9px;
+  padding: 12px 0;
+}
+
+.nd-tools {
+  gap: 12px;
+  padding: 11px 0;
+}
+
+/* A dot or a tool: as wide as the column, with a hit area over the gaps around it and a faint
+   disc behind it on hover. */
+
+.nd-dot,
+.nd-tool {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--pill-wide);
+  height: 11px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.nd-tool {
+  height: 17px;
+}
+
+.nd-tool[data-tool="pip"] {
+  height: 18px;
+}
+
+.nd-tool[hidden] {
+  display: none;
+}
+
+.nd-dot::after,
+.nd-tool::after {
+  content: "";
+  position: absolute;
+  inset: -5px 0;
+}
+
+.nd-dot::before,
+.nd-tool::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.1);
+  opacity: 0;
+  transition: opacity 120ms var(--ease-out);
+}
+
+.nd-tool::before {
+  width: 28px;
+  height: 28px;
+}
+
+.nd-dot:hover::before,
+.nd-dot[data-hover]::before,
+.nd-tool:hover::before {
+  opacity: 1;
+}
+
+.nd-dot .nd-mark {
+  --slot: 11px;
+  --solid: 9px;
+  --idle: 7px;
+  position: relative;
+  transition: scale 120ms var(--ease-out);
+}
+
+.nd-dot:active .nd-mark,
+.nd-tool:active > svg {
+  scale: 0.9;
+}
+
+.nd-tool > svg {
+  position: relative;
+  transition:
+    scale 120ms var(--ease-out),
+    color 200ms var(--ease-out);
+}
+
+/* The mic is blue while Pip listens. */
+.nd-tool[data-on] {
+  color: var(--nd-working);
+}
+
+.nd-round:focus-visible,
+.nd-dot:focus-visible,
+.nd-tool:focus-visible,
+.nd-label:focus-visible {
+  outline: 2px solid var(--nd-working);
+  outline-offset: 1px;
+}
+
+/* The status label, beside the hovered dot. */
+
+.nd-label {
+  position: absolute;
+  top: 0;
+  right: calc(var(--pill-inset) + var(--pill-wide) + var(--label-gap));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  max-width: var(--label-wide);
+  margin: 0;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 16px;
+  --nd-cap: linear-gradient(180deg, #48484c 0%, #2a2a2d 55%, #232326 100%);
+  background: var(--nd-cap);
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.2),
+    inset 0 0 0 1px rgb(255 255 255 / 0.08),
+    0 1px 2px rgb(0 0 0 / 0.6);
+  white-space: nowrap;
+  translate: 0 calc(var(--label-y, 0px) - 16px);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(calc(var(--out) * 6px));
+  transition:
+    opacity 120ms var(--ease-in),
+    transform 120ms var(--ease-in),
+    visibility 0s 120ms;
+}
+
+:root[data-edge="left"] .nd-label {
+  right: auto;
+  left: calc(var(--pill-inset) + var(--pill-wide) + var(--label-gap));
+}
+
+:root[data-label] .nd-label {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    opacity 180ms var(--ease-quick),
+    transform 180ms var(--ease-quick),
+    translate var(--spring-general-ms) var(--spring-general),
+    visibility 0s;
+}
+
+.nd-label:hover {
+  background:
+    linear-gradient(rgb(255 255 255 / 0.07), rgb(255 255 255 / 0.07)),
+    var(--nd-cap);
+}
+
+.nd-label-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--nd-idle);
+  transition: background-color 200ms var(--ease-out);
+}
+
+.nd-label[data-state="working"] .nd-label-dot {
+  background: var(--nd-working);
+}
+
+.nd-label[data-state="needs_you"] .nd-label-dot {
+  background: var(--nd-needs);
+}
+
+.nd-label[data-state="done"] .nd-label-dot {
+  background: var(--nd-done);
+}
+
+.nd-label-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: 500 14px/18px var(--font-sans);
+  color: rgb(255 255 255 / 0.6);
+}
+
+/* New words come in from just below as the label moves to another dot. */
+.nd-label-text[data-swap] {
+  animation: nd-swap 180ms var(--ease-quick);
+}
+
+@keyframes nd-swap {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+
+.nd-label-head {
+  font-weight: 500;
+  color: #fff;
+}
+
+.nd-label-tail:not(:empty)::before {
+  content: " · ";
+}
+
+.nd-chev {
+  flex: none;
+  margin-left: -2px;
+  font: 600 17px/1 var(--font-sans);
+  color: rgb(255 255 255 / 0.45);
+  translate: 0 -1px;
+  transition:
+    color 120ms var(--ease-out),
+    translate 120ms var(--ease-out);
+}
+
+.nd-label:hover .nd-chev {
+  color: rgb(255 255 255 / 0.85);
+  translate: 2px -1px;
+}

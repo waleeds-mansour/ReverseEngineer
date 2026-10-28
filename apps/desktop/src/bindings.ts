@@ -1015,7 +1015,12 @@ id: string; label: string; kind: AgentKind; state: AgentState;
 /**
  * Its last line, shown with the label when the dot is hovered.
  */
-line: string }
+line: string; 
+/**
+ * How many things behind this dot wait for the owner: the yeses, and what Pip asks. The dock's
+ * count badge is these added up.
+ */
+waiting: number }
 /**
  * What kind of agent a dot on the dock stands for.
  */
@@ -1240,7 +1245,7 @@ agents: AgentDot[]; dock: DockView }
 export type ClipboardHandling = "dont_modify" | "copy_to_clipboard"
 export type CustomSounds = { start: boolean; stop: boolean }
 /**
- * What a button on the agent dock's card opens in Hearth's window.
+ * What the agent dock's status label or Pip's mark opens in Hearth's window.
  */
 export type DockPage = 
 /**
@@ -1269,9 +1274,19 @@ shown: boolean;
  */
 why_not: string | null;
 /**
- * The pointer is over the dock, and its card has room to open.
+ * The pointer is over the dock, and its open pill has room.
  */
-open: boolean; edge: Edge }
+open: boolean; edge: Edge; 
+/**
+ * The dock's short tones, from its menu: something new waits, a service has trouble, Pip
+ * finished.
+ */
+sounds: boolean; 
+/**
+ * The dots' counts and services come from Hearth's notify feed, not the tray. The sounds
+ * start over when this changes, so the feed coming back is no news.
+ */
+feed: boolean }
 /**
  * The screen edge one of Nook's strips sits along: the bar the top, the agent dock a side.
  */
@@ -1566,7 +1581,7 @@ export type UiCmd =
  */
 { kind: "set_dock"; on: boolean } |
 /**
- * The pointer came over the agent dock, or left it: its card opens or closes.
+ * The pointer came over the agent dock, or left it: its open pill gets room, or gives it back.
  */
 { kind: "dock_hover"; open: boolean } | 
 /**
@@ -1574,17 +1589,27 @@ export type UiCmd =
  */
 { kind: "set_dock_edge"; edge: Edge } | 
 /**
- * A right click on the agent dock's strip: its menu, at the pointer.
+ * A right click on the agent dock, or its "…": its menu, at the pointer.
  */
 { kind: "dock_menu" } | 
 /**
- * The agent dock's strip was pressed and moved: it follows the pointer until let go.
+ * The agent dock was pressed and moved: it follows the pointer until let go.
  */
 { kind: "dock_drag" } | 
 /**
- * A button on the agent dock's card: a page of Hearth's window.
+ * A button on the agent dock's open pill or label: a page of Hearth's window.
  */
-{ kind: "dock_open"; page: DockPage }
+{ kind: "dock_open"; page: DockPage } | 
+/**
+ * The mic on the agent dock's open pill: talk to Pip, as talk mode's hotkey does.
+ */
+{ kind: "dock_talk" } | 
+/**
+ * Where the agent dock's status label is, in CSS px from the window's top: anywhere from
+ * `top` to `bottom` while it glides between dots, and `wide`; 0 wide once it is gone. The
+ * window takes the pointer only there and on what else it draws.
+ */
+{ kind: "dock_label"; top: number; bottom: number; wide: number }
 export type UiReply = { state: NookState; 
 /**
  * Where a saved file went.

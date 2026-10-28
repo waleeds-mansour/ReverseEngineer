@@ -3,6 +3,7 @@
 // settings of Windows the bar reads. None of this goes near another app's window: the bar's only
 // write outside its own windows is handing the foreground back after a click (focus.rs).
 
+use super::dockclip::Shape;
 use super::probe::Rect;
 use std::ffi::c_void;
 use tauri::{Runtime, WebviewWindow};
@@ -12,9 +13,13 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{
 };
 use webview2_com::TrySuspendCompletedHandler;
 use windows::core::Interface;
-use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+use windows::Win32::Foundation::{HWND, LPARAM, POINT, WPARAM};
 use windows::Win32::Graphics::Dwm::{
     DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND,
+};
+use windows::Win32::Graphics::Gdi::{
+    CombineRgn, CreatePolygonRgn, CreateRectRgn, CreateRoundRectRgn, DeleteObject, SetWindowRgn,
+    RGN_OR, WINDING,
 };
 use windows::Win32::UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW};
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -67,6 +72,41 @@ pub fn place<R: Runtime>(w: &WebviewWindow<R>, r: Rect) {
     if let Some(h) = hwnd(w) {
         let flags = SWP_NOACTIVATE | SWP_NOZORDER;
         let _ = unsafe { SetWindowPos(h, None, r.left, r.top, r.width(), r.height(), flags) };
+    }
+}
+
+/// Clips the window to shapes, in physical px from its top-left: only there is it drawn and
+/// does it take the pointer, so a click anywhere else in it reaches the window under it. Windows
+/// keeps the region it is given; one it refuses is let go here.
+pub fn clip<R: Runtime>(w: &WebviewWindow<R>, shapes: &[Shape]) {
+    let Some(h) = hwnd(w) else {
+        return;
+    };
+    unsafe {
+        let all = CreateRectRgn(0, 0, 0, 0);
+        if all.is_invalid() {
+            return;
+        }
+        for shape in shapes {
+            let part = match shape {
+                Shape::Rect(r) => CreateRectRgn(r.left, r.top, r.right, r.bottom),
+                Shape::Round(r, radius) => {
+                    let d = 2 * radius;
+                    CreateRoundRectRgn(r.left, r.top, r.right + 1, r.bottom + 1, d, d)
+                }
+                Shape::Polygon(p) => {
+                    let points: Vec<POINT> = p.iter().map(|&(x, y)| POINT { x, y }).collect();
+                    CreatePolygonRgn(&points, WINDING)
+                }
+            };
+            if !part.is_invalid() {
+                CombineRgn(Some(all), Some(all), Some(part), RGN_OR);
+                let _ = DeleteObject(part.into());
+            }
+        }
+        if SetWindowRgn(h, Some(all), true) == 0 {
+            let _ = DeleteObject(all.into());
+        }
     }
 }
 

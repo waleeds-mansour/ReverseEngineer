@@ -157,6 +157,7 @@ pub fn init(app: &AppHandle) {
         }),
         dock: Mutex::new(DockRun {
             place: super::dockplace::load(app),
+            sounds: settings.dock_sounds,
             ..DockRun::new(settings.dock)
         }),
         chrome: Mutex::new(Chrome::new(settings::load_theme(app))),

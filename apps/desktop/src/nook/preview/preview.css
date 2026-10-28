@@ -1,9 +1,59 @@
 /* The preview stands in for the desktop behind the glass: DWM's acrylic isn't there in a
-   browser, so a soft wallpaper shows what the translucent fill sits on. */
+   browser, so a soft wallpaper shows what the translucent fill sits on. The dock's preview has a
+   dusk wallpaper, as the dark tab and pill mostly sit on, and frames the dock's window at the
+   page's edge, sized by preview/dock.ts, with the screen's black bezel beyond it when asked. */
 
 html.preview-wall,
 html.preview-wall body {
   background:
     radial-gradient(60% 140% at 15% 0%, #6aa7e8 0%, transparent 70%),
     radial-gradient(50% 160% at 85% 100%, #e9a46a 0%, transparent 70%), #8a92a6;
+}
+
+html.preview-wall.preview-dock,
+html.preview-wall.preview-dock body {
+  background:
+    radial-gradient(70% 120% at 20% 10%, #8a6fb0 0%, transparent 70%),
+    radial-gradient(60% 120% at 85% 95%, #7a5566 0%, transparent 70%), #3b4258;
+}
+
+html.preview-dock {
+  --bezel: 0px;
+}
+
+html.preview-dock[data-bezel] {
+  --bezel: 28px;
+}
+
+html.preview-dock #dock {
+  position: fixed;
+  top: 50%;
+  right: var(--bezel);
+  width: var(--frame-w);
+  height: var(--frame-h);
+  translate: 0 -50%;
+}
+
+html.preview-dock[data-edge="left"] #dock {
+  right: auto;
+  left: var(--bezel);
+}
+
+html.preview-dock[data-frame] #dock {
+  outline: 1px dashed rgb(255 255 255 / 0.45);
+}
+
+html.preview-dock[data-bezel] body::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--bezel);
+  background: #000;
+}
+
+html.preview-dock[data-bezel][data-edge="left"] body::after {
+  right: auto;
+  left: 0;
 }

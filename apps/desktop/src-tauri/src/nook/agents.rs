@@ -9,7 +9,8 @@
 // not answering or this app without its address, the background work or the syncs having trouble,
 // or something else Hearth watches failing. While the feed is open the server is answering and
 // the rest is the server's own reading; otherwise it is the tray's, and until the tray's first
-// check comes back, Pip is alone.
+// check comes back, Pip is alone. Each dot also counts what behind it waits for the owner, the
+// yeses and what Pip asks, and the dock's count badge adds those up.
 
 use super::chrome::{AgentDot, AgentKind, AgentState, Health, PipMood, PipView, ServicesView};
 use super::live::{Live, Turn};
@@ -21,6 +22,7 @@ fn dot(id: &str, label: &str, kind: AgentKind, state: AgentState, line: String) 
         kind,
         state,
         line,
+        waiting: 0,
     }
 }
 
@@ -59,10 +61,12 @@ pub fn pip_dot(pip: &PipView, services: &ServicesView, live: Option<&Live>) -> A
     let down = (services.checked && services.pip == Health::Down)
         || live.is_some_and(|l| l.pip == Health::Down);
     let paused = services.pip_paused || live.is_some_and(|l| l.paused);
+    // Without the feed, what waits on the bar's Pip chip is what Pip asks of the owner.
+    let asks = if live.is_none() { pip.waiting } else { 0 };
     let (state, line) = match pip.mood {
         PipMood::Listening => (AgentState::Working, "Listening".to_string()),
         PipMood::Thinking => (AgentState::Working, "Thinking".to_string()),
-        _ if live.is_none() && pip.waiting > 0 => (AgentState::NeedsYou, waits(pip.waiting)),
+        _ if asks > 0 => (AgentState::NeedsYou, waits(asks)),
         _ if down => (AgentState::NeedsYou, "Pip isn't answering".to_string()),
         PipMood::Happy => (AgentState::Done, "Answered".to_string()),
         PipMood::Idle => match live.and_then(turn_line) {
@@ -71,7 +75,10 @@ pub fn pip_dot(pip: &PipView, services: &ServicesView, live: Option<&Live>) -> A
             None => (AgentState::Idle, "Resting".to_string()),
         },
     };
-    dot("pip", "Pip", AgentKind::Pip, state, line)
+    AgentDot {
+        waiting: asks,
+        ..dot("pip", "Pip", AgentKind::Pip, state, line)
+    }
 }
 
 fn troubled(h: Health) -> Option<&'static str> {
@@ -96,13 +103,16 @@ fn needs(id: &str, label: &str, line: &str) -> AgentDot {
 pub fn dots(pip: &PipView, services: &ServicesView, live: Option<&Live>) -> Vec<AgentDot> {
     let mut all = vec![pip_dot(pip, services, live)];
     if let Some(n) = live.map(|l| l.approvals).filter(|n| *n > 0) {
-        all.push(dot(
-            "approvals",
-            "Needs your yes",
-            AgentKind::Approvals,
-            AgentState::NeedsYou,
-            yeses(n),
-        ));
+        all.push(AgentDot {
+            waiting: n,
+            ..dot(
+                "approvals",
+                "Needs your yes",
+                AgentKind::Approvals,
+                AgentState::NeedsYou,
+                yeses(n),
+            )
+        });
     }
     if let Some(l) = live {
         // The feed is open, so the server is answering.

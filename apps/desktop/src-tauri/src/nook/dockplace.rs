@@ -1,14 +1,16 @@
 // Where the agent dock sits: which side of the primary monitor, and how far down it. The owner
-// picks the side in Nook's panel or the dock's own menu, and drags the strip along it; each side
-// keeps its own spot, as the fraction of the edge's length where the strip's middle is, so the
-// strip comes back to the same place after a resolution or monitor change. It starts on the right
-// edge, halfway down. Unlike Nook's switches, where the dock sits turns nothing on, so a stored
+// picks the side in Nook's panel or the dock's own menu, and drags the edge tab along it; each side
+// keeps its own spot, as the fraction of the edge's length where the tab's middle is, so the tab
+// comes back to the same place after a resolution or monitor change. It starts on the right edge,
+// halfway down, and goes no higher or lower than leaves room for its open pill, which opens
+// centred on it, within the monitor's work area (usable), so never under the taskbar. Unlike Nook's
+// switches, where the dock sits turns nothing on, so a stored
 // value that doesn't read is simply the defaults, and the rest of Nook carries on. It is kept in
 // the settings store under a key of its own, next to Nook's switches.
 
 use super::bar::Place;
 use super::chrome::Edge;
-use super::dock::{dock_rect, window_rect};
+use super::docksize::{dock_rect, window_rect};
 use super::probe::Rect;
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -23,7 +25,7 @@ pub const PLACE_KEY: &str = "nook_dock_place";
 pub struct DockPlace {
     /// The side it sits on; the top is the bar's, so it reads as the right.
     pub edge: Edge,
-    /// How far down the left edge the strip's middle is: 0 at the top, 1 at the bottom.
+    /// How far down the left edge the tab's middle is: 0 at the top, 1 at the bottom.
     pub left: f64,
     /// The same on the right edge.
     pub right: f64,
@@ -40,7 +42,7 @@ impl Default for DockPlace {
 }
 
 impl DockPlace {
-    /// How far down its own side the strip is.
+    /// How far down its own side the tab is.
     pub fn along(&self) -> f64 {
         match self.edge {
             Edge::Left => self.left,
@@ -97,26 +99,42 @@ fn fraction(f: f64) -> f64 {
     }
 }
 
-/// The tops the strip may have on `at`: from as far below the monitor's top as the strip floats
-/// in from its side, down to where the strip and the card's room beside it end as far above the
-/// bottom. The room is kept whether or not the card is open, so opening it never moves the strip.
-fn tops(at: &Place, edge: Edge, dots: usize) -> (i32, i32) {
+/// The monitor as the dock may use it: as tall as its work area, so the open pill never reaches
+/// under the taskbar, and as wide as the monitor, so the tab stays flush with the screen's edge.
+/// The monitor itself when there is no work area, or one that doesn't fit it.
+pub fn usable(at: &Place, work: Option<Rect>) -> Place {
     let m = at.rect;
-    let strip = dock_rect(at, edge, dots);
-    let inset = match edge {
-        Edge::Left => strip.left - m.left,
-        _ => m.right - strip.right,
-    };
-    let open = window_rect(at, edge, dots, true);
-    let lo = m.top + inset;
-    (lo, (m.bottom - inset - (open.bottom - open.top)).max(lo))
+    match work {
+        Some(w) if w.top >= m.top && w.bottom <= m.bottom && w.bottom > w.top => Place {
+            rect: Rect {
+                top: w.top,
+                bottom: w.bottom,
+                ..m
+            },
+            dpi: at.dpi,
+        },
+        _ => *at,
+    }
 }
 
-/// The strip's top for `along`, kept where the strip and its card stay on the monitor. Halfway
-/// down is exactly where dock_rect centres it.
+/// The tops the resting window may have on `at`: as high as leaves the open pill's window, which
+/// reaches above it, on the monitor, down to as low as does the same below. The room is kept
+/// whether or not the pill is open, so opening it never moves the tab.
+fn tops(at: &Place, edge: Edge, dots: usize) -> (i32, i32) {
+    let m = at.rect;
+    let rest = dock_rect(at, edge, dots);
+    let open = window_rect(at, edge, dots, true);
+    let above = (rest.top - open.top).max(0);
+    let below = open.bottom.max(rest.bottom) - rest.top;
+    let lo = m.top + above;
+    (lo, (m.bottom - below).max(lo))
+}
+
+/// The resting window's top for `along`, kept where it and its open pill stay on the monitor.
+/// Halfway down is exactly where dock_rect centres it.
 pub fn top_at(at: &Place, edge: Edge, dots: usize, along: f64) -> i32 {
-    let (m, strip) = (at.rect, dock_rect(at, edge, dots));
-    let long = f64::from(strip.bottom - strip.top);
+    let (m, rest) = (at.rect, dock_rect(at, edge, dots));
+    let long = f64::from(rest.bottom - rest.top);
     let height = f64::from(m.bottom - m.top);
     // The small nudge keeps a top read back from its own fraction from landing a pixel short.
     let top = m.top + (fraction(along) * height - long / 2.0 + 1e-6).floor() as i32;
@@ -124,19 +142,19 @@ pub fn top_at(at: &Place, edge: Edge, dots: usize, along: f64) -> i32 {
     top.clamp(lo, hi)
 }
 
-/// How far down the edge a strip with its top at `top` is, once kept on the monitor.
+/// How far down the edge a resting window with its top at `top` is, once kept on the monitor.
 pub fn along_at(at: &Place, edge: Edge, dots: usize, top: i32) -> f64 {
-    let (m, strip) = (at.rect, dock_rect(at, edge, dots));
+    let (m, rest) = (at.rect, dock_rect(at, edge, dots));
     let height = m.bottom - m.top;
     if height <= 0 {
         return 0.5;
     }
     let (lo, hi) = tops(at, edge, dots);
-    let middle = f64::from(top.clamp(lo, hi) - m.top) + f64::from(strip.bottom - strip.top) / 2.0;
+    let middle = f64::from(top.clamp(lo, hi) - m.top) + f64::from(rest.bottom - rest.top) / 2.0;
     fraction(middle / f64::from(height))
 }
 
-/// The dock's window where `along` puts the strip: window_rect's, moved along the edge.
+/// The dock's window where `along` puts the tab: window_rect's, moved along the edge.
 pub fn window_at(at: &Place, edge: Edge, dots: usize, open: bool, along: f64) -> Rect {
     let r = window_rect(at, edge, dots, open);
     let dy = top_at(at, edge, dots, along) - dock_rect(at, edge, dots).top;

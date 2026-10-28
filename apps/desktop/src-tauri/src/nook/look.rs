@@ -78,12 +78,13 @@ fn stop_key(app: &AppHandle) -> Vec<String> {
 /// own locks are taken and let go before Chrome's, so none is held with it.
 fn view(shared: &Shared) -> (ChromeView, bool) {
     let bar = shared.bar().view();
-    let dock = shared.dock().view();
+    let mut dock = shared.dock().view();
     let services = services(crate::hearth::status::current().as_ref());
     let stop = stop_key(&shared.app);
     let mut c = shared.chrome();
     let r = c.readings;
     let pip = c.pip.view(stop);
+    dock.feed = c.live.is_some();
     let mut next = ChromeView {
         seq: c.seq,
         theme: ThemeId::resolve(c.chosen, r.dark, r.high_contrast),
@@ -109,11 +110,12 @@ fn view(shared: &Shared) -> (ChromeView, bool) {
 }
 
 /// The view as it is now, for a reply. When it changed, every Nook page hears of it too, and the
-/// dock makes room for its dots.
+/// dock makes room for its dots and its count badge.
 pub fn fresh(shared: &Shared) -> ChromeView {
     let (view, changed) = view(shared);
     if changed {
-        dockwin::dots(shared, view.agents.len());
+        let waiting = view.agents.iter().any(|a| a.waiting > 0);
+        dockwin::dots(shared, view.agents.len(), waiting);
         ui::emit_chrome(&shared.app, &view);
     }
     view

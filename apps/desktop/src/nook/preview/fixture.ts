@@ -2,10 +2,12 @@
 // pages). It answers the bar, popover and dock with a fixture state and chrome taken from the
 // address:
 //   ?theme=dusk&mood=thinking&waiting=2&services=down&glass=0&reduced=1&popover=1&quiet=1&app=Figma&edge=left
-// and, for the dock, what Hearth's feed says: &turn=working (or thinking) and &yes=2. The dock
-// sits on the right edge, as it starts, unless &edge says otherwise. It keeps
-// every command it was asked in window.__nookAsked, for the screenshot script, and makes room for
-// the dock's card when asked, as Nook does.
+// and, for the dock, what Hearth's feed says: &turn=working (or thinking) and &yes=2, or its dots
+// outright, one per state listed (&states=working,working,needs_you,done,idle), with &badge=3 for
+// how many wait behind the first amber one. The dock sits on the right edge, as it starts, unless
+// &edge says otherwise, &sounds=0 turns its sounds off, and &feed=0 has its dots come from the tray. It keeps every command it was asked in
+// window.__nookAsked, for the screenshot script, and makes room for the dock's open pill when
+// asked, as Nook does.
 
 import type {
   AgentDot,
@@ -74,14 +76,44 @@ const services = q.get("services") ?? "ok";
 const turn = q.get("turn");
 const yes = Number(q.get("yes") ?? 0);
 
+/** What a dot listed in &states says, by its state. */
+const LINES: Record<AgentState, string> = {
+  working: "Thinking about your brief",
+  needs_you: "Wants your yes to send a reply",
+  done: "Answered your question",
+  idle: "Resting",
+};
+
+/** The dots &states lists, with what &badge says waits behind the first amber one. */
+function listedAgents(listed: string): AgentDot[] {
+  const badge = Number(q.get("badge") ?? 1);
+  let first = true;
+  return listed.split(",").map((s, i) => {
+    const state = s as AgentState;
+    const asks = state === "needs_you" && first ? badge : 0;
+    if (state === "needs_you") first = false;
+    return {
+      id: i === 0 ? "pip" : `agent-${i}`,
+      label: i === 0 ? "Pip" : `Agent ${i + 1}`,
+      kind: "pip",
+      state,
+      line: LINES[state],
+      waiting: asks,
+    };
+  });
+}
+
 /** The dock's dots, roughly as agents.rs picks them. */
 function fixtureAgents(): AgentDot[] {
+  const listed = q.get("states");
+  if (listed) return listedAgents(listed);
   const pip = (state: AgentState, line: string): AgentDot => ({
     id: "pip",
     label: "Pip",
     kind: "pip",
     state,
     line,
+    waiting: state === "needs_you" ? waiting : 0,
   });
   const service = (id: string, label: string, line: string): AgentDot => ({
     id,
@@ -89,6 +121,7 @@ function fixtureAgents(): AgentDot[] {
     kind: "service",
     state: "needs_you",
     line,
+    waiting: 0,
   });
   const all = [
     mood === "listening" || mood === "thinking"
@@ -110,6 +143,7 @@ function fixtureAgents(): AgentDot[] {
       kind: "approvals",
       state: "needs_you",
       line: `${yes} things wait for your yes`,
+      waiting: yes,
     });
   }
   if (services === "down") {
@@ -156,6 +190,8 @@ export const chrome: ChromeView = {
     why_not: null,
     open: false,
     edge: (q.get("edge") ?? "right") as Edge,
+    sounds: q.get("sounds") !== "0",
+    feed: q.get("feed") !== "0",
   },
 };
 

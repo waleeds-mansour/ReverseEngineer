@@ -244,3 +244,25 @@ fn with_the_feed_open_services_are_the_servers_reading() {
         "only something else failing outright needs the owner, as the tray reads it"
     );
 }
+
+#[test]
+fn each_dot_counts_what_waits_behind_it_for_the_docks_badge() {
+    let s = fine();
+    let total = |dots: &[AgentDot]| dots.iter().map(|d| d.waiting).sum::<u32>();
+    // Without the feed, what waits on the bar's Pip chip is Pip's.
+    let alone = dots(&pip(PipMood::Idle, 3), &s, None);
+    assert_eq!((alone[0].waiting, total(&alone)), (3, 3));
+    // Working on something for this PC, Pip still counts what it asked.
+    assert_eq!(pip_dot(&pip(PipMood::Thinking, 2), &s, None).waiting, 2);
+    // With the feed open, the yeses are counted on their own dot, and the chip's count is the
+    // bar's alone; a service in trouble waits on nothing the owner can answer.
+    let feed = Live {
+        approvals: 4,
+        worker: Health::Down,
+        ..calm()
+    };
+    let all = dots(&pip(PipMood::Idle, 3), &s, Some(&feed));
+    let counts: Vec<(&str, u32)> = all.iter().map(|d| (d.id.as_str(), d.waiting)).collect();
+    assert_eq!(counts, vec![("pip", 0), ("approvals", 4), ("worker", 0)]);
+    assert_eq!(total(&all), 4);
+}

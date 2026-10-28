@@ -1,10 +1,13 @@
-/* Nook's agent dock: a short glass-strong strip of status dots floating by a side of the screen,
-   and, while the pointer is over it, a card beside it, toward the middle of the screen, with the
-   hovered dot's label, last line and one button. The window is exactly the strip until Nook widens
-   it for the card, so the strip has a hairline edge and no outer shadow. The sizes match dock.rs
-   (DOCK_DEEP, DOCK_PAD, DOT_ROW, CARD_SIZE).
-   A working dot breathes; nothing moves when Windows or the page asks for less motion
-   (nook.css), or while the page is hidden. */
+/* Nook's agent dock at rest: the edge tab, a solid black tab flush with a side of the screen that
+   grows out of it through two S-shaped flares (its outline is dockShape.ts's), with its dots and
+   its count badge, and the dots themselves, which the open pill (dockPill.css) shares. The window is
+   the tab and a little room around it for its badge until Nook widens it for the pill, and Nook
+   clips it to what is drawn (dockclip.rs), so shadows stay close: anything past 3 px is cut off.
+   Only the tab's painted outline takes the pointer. The sizes match docksize.rs. Its colours are its own and stay dark in every theme, as a black
+   bezel does. A working dot's arc spins and colours cross-fade over 500 ms; the tab springs out of
+   the edge when the dock first shows and back out as the pill closes. Nothing moves when Windows
+   or the page asks for less motion (nook.css), and the spinners stop while the page is hidden and
+   while what they sit on, the tab or the pill, is folded away. */
 
 * {
   box-sizing: border-box;
@@ -19,176 +22,247 @@ body {
 }
 
 body {
-  font: 500 12px/16px var(--font-sans);
-  color: var(--ink);
+  font: 500 13px/16px var(--font-sans);
+  color: #fff;
   -webkit-font-smoothing: antialiased;
   user-select: none;
   cursor: default;
 }
 
 :root {
-  --dock-width: 28px;
-  --dock-pad: 6px;
-  --dot-row: 24px;
-  --card-gap: 6px;
-  --card-w: 236px;
-  --card-h: 80px;
+  /* docksize.rs */
+  --tab-deep: 25px;
+  --tab-flare: 22px;
+  --tab-gap: 9px;
+  --tab-pad: 25px;
+  --pill-inset: 14px;
+  --pill-wide: 34px;
+  --pill-gap: 8px;
+  --label-gap: 12px;
+  --label-wide: 300px;
+  /* The dots' and badge's colours. Idle is a neutral grey that reads as resting on black without
+     competing with the amber and green. */
+  --nd-working: #0a84ff;
+  --nd-track: rgb(255 255 255 / 0.2);
+  --nd-needs: #ffc75c;
+  --nd-done: #34c759;
+  --nd-idle: #6e6e73;
+  --nd-badge: #ffc75c;
+  --nd-badge-ink: #1c1c1e;
+  /* dockSpring.ts puts the springs themselves here; these stand in until it does. */
+  --spring-tab: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --spring-tab-ms: 600ms;
+  --spring-panel: cubic-bezier(0.2, 0.9, 0.3, 1);
+  --spring-panel-ms: 380ms;
+  --spring-general: cubic-bezier(0.2, 0.9, 0.3, 1);
+  --spring-general-ms: 360ms;
+  --ease-out: cubic-bezier(0, 0, 0.58, 1);
+  --ease-in: cubic-bezier(0.42, 0, 1, 1);
+  --ease-quick: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Toward the screen's edge: +1 on the right, -1 on the left. */
+  --out: 1;
+}
+
+:root[data-edge="left"] {
+  --out: -1;
 }
 
 .nd {
   position: relative;
+  width: 100%;
   height: 100%;
 }
 
-.nd-strip {
+/* The edge tab. */
+
+.nd-tab {
   position: absolute;
-  top: 0;
+  top: 50%;
+  right: 0;
+  width: var(--tab-deep);
+  height: var(--tab-h, 82px);
+  translate: 0 -50%;
+  transform-origin: 100% 50%;
+  touch-action: none;
+  /* Its painted outline takes the pointer (below), not the clear corners beside its flares. */
+  pointer-events: none;
+  transition:
+    transform var(--spring-tab-ms) var(--spring-tab),
+    opacity 160ms var(--ease-out);
+}
+
+:root[data-edge="left"] .nd-tab {
+  right: auto;
   left: 0;
+  transform-origin: 0 50%;
+}
+
+:root[data-open] .nd-tab {
+  opacity: 0;
+  transform: scaleX(0.4);
+  pointer-events: none;
+  transition:
+    transform 220ms var(--ease-out),
+    opacity 220ms var(--ease-out);
+}
+
+:root[data-mount] .nd-tab {
+  transform: scaleX(0);
+  transition: none;
+}
+
+.nd-shape {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.45));
+}
+
+.nd-shape path {
+  fill: #000;
+  pointer-events: visiblePainted;
+}
+
+:root[data-open] .nd-shape path {
+  pointer-events: none;
+}
+
+.nd-tab-dots {
+  position: absolute;
+  top: calc(var(--tab-flare) + var(--tab-pad) / 2);
+  left: 0;
+  right: 0;
   display: flex;
   flex-direction: column;
-  width: var(--dock-width);
-  padding: var(--dock-pad) 0;
-  border: 0.5px solid var(--hairline);
-  border-radius: calc(var(--dock-width) / 2);
-  background: var(--glass-strong);
-  box-shadow: inset 0 1px 0 var(--glass-edge);
+  align-items: center;
+  gap: var(--tab-gap);
+  /* A nudge of a pixel toward the screen's edge. */
+  padding-left: 2px;
 }
 
-:root[data-edge="right"] .nd-strip {
-  left: auto;
-  right: 0;
+:root[data-edge="left"] .nd-tab-dots {
+  padding-left: 0;
+  padding-right: 2px;
 }
 
-.nd-dot {
+/* A dot: a ring whose blue arc spins while its agent works, and a solid for the other states. */
+
+.nd-mark {
+  --slot: 13px;
+  --solid: 10px;
+  --idle: 8px;
   display: grid;
   place-items: center;
-  align-self: center;
-  width: var(--dot-row);
-  height: var(--dot-row);
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  cursor: pointer;
+  width: var(--slot);
+  height: var(--slot);
 }
 
-.nd-dot:hover {
-  background: var(--surface-3);
-}
-
-.nd-dot i {
+.nd-mark > i {
+  grid-area: 1 / 1;
   display: block;
-  width: 8px;
-  height: 8px;
   border-radius: 50%;
-  background: var(--border-strong);
   transition:
-    background-color var(--dur-base) var(--ease-standard),
-    transform var(--dur-base) var(--ease-standard);
+    opacity 500ms ease,
+    background-color 500ms ease;
 }
 
-.nd-dot[data-kind="pip"] i {
-  width: 10px;
-  height: 10px;
+.nd-ring {
+  width: var(--slot);
+  height: var(--slot);
+  border: 2px solid var(--nd-track);
+  border-top-color: var(--nd-working);
+  opacity: 0;
 }
 
-.nd-dot[data-state="working"] i {
-  background: var(--accent);
-  animation: nd-breathe 1.6s ease-in-out infinite;
+.nd-solid {
+  width: var(--solid);
+  height: var(--solid);
+  background: var(--nd-idle);
 }
 
-.nd-dot[data-state="needs_you"] i {
-  background: var(--warning);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 22%, transparent);
+[data-state="working"] .nd-ring {
+  opacity: 1;
+  animation: nd-spin 0.95s linear infinite;
 }
 
-.nd-dot[data-state="done"] i {
-  background: var(--positive);
+[data-state="working"][data-slow] .nd-ring {
+  animation-duration: 1.3s;
 }
 
-:root[data-hidden] .nd-dot i {
-  animation: none;
+[data-state="working"] .nd-solid {
+  opacity: 0;
+  background: var(--nd-working);
 }
 
-@keyframes nd-breathe {
-  0%,
-  100% {
-    transform: scale(1);
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent);
+[data-state="needs_you"] .nd-solid {
+  background: var(--nd-needs);
+}
+
+[data-state="done"] .nd-solid {
+  background: var(--nd-done);
+}
+
+[data-state="idle"] .nd-solid {
+  width: var(--idle);
+  height: var(--idle);
+}
+
+:root[data-hidden] .nd-ring,
+:root:not([data-open]) .nd-pill .nd-ring,
+:root[data-open] .nd-tab .nd-ring {
+  animation-play-state: paused;
+}
+
+@keyframes nd-spin {
+  to {
+    rotate: 360deg;
   }
-  50% {
-    transform: scale(1.15);
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 0%, transparent);
-  }
 }
 
-.nd-card {
+/* The count badge: amber, cut out of what it sits on by a ring of that colour. */
+
+.nd-badge {
   position: absolute;
-  left: calc(var(--dock-width) + var(--card-gap));
-  top: clamp(
-    0px,
-    calc(
-      var(--dock-pad) + var(--row, 0) * var(--dot-row) + var(--dot-row) / 2 -
-        var(--card-h) / 2
-    ),
-    calc(100vh - var(--card-h))
-  );
   display: none;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 2px;
-  width: var(--card-w);
-  height: var(--card-h);
-  padding: var(--space-2) var(--space-3);
-  border: 0.5px solid var(--hairline);
-  border-radius: var(--radius-lg);
-  background: var(--glass-strong);
-  box-shadow:
-    inset 0 1px 0 var(--glass-edge),
-    var(--shadow-1);
+  height: 16px;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--nd-badge);
+  color: var(--nd-badge-ink);
+  font: 700 10px/16px var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--nd-badge-ring, #1c1c1e);
+  pointer-events: none;
 }
 
-:root[data-edge="right"] .nd-card {
+.nd-badge[data-n] {
+  display: block;
+  animation: nd-pop 400ms var(--ease-out);
+}
+
+.nd-tab .nd-badge {
+  --nd-badge-ring: #000;
+  top: 15px;
+  left: -8px;
+}
+
+:root[data-edge="left"] .nd-tab .nd-badge {
   left: auto;
-  right: calc(var(--dock-width) + var(--card-gap));
+  right: -8px;
 }
 
-:root[data-open] .nd-card {
-  display: flex;
-}
-
-.nd-label {
-  font: 650 12px/16px var(--font-sans);
-}
-
-.nd-line {
-  max-width: 100%;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font: 500 11px/14px var(--font-sans);
-  color: var(--ink-muted);
-}
-
-.nd-act {
-  margin: 4px 0 0 -6px;
-  height: 22px;
-  padding: 0 6px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  font: 600 11px/22px var(--font-sans);
-  color: var(--accent);
-  cursor: pointer;
-}
-
-.nd-act:hover {
-  background: var(--surface-3);
-}
-
-.nd-act:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+@keyframes nd-pop {
+  0% {
+    scale: 0;
+  }
+  60% {
+    scale: 1.25;
+  }
+  100% {
+    scale: 1;
+  }
 }
