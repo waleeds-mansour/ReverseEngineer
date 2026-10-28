@@ -52,7 +52,7 @@ export async function createJarvisHarness(
   start?: string,
   opts: {
     brain?: Brain;
-    runner?: Pick<RunnerOptions, "limits" | "turnLog" | "stopCheckMs">;
+    runner?: Pick<RunnerOptions, "limits" | "turnLog" | "stopCheckMs" | "nextReplies">;
     /** Test modules to load beside Hearth's own. */
     modules?: HearthModule[];
   } = {},
@@ -82,6 +82,8 @@ export async function createJarvisHarness(
         const fired = await runDueSchedules(t.kernel.db, t.clock);
         const events = await engine.processAvailable();
         const turns = await runner.drain();
+        // Ready replies are made after a turn, in the background (D85).
+        await runner.offers?.idle();
         total.fired += fired;
         total.events += events;
         total.turns += turns;

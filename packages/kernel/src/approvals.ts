@@ -267,6 +267,8 @@ export async function resolveApproval(
             ...(extra.error ? { error: extra.error } : {}),
             ...(extra.result !== undefined ? { result: extra.result } : {}),
             ...(always && status === "executed" ? { alwaysAllow: true } : {}),
+            // Decided at the desktop's desk, opened with Windows Hello (D84).
+            ...(caller.desk ? { desk: true } : {}),
           },
         },
       ],

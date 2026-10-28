@@ -24,7 +24,8 @@ interface Pending {
 
 const hash = (secret: string) => createHash("sha256").update(secret).digest("base64url");
 
-class SingleUse {
+/** Secrets each good once, until they expire; the desk's challenges are these too (D84). */
+export class SingleUse {
   private pending: Pending[] = [];
   private readonly now: () => number;
   private readonly ttl: number;

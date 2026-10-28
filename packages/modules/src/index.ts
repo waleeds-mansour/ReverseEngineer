@@ -11,6 +11,7 @@ import { chatModule } from "./chat/index.ts";
 import { codeModule } from "./code/index.ts";
 import { connectModule } from "./connect/index.ts";
 import { dataModule } from "./data/index.ts";
+import { deskModule } from "./desk/index.ts";
 import { filesModule } from "./files/index.ts";
 import { githubModule } from "./github/index.ts";
 import { graphModule } from "./graph/index.ts";
@@ -21,6 +22,7 @@ import { memoryModule } from "./memory/index.ts";
 import { notesModule } from "./notes/index.ts";
 import { notionModule } from "./notion/index.ts";
 import { peopleModule } from "./people/index.ts";
+import { questionsModule } from "./questions/index.ts";
 import { rolesModule } from "./roles/index.ts";
 import { routinesModule } from "./routines/index.ts";
 import { sheetsModule } from "./sheets/index.ts";
@@ -60,6 +62,8 @@ export const ALL_MODULES: HearthModule[] = [
   activityModule,
   filesModule,
   codeModule,
+  questionsModule,
+  deskModule,
 ];
 
 export type { Timeline, TimelineGroup, UndoView } from "./activity/index.ts";
@@ -106,6 +110,7 @@ export { gist } from "./calendar/soon.ts";
 export type { EventView } from "./calendar/store.ts";
 export { appendLog, type LogEntry, type LogKind, routeLane } from "./chat/index.ts";
 export { MENTION_SETTLE_MS } from "./chat/mention.ts";
+export { appendNext, lastOwnerMessage, readyRepliesFor } from "./chat/next.ts";
 export {
   CONNECT_WAIT,
   type ConnectWait,
@@ -115,6 +120,15 @@ export {
   waitKey,
 } from "./connect/index.ts";
 export { CONVEX_SERVICE, type ConvexApi, FakeConvex, httpConvex } from "./data/index.ts";
+export {
+  DESK_SERVICE,
+  type DeskCard,
+  type DeskDecisions,
+  type DeskKind,
+  type DeskList,
+  deskDecisions,
+  opensAt,
+} from "./desk/index.ts";
 export { type FileView, fileMime, MAX_FILE_BYTES, SHOWN_IMAGES } from "./files/index.ts";
 export { FakeGithub, GITHUB_SERVICE, type GithubApi, httpGithub } from "./github/index.ts";
 export { GOOGLE_SERVICE, GoogleClient, googleFromEnv, SCOPES } from "./google/client.ts";
@@ -146,6 +160,16 @@ export {
   UPLOADS_SERVICE,
   type Uploads,
 } from "./notion/index.ts";
+export {
+  type AnswerContext,
+  type AnswerResult,
+  answerQuestion,
+  finishedCard,
+  firstLine,
+  listOpenQuestions,
+  QUESTION_ANSWERED,
+  type QuestionRow,
+} from "./questions/index.ts";
 export type { AttachableReflex, RoleList, RoleView } from "./roles/index.ts";
 export {
   isSealed,

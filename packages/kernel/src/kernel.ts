@@ -198,7 +198,7 @@ export class Kernel {
             outcome: "ok",
             durationMs: performance.now() - started,
             correlationId: caller.correlationId,
-            approvalId: hooks.approvalId ?? null,
+            approvalId: hooks.approvalId ?? def.auditApproval?.(input as never) ?? null,
             at: now,
           });
         }
@@ -232,7 +232,7 @@ export class Kernel {
         error: failure.message,
         durationMs: performance.now() - started,
         correlationId: caller.correlationId,
-        approvalId: hooks.approvalId ?? null,
+        approvalId: hooks.approvalId ?? def.auditApproval?.(input as never) ?? null,
         at: now,
       }).catch((e) => this.log(`Could not write audit row: ${logLine(e)}`));
       return { status: "error", ...failure };

@@ -49,9 +49,40 @@ export interface ConversationView {
   activeTurns: string[];
   /** When you last said something Jarvis hasn't started on yet, if so (D54). */
   waitingSince: string | null;
+  /** Up to two replies you might send next, offered after Pip's last answer (D85). */
+  next: ReadyReplies;
+}
+
+/** Ready replies (D85), and whether a turn that read outside content wrote them (D58). */
+export interface ReadyReplies {
+  replies: string[];
+  outside: boolean;
 }
 
 const iso = (v: string | Date) => (typeof v === "string" ? v : v.toISOString());
+
+/** A line you wrote yourself: in a Slack member's conversation, theirs isn't (D62). */
+const ownersOwn = (r: LogRecord) =>
+  r.kind === "user_message" &&
+  r.turnId === null &&
+  !String(r.payload.by ?? "").startsWith("member:");
+
+/**
+ * The ready replies to show (D85): the latest `next` entry, unless you've written since or a turn
+ * has started since (its answer will bring its own). They're only offered: you send them yourself.
+ */
+export function readyReplies(log: LogRecord[]): ReadyReplies {
+  let next: ReadyReplies = { replies: [], outside: false };
+  for (const r of [...log].sort((a, b) => a.idx - b.idx)) {
+    if (ownersOwn(r) || r.kind === "turn_started") next = { replies: [], outside: false };
+    else if (r.kind === "next" && Array.isArray(r.payload.replies))
+      next = {
+        replies: r.payload.replies.filter((x): x is string => typeof x === "string" && x !== ""),
+        outside: r.payload.outside === true,
+      };
+  }
+  return { replies: next.replies.slice(0, 2), outside: next.replies.length > 0 && next.outside };
+}
 
 export function foldConversation(log: LogRecord[]): ConversationView {
   const items: ConversationItem[] = [];
@@ -159,5 +190,6 @@ export function foldConversation(log: LogRecord[]): ConversationView {
         break;
     }
   }
-  return { items, activeTurns: [...active], waitingSince };
+  // A `next` entry is no line of its own: its replies sit under the last answer, until stale.
+  return { items, activeTurns: [...active], waitingSince, next: readyReplies(log) };
 }

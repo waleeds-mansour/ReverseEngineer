@@ -122,9 +122,9 @@ const enrollBody = z.object({ ticket: z.string().max(128), publicKey: z.string()
 const helloBody = z.object({ challenge: z.string().max(128), signature: z.string().max(1024) });
 
 /** The desktop app itself: its device token, straight from this PC, through no proxy (D80). */
-const fromTheApp = (c: Context<AppEnv>) =>
+export const fromTheApp = (c: Context<AppEnv>) =>
   c.get("caller")?.via === "device" && !c.get("viaCookie") && directFromThisPc(c);
-const NOT_THE_APP = "Only Nook's desktop app on this PC can do that.";
+export const NOT_THE_APP = "Only Nook's desktop app on this PC can do that.";
 
 const RUN_OUT_PAGE = `<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Connect again</title>

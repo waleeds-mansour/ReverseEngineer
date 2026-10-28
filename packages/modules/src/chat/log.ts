@@ -11,7 +11,9 @@ export type LogKind =
   | "turn_started"
   | "turn_finished"
   | "error"
-  | "notice";
+  | "notice"
+  /** Up to two replies the owner might send next, offered after Pip's answer (D85, next.ts). */
+  | "next";
 
 export interface LogEntry {
   kind: LogKind;

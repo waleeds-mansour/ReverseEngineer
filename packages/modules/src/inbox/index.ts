@@ -1,5 +1,5 @@
 // The inbox: everything that needs you, in one keyboard-driven list (PLAN.md section 4).
-import { approval, entity, notification, type Tx } from "@hearth/db";
+import { approval, entity, notification, question, type Tx } from "@hearth/db";
 import {
   ActionError,
   createNotification,
@@ -8,12 +8,26 @@ import {
   defineModule,
   interruptDecision,
 } from "@hearth/kernel";
-import { and, count, desc, eq, inArray, isNull, lte, ne, notExists, or, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  ne,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 import { z } from "zod";
 import { id, isoDateTime } from "../shared.ts";
 import { reminderActions, ringReminder } from "./reminders.ts";
 
-const live = (now: Date) =>
+/** Not done and not snoozed. The desk (D84) shows what this lets through, so the two agree. */
+export const live = (now: Date) =>
   and(
     ne(notification.state, "done"),
     or(isNull(notification.snoozedUntil), lte(notification.snoozedUntil, now)),
@@ -34,6 +48,26 @@ const notAwaitingDecision = (tx: Tx) =>
       ),
   );
 const NEEDS_DECISION = "This one needs a yes or a no first.";
+
+/** Not a card of Pip's question while it waits for an answer (D85): Pip's work waits on it, so
+ * it too leaves only by answering, or once it lapses. Its card's key is "question:<id>". */
+const notOpenQuestion = (tx: Tx, now: Date) =>
+  notExists(
+    tx
+      .select({ id: question.id })
+      .from(question)
+      .where(
+        and(
+          sql`${notification.dedupeKey} = 'question:' || ${question.id}`,
+          eq(question.status, "open"),
+          gt(question.expiresAt, now),
+        ),
+      ),
+  );
+const NEEDS_ANSWER = "This one needs an answer first.";
+
+/** Kinds only Nook makes, with what they need: a question's choices, a finished turn's work. */
+const NOT_TOLD = new Set(["question", "finished"]);
 
 export const inboxModule = defineModule({
   name: "inbox",
@@ -86,7 +120,7 @@ export const inboxModule = defineModule({
     defineAction({
       name: "inbox.mark",
       description:
-        "Mark inbox items unseen, seen or done. An approval's card is done once it's decided.",
+        "Mark inbox items unseen, seen or done. An approval's card is done once it's decided, and a question's once it's answered.",
       input: z.object({
         ids: z.array(id).min(1).max(500),
         state: z.enum(["unseen", "seen", "done"]),
@@ -101,6 +135,7 @@ export const inboxModule = defineModule({
               inArray(notification.id, i.ids),
               ne(notification.state, i.state),
               i.state === "done" ? notAwaitingDecision(ctx.tx) : undefined,
+              i.state === "done" ? notOpenQuestion(ctx.tx, ctx.now) : undefined,
             ),
           )
           .returning({ id: notification.id, entityId: notification.entityId });
@@ -124,14 +159,24 @@ export const inboxModule = defineModule({
         const [r] = await ctx.tx
           .update(notification)
           .set({ snoozedUntil: until, state: "seen", updatedAt: ctx.now })
-          .where(and(eq(notification.id, i.id), notAwaitingDecision(ctx.tx)))
+          .where(
+            and(
+              eq(notification.id, i.id),
+              notAwaitingDecision(ctx.tx),
+              notOpenQuestion(ctx.tx, ctx.now),
+            ),
+          )
           .returning({ id: notification.id, entityId: notification.entityId });
         if (!r) {
           const [n] = await ctx.tx
-            .select({ id: notification.id })
+            .select({ kind: notification.kind })
             .from(notification)
             .where(eq(notification.id, i.id));
-          if (n) throw new ActionError("conflict", NEEDS_DECISION);
+          if (n)
+            throw new ActionError(
+              "conflict",
+              n.kind === "question" ? NEEDS_ANSWER : NEEDS_DECISION,
+            );
           return { snoozed: false };
         }
         ctx.emit({
@@ -185,6 +230,12 @@ export const inboxModule = defineModule({
       }),
       risk: "internal",
       async handler(i, ctx) {
+        // A question with choices is asked with ask_owner, and finished work is Nook's to card.
+        if (NOT_TOLD.has(i.kind))
+          throw new ActionError(
+            "invalid_input",
+            `A ${i.kind} card can't be made this way: ask with ask_owner, or tell with another kind.`,
+          );
         const created = await createNotification(ctx, {
           ...(i.outside ? { outside: true } : {}),
           kind: i.kind,

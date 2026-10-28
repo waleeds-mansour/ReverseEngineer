@@ -28,6 +28,16 @@ export const DEVICE_SCOPES: Record<string, string[]> = {
     "POST /api/auth/desktop/hello/enroll",
     "POST /api/auth/desktop/hello/challenge",
     "POST /api/auth/desktop/hello/verify",
+    // The desk (D84): Windows Hello opens it for a sitting, and only while it's open do the desk's
+    // actions answer. The token alone gets a refusal from each of them.
+    "POST /api/desktop/desk/challenge",
+    "POST /api/desktop/desk/unlock",
+    "POST /api/desktop/desk/lock",
+    "GET /api/desktop/desk",
+    "desk.list",
+    "desk.decide",
+    "desk.mark",
+    "desk.answer",
   ],
 };
 
@@ -43,6 +53,103 @@ export async function pairDevice(db: DbOrTx, name: string, now = new Date()): Pr
     { principal: PRINCIPAL.owner, kind: "api", label: label(name), ttlDays: null, scopes },
     now,
   );
+}
+
+/** What a sync changed for one device's token. */
+export interface ScopeChange {
+  name: string;
+  added: string[];
+  removed: string[];
+}
+
+/**
+ * Sets every live device token's scopes to its device's list above, at each server start (X1, D84):
+ * a device paired before a scope was added gets it with the next deploy, without pairing again,
+ * and a scope taken off the list is taken from its token. A device name the list doesn't know is
+ * left as it is, and an empty list is never written: no scopes would read as a full sign-in.
+ * Running it again changes nothing.
+ */
+export async function syncDeviceScopes(db: DbOrTx): Promise<ScopeChange[]> {
+  const rows = await db
+    .select({ hash: session.tokenHash, label: session.label, scopes: session.scopes })
+    .from(session)
+    // A device's token is an API one: a browser's label is its user agent, which says anything.
+    .where(
+      and(eq(session.kind, "api"), like(session.label, "device:%"), isNull(session.revokedAt)),
+    );
+  const changes: ScopeChange[] = [];
+  for (const row of rows) {
+    const name = row.label.slice("device:".length);
+    // Own names only: "device:constructor" must not find something on Object's prototype.
+    const want = Object.hasOwn(DEVICE_SCOPES, name) ? DEVICE_SCOPES[name] : undefined;
+    if (!Array.isArray(want) || want.length === 0) continue;
+    const have = row.scopes ?? [];
+    if (have.length === want.length && have.every((s, i) => s === want[i])) continue;
+    await db
+      .update(session)
+      .set({ scopes: want })
+      .where(and(eq(session.tokenHash, row.hash), isNull(session.revokedAt)));
+    changes.push({
+      name,
+      added: want.filter((s) => !have.includes(s)),
+      removed: have.filter((s) => !want.includes(s)),
+    });
+  }
+  return changes;
+}
+
+/** How long to wait before each try again, the last again and again until one gets through. */
+export const SCOPE_RETRY_MS = [1_000, 2_000, 5_000, 15_000, 30_000, 60_000];
+
+/**
+ * Runs the scope sync at start without holding the start up. With the database out of reach (as on
+ * 2026-10-27), it tries again, waiting longer each time, until one gets through or the server
+ * stops; meanwhile the tokens keep the scopes they had. `done` resolves with what changed, or
+ * null once stopped.
+ */
+export function keepDeviceScopes(
+  sync: () => Promise<ScopeChange[]>,
+  opts: { retryMs?: number[]; log?: (line: string) => void; warn?: (line: string) => void } = {},
+) {
+  const retryMs = opts.retryMs ?? SCOPE_RETRY_MS;
+  const log = opts.log ?? console.log;
+  const warn = opts.warn ?? console.warn;
+  let stopped = false;
+  let timer: NodeJS.Timeout | undefined;
+  let finish: (changes: ScopeChange[] | null) => void = () => {};
+  const done = new Promise<ScopeChange[] | null>((resolve) => {
+    finish = resolve;
+  });
+  const attempt = (n: number) => {
+    sync().then(
+      (changes) => {
+        for (const c of changes) {
+          const said = [...c.added.map((s) => `+${s}`), ...c.removed.map((s) => `-${s}`)];
+          log(
+            `[auth] the ${c.name} device's token now has this build's scopes: ${said.join(", ")}`,
+          );
+        }
+        finish(changes);
+      },
+      (err: unknown) => {
+        if (stopped) return;
+        const wait = retryMs[Math.min(n, retryMs.length - 1)] ?? 60_000;
+        warn(
+          `[auth] couldn't bring device scopes up to date (${(err as Error).message}); trying again in ${Math.round(wait / 1000)} s`,
+        );
+        timer = setTimeout(() => attempt(n + 1), wait);
+      },
+    );
+  };
+  attempt(0);
+  return {
+    done,
+    stop() {
+      stopped = true;
+      clearTimeout(timer);
+      finish(null);
+    },
+  };
 }
 
 export async function revokeDevice(db: DbOrTx, name: string, now = new Date()): Promise<number> {

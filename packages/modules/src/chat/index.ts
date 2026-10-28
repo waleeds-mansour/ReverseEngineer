@@ -1,6 +1,6 @@
 // Chat with Jarvis, and comment threads on any record. Jarvis answers chat messages and
 // @mentions wherever they appear. Its own routines' runs stay out of the conversation list.
-import { asUntrusted, formatDateTime, MEMBER_CONVERSATION } from "@hearth/core";
+import { asUntrusted, formatDateTime, MEMBER_CONVERSATION, readyReplies } from "@hearth/core";
 import { conversation, conversationLog, entity, jarvisTurn } from "@hearth/db";
 import {
   ActionError,
@@ -184,6 +184,8 @@ export const chatModule = defineModule({
             taintSource: c?.taintSource ?? null,
           },
           log: log.filter((l) => i.afterIdx === undefined || l.idx > i.afterIdx),
+          // From the whole log, as only it can say they're stale: replies to offer now (D85).
+          next: readyReplies(log),
         };
       },
     }),

@@ -71,6 +71,8 @@ export const JOBS = {
   voice: { tier: "haiku", effort: "low" },
   /** Someone in your Slack wrote to Pip's bot: Pip answers them. */
   slack_member: { tier: "sonnet", effort: "low" },
+  /** After Pip answers you: up to two short replies you might send next (D85). A single step, no tools. */
+  next: { tier: "haiku", effort: "low" },
   /** `hearth doctor`'s check that Claude answers at all. */
   probe: { tier: "haiku", effort: "low" },
 } as const satisfies Record<string, { tier: Tier; effort?: Effort }>;

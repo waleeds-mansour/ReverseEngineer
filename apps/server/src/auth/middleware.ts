@@ -7,6 +7,7 @@ import type { Context, MiddlewareHandler } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import { localOriginOf } from "../config.ts";
 import type { AppEnv } from "../env.ts";
+import { withDesk } from "./desk.ts";
 import { scopeAllows } from "./devices.ts";
 import {
   checkToken,
@@ -97,7 +98,8 @@ export function authenticate(): MiddlewareHandler<AppEnv> {
       const s = r.session;
       if (s.scopes && !scopeAllows(s.scopes, c.req.method, c.req.path))
         return c.json({ error: "This device's token can't do that." }, 403);
-      c.set("caller", callerFor(s));
+      // The desktop app's calls say whether its desk is open, for the desk's actions (D84).
+      c.set("caller", withDesk(c, token, callerFor(s)));
       c.set("token", token);
     } else {
       const cookie = getCookie(c, SESSION_COOKIE);
