@@ -13,9 +13,11 @@
 
 pub mod bakeoff;
 pub mod capture;
+pub mod chat;
 pub mod chunker;
 pub mod client;
 pub mod deeplink;
+pub mod desk;
 pub mod double_tap;
 pub mod foreground;
 pub mod hello;

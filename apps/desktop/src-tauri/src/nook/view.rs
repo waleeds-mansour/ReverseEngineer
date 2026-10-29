@@ -4,6 +4,7 @@
 // list; every other Nook window gets the state without it.
 
 use super::chrome::{ChromeView, Edge};
+use super::inboxview::{InboxAct, InboxView};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -155,7 +156,8 @@ impl NookState {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Type)]
+// Not Eq: the dock's outlines are fractional CSS px.
+#[derive(Clone, Debug, PartialEq, Deserialize, Type)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum UiCmd {
     /// The page has loaded: send it the state.
@@ -178,22 +180,50 @@ pub enum UiCmd {
     OpenToday,
     /// The agent dock's switch.
     SetDock { on: bool },
-    /// The pointer came over the agent dock, or left it: its open pill gets room, or gives it back.
-    DockHover { open: bool },
+    /// What the agent dock's notch is: open or folded, held open by a panel or not, and the
+    /// outlines it draws, in CSS px from the window's top-left, which its window's region follows.
+    DockShape {
+        open: bool,
+        hold: bool,
+        outlines: Vec<Vec<(f64, f64)>>,
+    },
+    /// A panel in the agent dock's notch that wants the keyboard opened, or closed (dockkeys.rs).
+    DockKeys { take: bool },
+    /// Something chosen from the agent dock's menu.
+    DockChoose { choice: DockChoice },
     /// The side the agent dock sits on, left or right.
     SetDockEdge { edge: Edge },
-    /// A right click on the agent dock, or its "…": its menu, at the pointer.
-    DockMenu,
     /// The agent dock was pressed and moved: it follows the pointer until let go.
     DockDrag,
     /// A button on the agent dock's open pill or label: a page of Hearth's window.
     DockOpen { page: DockPage },
     /// The mic on the agent dock's open pill: talk to Pip, as talk mode's hotkey does.
     DockTalk,
-    /// Where the agent dock's status label is, in CSS px from the window's top: anywhere from
-    /// `top` to `bottom` while it glides between dots, and `wide`; 0 wide once it is gone. The
-    /// window takes the pointer only there and on what else it draws.
-    DockLabel { top: i32, bottom: i32, wide: i32 },
+    /// The agent dock's Inbox (inboxview.rs): answered with the Inbox's view.
+    Inbox { act: InboxAct },
+}
+
+/// What the agent dock's menu (menuPanel.ts) does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum DockChoice {
+    /// Over to the other edge.
+    Edge {
+        edge: Edge,
+    },
+    /// Hidden for an hour.
+    Rest,
+    Sounds {
+        on: bool,
+    },
+    /// The dock's size, in percent.
+    Size {
+        percent: u32,
+    },
+    /// Nook's panel, where the dock's settings are.
+    Settings,
+    /// The dock's switch, off.
+    Off,
 }
 
 /// What the agent dock's status label or Pip's mark opens in Hearth's window.
@@ -214,6 +244,8 @@ pub struct UiReply {
     /// Where a saved file went.
     pub saved: Option<String>,
     pub chrome: ChromeView,
+    /// The Inbox's view, for UiCmd::Inbox.
+    pub inbox: Option<InboxView>,
 }
 
 #[cfg(test)]
@@ -240,9 +272,28 @@ mod tests {
             UiCmd::SetDock { on: false }
         );
         assert_eq!(
-            read(r#"{"kind":"dock_hover","open":true}"#),
-            UiCmd::DockHover { open: true }
+            read(
+                r#"{"kind":"dock_shape","open":true,"hold":false,"outlines":[[[0,1],[2.5,3],[4,5]]]}"#
+            ),
+            UiCmd::DockShape {
+                open: true,
+                hold: false,
+                outlines: vec![vec![(0.0, 1.0), (2.5, 3.0), (4.0, 5.0)]]
+            }
         );
+        assert_eq!(
+            read(r#"{"kind":"dock_choose","choice":{"kind":"size","percent":125}}"#),
+            UiCmd::DockChoose {
+                choice: DockChoice::Size { percent: 125 }
+            }
+        );
+        assert_eq!(
+            read(r#"{"kind":"dock_keys","take":true}"#),
+            UiCmd::DockKeys { take: true }
+        );
+        // The native menu and the label's room are gone: the page draws both in the notch.
+        assert!(serde_json::from_str::<UiCmd>(r#"{"kind":"dock_menu"}"#).is_err());
+        assert!(serde_json::from_str::<UiCmd>(r#"{"kind":"dock_hover","open":true}"#).is_err());
         assert_eq!(
             read(r#"{"kind":"set_dock_edge","edge":"right"}"#),
             UiCmd::SetDockEdge { edge: Edge::Right }
@@ -256,11 +307,9 @@ mod tests {
         assert!(serde_json::from_str::<UiCmd>(r#"{"kind":"dock_open","page":"/api"}"#).is_err());
         assert_eq!(read(r#"{"kind":"dock_talk"}"#), UiCmd::DockTalk);
         assert_eq!(
-            read(r#"{"kind":"dock_label","top":40,"bottom":92,"wide":250}"#),
-            UiCmd::DockLabel {
-                top: 40,
-                bottom: 92,
-                wide: 250
+            read(r#"{"kind":"inbox","act":{"kind":"clear","id":"n1"}}"#),
+            UiCmd::Inbox {
+                act: InboxAct::Clear { id: "n1".into() }
             }
         );
         assert!(serde_json::from_str::<UiCmd>(r#"{"kind":"theme","id":"dark"}"#).is_err());

@@ -13,7 +13,7 @@ use super::host::{self, Shared};
 use super::probe::Hwnd;
 use super::view::NookState;
 use super::wm::Cmd;
-use super::{dockmenu, dockwin, focus, look, observe, surface, ui};
+use super::{dockkeys, dockwin, focus, look, observe, surface, ui};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -373,8 +373,11 @@ pub fn focused(app: &AppHandle, label: &str) {
         return;
     }
     match label {
-        // Not while the dock's menu is up: handing the foreground back would close it.
-        BAR_LABEL | POPOVER_LABEL | super::dock::DOCK_LABEL if made && !dockmenu::showing() => {
+        // Not while one of the dock's panels has the keyboard (dockkeys.rs): handing the
+        // foreground back would take it away.
+        BAR_LABEL | POPOVER_LABEL | super::dock::DOCK_LABEL
+            if made && !dockkeys::has_keys(app, label) =>
+        {
             let decided = focus::decide(focus::foreground(), &ours, before.as_ref(), focus::live);
             let landed = decided.is_ok_and(focus::hand_back);
             let first = shared

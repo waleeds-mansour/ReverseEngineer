@@ -4,44 +4,48 @@
 // Its page says when it has drawn (the readiness handshake); one that doesn't within DRAW_WITHIN
 // is made again, once. While the dock is made it reads Windows every LOOK_EVERY: whether something
 // fullscreen is in front, where the primary monitor is, and Windows' text size, which WebView2
-// draws the page at, and it ends a rest from its menu once the hour is up. While its pill is open
-// it reads where the pointer is every WATCH_EVERY, and closes the pill once the pointer has left.
-// After every change to the window its region is set again (dockclip.rs), so it takes clicks only
-// on what its page draws: the tab, and while open the pill and the label where the page says.
-// With its switch off, none of this starts a thread. What the owner does to the dock itself, its
-// menu, dragging it, its sounds and its pill's buttons, is dockact.rs.
+// draws the page at, and it ends a rest from its menu once the hour is up (dockread.rs). While
+// the notch is open and no panel holds it, it reads where the pointer is every WATCH_EVERY, and
+// folds the notch once the pointer has stayed off it for AWAY_READS reads, a little after the
+// page's own 350 ms; a page that doesn't answer that with its shape within ANSWER_WITHIN is taken
+// for dead, and the region falls back to the tab's own piece. A page whose process fails is made
+// again with its window. The window is made once, at its biggest (docksize.rs), its page zoomed to
+// the owner's size; after every change its region is set again (dockclip.rs), so it takes clicks
+// only on what its page draws: the tab, and the outlines the page says it draws. With its switch
+// off, none of this starts a thread. What the owner does to the dock itself is dockact.rs.
 
-use super::bar::Place;
 use super::barwin;
 use super::dock::{self, DockRun, DockStep, DOCK_LABEL, DOCK_PAGE};
-use super::dockclip::LabelBox;
-use super::docksize::{rest_long, DOCK_DEEP};
+use super::dockread::{busy_now, primary};
+use super::docksize::{tab_long, WINDOW_DEEP};
 use super::host::{self, Shared};
-use super::probe::{Hwnd, Rect};
+use super::probe::Hwnd;
 use super::view::NookState;
 use super::{look, observe, surface, ui};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
-use windows::Win32::Foundation::POINT;
-use windows::Win32::Graphics::Gdi::{
-    GetMonitorInfoW, MonitorFromPoint, MONITORINFO, MONITOR_DEFAULTTOPRIMARY,
-};
-use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
-use windows::Win32::UI::Shell::SHQueryUserNotificationState;
-use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+
+pub(super) use super::dockread::{cursor, text_now};
 
 /// How long the dock's page has to draw its first frame before its window is made again, once.
 const DRAW_WITHIN: Duration = Duration::from_secs(3);
 /// How often the dock reads Windows while it is made.
 const LOOK_EVERY: Duration = Duration::from_secs(2);
-/// How often the pointer is read while the pill is open.
+/// How often the pointer is read while the notch is open.
 const WATCH_EVERY: Duration = Duration::from_millis(150);
+/// Reads in a row the pointer is off the notch before Nook folds it: the page folds it 350 ms
+/// after the pointer leaves, and this only catches a page that didn't hear it go.
+const AWAY_READS: u32 = 3;
+/// How long a page has to answer Nook folding its notch with its shape.
+const ANSWER_WITHIN: Duration = Duration::from_secs(1);
 /// Each making of the window, so a late check or reading for one never acts on the next.
 static MAKES: AtomicU64 = AtomicU64::new(0);
-/// Each opening of the pill, so only the latest one's watch goes on.
+/// Each opening of the notch, so only the latest one's watch goes on.
 static OPENS: AtomicU64 = AtomicU64::new(0);
+/// Each shape the page tells, so a fold it never answered is seen.
+static SHAPES: AtomicU64 = AtomicU64::new(0);
 
 /// Brings the dock to what its switch and Nook's status say.
 pub fn sync(shared: &Arc<Shared>) {
@@ -84,6 +88,13 @@ fn sync_now(shared: &Arc<Shared>) {
                 barwin::tell_own(shared);
                 must_draw(shared, made);
                 keep_looking(shared, made);
+                if let Some(w) = shared.app.get_webview_window(DOCK_LABEL) {
+                    let s = shared.clone();
+                    surface::on_failed(&w, move || {
+                        let s = s.clone();
+                        tauri::async_runtime::spawn_blocking(move || failed(&s, made));
+                    });
+                }
                 log::info!("Nook's agent dock is on");
                 // The theme and motion settings, as the bar reads them when it is made.
                 look::read_system(shared);
@@ -155,6 +166,28 @@ fn undrawn(shared: &Arc<Shared>, made: u64) {
     }
 }
 
+/// Its page's process failed: a renderer that crashed or hung leaves a dead page holding its last
+/// region, which can be a panel's size of the screen taking clicks. The window is made again.
+fn failed(shared: &Arc<Shared>, made: u64) {
+    {
+        let _one = shared.bar_sync.lock().unwrap_or_else(|p| p.into_inner());
+        if MAKES.load(Ordering::SeqCst) != made {
+            return;
+        }
+        log::warn!("The page of Nook's agent dock failed; making it again");
+        destroy(&shared.app);
+        {
+            let mut run = shared.dock();
+            *run = DockRun {
+                why_not: run.why_not,
+                ..run.kept()
+            };
+        }
+        barwin::tell_own(shared);
+    }
+    sync_now(shared);
+}
+
 /// While this making of the window lasts, reads Windows every LOOK_EVERY.
 fn keep_looking(shared: &Arc<Shared>, made: u64) {
     let s = shared.clone();
@@ -184,58 +217,6 @@ fn keep_looking(shared: &Arc<Shared>, made: u64) {
     });
 }
 
-/// Windows' notification state: something fullscreen, a presentation, or nobody there.
-fn busy_now() -> bool {
-    match unsafe { SHQueryUserNotificationState() } {
-        Ok(state) => dock::busy(state.0),
-        Err(_) => false,
-    }
-}
-
-/// Windows' text size (Settings > Accessibility > Text size), which it keeps as TextScaleFactor
-/// only while it is above 100 %. The bar reads it too (barwin.rs).
-pub(super) fn text_now() -> u32 {
-    use winreg::enums::HKEY_CURRENT_USER;
-    use winreg::RegKey;
-    let raw = RegKey::predef(HKEY_CURRENT_USER)
-        .open_subkey("Software\\Microsoft\\Accessibility")
-        .and_then(|k| k.get_value::<u32, _>("TextScaleFactor"))
-        .ok();
-    dock::text_size(raw)
-}
-
-/// Where the pointer is, in physical px.
-pub(super) fn cursor() -> Option<(i32, i32)> {
-    let mut p = POINT::default();
-    unsafe { GetCursorPos(&mut p) }.ok()?;
-    Some((p.x, p.y))
-}
-
-/// The primary monitor, which always holds the point (0, 0), and its work area, in physical px.
-fn primary() -> Option<(Place, Rect)> {
-    let h = unsafe { MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY) };
-    let mut info = MONITORINFO {
-        cbSize: std::mem::size_of::<MONITORINFO>() as u32,
-        ..Default::default()
-    };
-    if !unsafe { GetMonitorInfoW(h, &mut info) }.as_bool() {
-        return None;
-    }
-    let (mut dx, mut dy) = (96u32, 96u32);
-    let _ = unsafe { GetDpiForMonitor(h, MDT_EFFECTIVE_DPI, &mut dx, &mut dy) };
-    let rect = |r: windows::Win32::Foundation::RECT| Rect {
-        left: r.left,
-        top: r.top,
-        right: r.right,
-        bottom: r.bottom,
-    };
-    let at = Place {
-        rect: rect(info.rcMonitor),
-        dpi: dx,
-    };
-    Some((at, rect(info.rcWork)))
-}
-
 /// The dock's window, hidden, and its handle: topmost, never activated, with no glass of its
 /// own (its page draws the tab).
 fn make(shared: &Shared) -> Result<Vec<Hwnd>, String> {
@@ -248,7 +229,7 @@ fn make(shared: &Shared) -> Result<Vec<Hwnd>, String> {
         .title("Nook dock")
         .always_on_top(true)
         .position(x, y)
-        .inner_size(f64::from(DOCK_DEEP), f64::from(rest_long(1)))
+        .inner_size(f64::from(WINDOW_DEEP), f64::from(tab_long(1)))
         .build()
         .map_err(|e| e.to_string())?;
     let ours = w.hwnd().ok().map(|h| h.0 as Hwnd).into_iter().collect();
@@ -289,29 +270,35 @@ pub fn drawn(shared: &Shared) {
     nudge(&shared.app);
 }
 
-/// The pointer came over the dock, or left it. While the pill is open, the pointer is watched.
-pub fn hover(shared: &Arc<Shared>, open: bool) {
-    let (changed, opened) = {
+/// What the page says of the notch (DockRun::shape). While it is open and nothing holds it, the
+/// pointer is watched.
+pub fn shape(shared: &Arc<Shared>, open: bool, hold: bool, outlines: Vec<Vec<(f64, f64)>>) {
+    SHAPES.fetch_add(1, Ordering::SeqCst);
+    let (changed, watch) = {
         let mut run = shared.dock();
-        let was = run.open;
-        run.hover(open);
-        (was != run.open, run.open && !was)
+        let was = (run.open, run.hold);
+        let opened = run.shape(open, hold, outlines);
+        let watch = opened || (was.1 && !run.hold && run.open);
+        (was != (run.open, run.hold), watch)
     };
-    if opened {
+    if watch {
         watch_pointer(shared);
     }
+    // The region follows the outlines whether or not anything else changed.
+    nudge(&shared.app);
     if changed {
-        nudge(&shared.app);
         look::emit(shared);
     }
 }
 
-/// Every WATCH_EVERY while this opening of the pill lasts: once the pointer has left the window,
-/// the pill closes and the window narrows, and the page hears it in the chrome's dock.open.
+/// Every WATCH_EVERY while this opening of the notch lasts and nothing holds it: once the pointer
+/// has been off what the region covers for AWAY_READS reads, the notch folds, and the page hears
+/// it in the chrome's dock.open.
 fn watch_pointer(shared: &Arc<Shared>) {
     let open = OPENS.fetch_add(1, Ordering::SeqCst) + 1;
     let s = shared.clone();
     tauri::async_runtime::spawn(async move {
+        let mut away = 0;
         loop {
             tokio::time::sleep(WATCH_EVERY).await;
             if OPENS.load(Ordering::SeqCst) != open {
@@ -320,16 +307,43 @@ fn watch_pointer(shared: &Arc<Shared>) {
             let at = cursor();
             let closed = {
                 let mut run = s.dock();
-                if !run.open {
+                if !run.open || run.hold {
                     return;
                 }
-                run.pointer(at)
+                away = if run.covers(at) { 0 } else { away + 1 };
+                away >= AWAY_READS && run.pointer(at)
             };
             if closed {
                 nudge(&s.app);
                 look::emit(&s);
+                unanswered(&s);
                 return;
             }
+        }
+    });
+}
+
+/// Nook folded the notch: a page that doesn't answer with its shape within ANSWER_WITHIN is dead
+/// or stuck, so the region keeps only the tab's own piece rather than the open notch's outlines.
+fn unanswered(shared: &Arc<Shared>) {
+    let told = SHAPES.load(Ordering::SeqCst);
+    let s = shared.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(ANSWER_WITHIN).await;
+        if SHAPES.load(Ordering::SeqCst) != told {
+            return;
+        }
+        let cleared = {
+            let mut run = s.dock();
+            let stale = !run.open && !run.outlines.is_empty();
+            if stale {
+                run.outlines.clear();
+            }
+            stale
+        };
+        if cleared {
+            log::warn!("The agent dock's page didn't answer its notch folding; keeping the tab");
+            nudge(&s.app);
         }
     });
 }
@@ -342,20 +356,6 @@ pub fn dots(shared: &Shared, n: usize, waiting: bool) {
         let was = (run.dots, run.waiting);
         (run.dots, run.waiting) = (n, waiting);
         run.made && was != (n, waiting)
-    };
-    if changed {
-        nudge(&shared.app);
-    }
-}
-
-/// Where the open pill's status label is now, as its page says, so the window's region takes it
-/// in while the pill is open.
-pub fn label(shared: &Shared, top: i32, bottom: i32, wide: i32) {
-    let changed = {
-        let mut run = shared.dock();
-        let was = run.label;
-        run.label = LabelBox::read(top, bottom, wide);
-        run.made && was != run.label
     };
     if changed {
         nudge(&shared.app);
@@ -382,6 +382,7 @@ fn reconcile(app: &AppHandle) {
     };
     for step in steps {
         match step {
+            DockStep::Zoom(percent) => surface::zoom(&w, percent),
             DockStep::Place(r) => surface::place(&w, r),
             DockStep::Wake => {
                 surface::wake(&w);

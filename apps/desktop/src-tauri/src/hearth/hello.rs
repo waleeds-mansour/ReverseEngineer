@@ -191,8 +191,9 @@ async fn sign_in_now(app: &AppHandle) -> Result<String, NotIn> {
         .ok_or(NotIn::Failed)
 }
 
+// The desk (desk.rs, D84) signs its own challenge with the same key.
 #[cfg(windows)]
-mod os {
+pub(super) mod os {
     use super::{HelloError, KEY_NAME};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
@@ -302,7 +303,7 @@ mod os {
 }
 
 #[cfg(not(windows))]
-mod os {
+pub(super) mod os {
     use super::HelloError;
 
     pub fn create() -> Result<String, HelloError> {

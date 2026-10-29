@@ -1,8 +1,8 @@
-// Presses on the agent dock (dockView.ts): pressing the edge tab or the open pill and moving a few
-// px drags the tab along its edge, which Nook carries out itself, following the pointer, so the
-// page only says when a press has become a drag (dockHover.ts's drags). The release that ends a
-// drag clicks nothing, whatever ends up under it. A right click anywhere on the tab or the pill
-// opens Nook's menu for the dock, never the page's own.
+// Presses on the agent dock (dockView.ts): pressing the notch, the tab or the open column, and
+// moving a few px drags the tab along its edge, which Nook carries out itself, following the
+// pointer, so the page only says when a press has become a drag (dockHover.ts's drags). The release
+// that ends a drag clicks nothing, whatever ends up under it. A right click anywhere on the notch
+// opens the dock's own menu in it (menuPanel.ts), never the page's.
 
 import type { UiCmd } from "@/bindings";
 import { drags } from "./dockHover";
@@ -20,23 +20,27 @@ export function presses({
   pressing,
   changed,
   ask,
+  menu,
 }: {
   /** The page's dock, whose clicks a drag's release must not reach. */
   nav: HTMLElement;
-  /** What a press can drag from: the tab and the pill. */
-  pressable: readonly HTMLElement[];
+  /** What a press can drag from: the notch's shape, its column and its dots. */
+  pressable: readonly Element[];
   /** Any press on them, left or right (the sounds may play only after one). */
   pressing: () => void;
   /** A drag began or ended, so what the pointer wants is read again. */
   changed: () => void;
   ask: (cmd: UiCmd) => void;
+  /** A right click on the dock: its menu opens. */
+  menu: () => void;
 }): Presses {
   /** Where a press began, on the screen, until the button comes up, and whether it dragged. */
   let press: { x: number; y: number } | null = null;
   let dragged = false;
 
   for (const e of pressable) {
-    e.addEventListener("pointerdown", (ev) => {
+    e.addEventListener("pointerdown", (down) => {
+      const ev = down as PointerEvent;
       pressing();
       if (ev.button !== 0) return;
       press = { x: ev.screenX, y: ev.screenY };
@@ -65,9 +69,7 @@ export function presses({
   );
   document.addEventListener("contextmenu", (e) => {
     e.preventDefault();
-    if (pressable.some((p) => p.contains(e.target as Node))) {
-      ask({ kind: "dock_menu" });
-    }
+    if (pressable.some((p) => p.contains(e.target as Node))) menu();
   });
 
   return {

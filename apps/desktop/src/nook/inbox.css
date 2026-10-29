@@ -1,0 +1,198 @@
+/* The Inbox panel (inboxParts.ts), as the notch holds it: 380 px of content on the notch's black,
+   with no frame, nub or shadow of its own, as the notch draws those and pads it by 16. Its header
+   has the card's title, then the page dots and × at the right; the undo ring with esc, and
+   "✓ Sent", take that spot in turn and cross-fade (inboxBody.css has the card's insides,
+   inboxNote.css the message that stands in for a card and the note line). Colours are its own and
+   stay dark in every theme, as the dock's do. */
+
+.ni {
+  --ni-quick: cubic-bezier(0.16, 1, 0.3, 1);
+  --ni-out: cubic-bezier(0, 0, 0.58, 1);
+  --ni-in: cubic-bezier(0.42, 0, 1, 1);
+  --ni-spring: var(--spring-panel, var(--ni-quick));
+  --ni-spring-ms: var(--spring-panel-ms, 380ms);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 380px;
+  outline: none;
+  font: 400 12px/16px var(--font-sans);
+  color: rgb(255 255 255 / 0.93);
+}
+
+/* The header: title, then the dots and × (or the ring and esc, or "✓ Sent"). */
+
+.ni-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  min-height: 24px;
+  margin-bottom: 12px;
+}
+
+.ni-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font: 600 14px/21px var(--font-sans);
+  letter-spacing: -0.01em;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ni-side {
+  display: grid;
+  align-items: center;
+  justify-items: end;
+}
+
+.ni-side > * {
+  grid-area: 1 / 1;
+  transition:
+    opacity 180ms var(--ni-quick),
+    translate 180ms var(--ni-quick);
+}
+
+.ni-plain {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ni-dots {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ni-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgb(76 141 255 / 0.45);
+  transition:
+    width var(--ni-spring-ms) var(--ni-spring),
+    background-color 200ms var(--ni-out);
+}
+
+.ni-dot[data-dot="current"] {
+  width: 16px;
+  background: #4c8dff;
+}
+
+.ni-dot[data-dot="seen"] {
+  background: rgb(255 255 255 / 0.18);
+}
+
+.ni-close,
+.ni-undo,
+.ni-send {
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ni-close {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  color: rgb(255 255 255 / 0.45);
+}
+
+.ni-close path {
+  stroke-width: 2.2;
+}
+
+.ni-close:hover {
+  color: rgb(255 255 255 / 0.8);
+  background: rgb(255 255 255 / 0.08);
+}
+
+/* The ring and esc: the esc key's hit area reaches 3 px sideways and 10 px up and down. */
+.ni-undo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -10px -3px;
+  padding: 10px 3px;
+}
+
+.ni-undo,
+.ni-sent {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ni-sent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 500 14px/18px var(--font-sans);
+  color: rgb(255 255 255 / 0.9);
+  translate: 6px 0;
+}
+
+.ni-sent svg {
+  color: #30d158;
+}
+
+.ni-sent path {
+  stroke-width: 2.2;
+}
+
+.ni[data-stage="wait"] .ni-plain,
+.ni[data-stage="sent"] .ni-plain {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ni[data-stage="wait"] .ni-undo {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ni[data-stage="sent"] .ni-sent {
+  opacity: 1;
+  translate: 0 0;
+}
+
+.ni-ring-track {
+  stroke: rgb(255 255 255 / 0.22);
+}
+
+/* inboxPanel.ts sets how much of the arc is left to fill, from the wait's own clock. */
+.ni-ring-arc {
+  stroke: #fff;
+  stroke-linecap: round;
+}
+
+.ni-esc {
+  display: inline-grid;
+  place-items: center;
+  height: 24px;
+  min-width: 38px;
+  padding: 0 6px;
+  border-radius: 7px;
+  font: 500 14px/1 var(--font-sans);
+  color: #fff;
+  background: rgb(255 255 255 / 0.07);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.14),
+    inset 0 1px 0 rgb(255 255 255 / 0.2);
+  transition: box-shadow 150ms var(--ni-out);
+}
+
+.ni-undo:hover .ni-esc {
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.5),
+    inset 0 1px 0 rgb(255 255 255 / 0.2);
+}

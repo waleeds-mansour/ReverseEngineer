@@ -9,9 +9,12 @@ use std::ffi::c_void;
 use tauri::{Runtime, WebviewWindow};
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     ICoreWebView2_19, ICoreWebView2_3, COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW,
-    COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL,
+    COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL, COREWEBVIEW2_PROCESS_FAILED_KIND,
+    COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED,
+    COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED,
+    COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_UNRESPONSIVE,
 };
-use webview2_com::TrySuspendCompletedHandler;
+use webview2_com::{ProcessFailedEventHandler, TrySuspendCompletedHandler};
 use windows::core::Interface;
 use windows::Win32::Foundation::{HWND, LPARAM, POINT, WPARAM};
 use windows::Win32::Graphics::Dwm::{
@@ -23,11 +26,11 @@ use windows::Win32::Graphics::Gdi::{
 };
 use windows::Win32::UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW};
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetWindowLongPtrW, SendMessageW, SetWindowLongPtrW, SetWindowPos, ShowWindow,
-    SystemParametersInfoW, GWL_EXSTYLE, HWND_TOP, HWND_TOPMOST, SPI_GETCLIENTAREAANIMATION,
-    SPI_GETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
-    SW_HIDE, SW_SHOWNOACTIVATE, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WM_NCACTIVATE,
-    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+    GetWindowLongPtrW, SendMessageW, SetForegroundWindow, SetWindowLongPtrW, SetWindowPos,
+    ShowWindow, SystemParametersInfoW, GWL_EXSTYLE, HWND_TOP, HWND_TOPMOST,
+    SPI_GETCLIENTAREAANIMATION, SPI_GETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE,
+    SWP_NOSIZE, SWP_NOZORDER, SW_HIDE, SW_SHOWNOACTIVATE, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
+    WM_NCACTIVATE, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
 };
 
 fn hwnd<R: Runtime>(w: &WebviewWindow<R>) -> Option<HWND> {
@@ -89,7 +92,6 @@ pub fn clip<R: Runtime>(w: &WebviewWindow<R>, shapes: &[Shape]) {
         }
         for shape in shapes {
             let part = match shape {
-                Shape::Rect(r) => CreateRectRgn(r.left, r.top, r.right, r.bottom),
                 Shape::Round(r, radius) => {
                     let d = 2 * radius;
                     CreateRoundRectRgn(r.left, r.top, r.right + 1, r.bottom + 1, d, d)
@@ -108,6 +110,45 @@ pub fn clip<R: Runtime>(w: &WebviewWindow<R>, shapes: &[Shape]) {
             let _ = DeleteObject(all.into());
         }
     }
+}
+
+/// Zooms the page by `percent`: the agent dock's size, which scales everything it draws while
+/// its CSS px stay the same numbers (dock.rs's drawn_at sizes its window to match).
+pub fn zoom<R: Runtime>(w: &WebviewWindow<R>, percent: u32) {
+    if let Err(e) = w.set_zoom(f64::from(percent) / 100.0) {
+        log::warn!("Couldn't zoom Nook's agent dock: {e}");
+    }
+}
+
+/// Calls `failed` when the page's own process is gone or hung (WebView2's ProcessFailed: the
+/// browser or the page's renderer exited, or the renderer stopped answering), which leaves the
+/// page dead. A helper process failing (the GPU's, say) WebView2 recovers from by itself.
+pub fn on_failed<R: Runtime>(w: &WebviewWindow<R>, failed: impl Fn() + Send + 'static) {
+    let dead = [
+        COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED,
+        COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED,
+        COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_UNRESPONSIVE,
+    ];
+    let _ = w.with_webview(move |pw| unsafe {
+        let Ok(core) = pw.controller().CoreWebView2() else {
+            return;
+        };
+        let handler = ProcessFailedEventHandler::create(Box::new(move |_, args| {
+            // Unread, it is none of them.
+            let mut kind = COREWEBVIEW2_PROCESS_FAILED_KIND(-1);
+            if let Some(args) = args {
+                args.ProcessFailedKind(&mut kind)?;
+            }
+            if dead.contains(&kind) {
+                failed();
+            }
+            Ok(())
+        }));
+        let mut token = 0i64;
+        if let Err(e) = core.add_ProcessFailed(&handler, &mut token) {
+            log::warn!("Nook won't hear if a page of its own fails: {e}");
+        }
+    });
 }
 
 /// Shown without taking the foreground, at the top of the non-topmost windows. tao's show()
@@ -129,6 +170,27 @@ pub fn show_topmost<R: Runtime>(w: &WebviewWindow<R>) {
             let _ = ShowWindow(h, SW_SHOWNOACTIVATE);
             let flags = SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE;
             let _ = SetWindowPos(h, Some(HWND_TOPMOST), 0, 0, 0, 0, flags);
+        }
+    }
+}
+
+/// Lets the window be activated and brings it to the front with the keyboard (`take`), or makes
+/// it one that is never activated again: the dock's while a panel has the keyboard (dockkeys.rs).
+/// The click that opened the panel was on this window, which lets this process take the foreground;
+/// tao's set_focus is the way left if Windows refuses.
+pub fn keys<R: Runtime>(w: &WebviewWindow<R>, take: bool) {
+    let Some(h) = hwnd(w) else {
+        return;
+    };
+    unsafe {
+        let ex = GetWindowLongPtrW(h, GWL_EXSTYLE);
+        let no = WS_EX_NOACTIVATE.0 as isize;
+        let want = if take { ex & !no } else { ex | no };
+        if want != ex {
+            SetWindowLongPtrW(h, GWL_EXSTYLE, want);
+        }
+        if take && !SetForegroundWindow(h).as_bool() {
+            let _ = w.set_focus();
         }
     }
 }

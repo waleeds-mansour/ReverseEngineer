@@ -1,7 +1,8 @@
 /* The preview stands in for the desktop behind the glass: DWM's acrylic isn't there in a
    browser, so a soft wallpaper shows what the translucent fill sits on. The dock's preview has a
-   dusk wallpaper, as the dark tab and pill mostly sit on, and frames the dock's window at the
-   page's edge, sized by preview/dock.ts, with the screen's black bezel beyond it when asked. */
+   dusk wallpaper, as the dark notch mostly sits on, and frames the dock's window at the page's
+   edge, with the screen's black bezel beyond it when asked, and what the page tells Nook it draws
+   outlined over it. */
 
 html.preview-wall,
 html.preview-wall body {
@@ -25,13 +26,14 @@ html.preview-dock[data-bezel] {
   --bezel: 28px;
 }
 
+/* The dock's window: made once, 520 px deep (docksize.rs's WINDOW_DEEP) and as tall as the work
+   area, here the page. */
 html.preview-dock #dock {
   position: fixed;
-  top: 50%;
+  top: 0;
   right: var(--bezel);
-  width: var(--frame-w);
-  height: var(--frame-h);
-  translate: 0 -50%;
+  width: 520px;
+  height: 100vh;
 }
 
 html.preview-dock[data-edge="left"] #dock {
@@ -56,4 +58,47 @@ html.preview-dock[data-bezel] body::after {
 html.preview-dock[data-bezel][data-edge="left"] body::after {
   right: auto;
   left: 0;
+}
+
+/* What the page told Nook it draws (&region=1): the window shows and takes the pointer only there,
+   and on Nook's own piece for the tab. */
+html.preview-dock .preview-region {
+  position: fixed;
+  top: 0;
+  right: var(--bezel);
+  width: 520px;
+  height: 100vh;
+  pointer-events: none;
+  overflow: visible;
+}
+
+html.preview-dock[data-edge="left"] .preview-region {
+  right: auto;
+  left: var(--bezel);
+}
+
+html.preview-dock .preview-region polygon {
+  fill: rgb(255 69 58 / 0.1);
+  stroke: #ff453a;
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+}
+
+/* The stand-in panel (&show=stub). */
+.preview-stub {
+  width: 360px;
+  color: rgb(255 255 255 / 0.88);
+  font: 500 13px/18px var(--font-sans);
+}
+
+.preview-stub-head {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 15px;
+  color: #fff;
+}
+
+.preview-stub-line {
+  margin: 0 0 6px;
+  color: rgb(255 255 255 / 0.6);
 }

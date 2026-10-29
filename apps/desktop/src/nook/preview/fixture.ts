@@ -5,9 +5,11 @@
 // and, for the dock, what Hearth's feed says: &turn=working (or thinking) and &yes=2, or its dots
 // outright, one per state listed (&states=working,working,needs_you,done,idle), with &badge=3 for
 // how many wait behind the first amber one. The dock sits on the right edge, as it starts, unless
-// &edge says otherwise, &sounds=0 turns its sounds off, and &feed=0 has its dots come from the tray. It keeps every command it was asked in
-// window.__nookAsked, for the screenshot script, and makes room for the dock's open pill when
-// asked, as Nook does.
+// &edge says otherwise, &sounds=0 turns its sounds off, &feed=0 has its dots come from the tray,
+// and &mid puts the tab's middle that far down its window (halfway, by default). It keeps every
+// command it was asked in window.__nookAsked, and the outlines the page last said it draws in
+// window.__nookShape, for the screenshot script, and follows what the page tells Nook as Nook does:
+// the notch open or folded, the keyboard taken or let go, and the menu's choices.
 
 import type {
   AgentDot,
@@ -191,6 +193,9 @@ export const chrome: ChromeView = {
     open: false,
     edge: (q.get("edge") ?? "right") as Edge,
     sounds: q.get("sounds") !== "0",
+    mid: Number(q.get("mid") ?? 0) || Math.round(window.innerHeight / 2),
+    scale: 150,
+    keys: false,
     feed: q.get("feed") !== "0",
   },
 };
@@ -198,21 +203,47 @@ export const chrome: ChromeView = {
 declare global {
   interface Window {
     __nookAsked: UiCmd[];
+    __nookShape: [number, number][][];
   }
 }
 window.__nookAsked = [];
+window.__nookShape = [];
+
+/** What Nook does with the page's commands that change what it shows. */
+function follow(cmd: UiCmd): boolean {
+  const dock = chrome.dock;
+  switch (cmd.kind) {
+    case "dock_shape":
+      window.__nookShape = cmd.outlines;
+      if (dock.open === cmd.open) return false;
+      dock.open = cmd.open;
+      return true;
+    case "dock_keys":
+      if (dock.keys === cmd.take) return false;
+      dock.keys = cmd.take;
+      return true;
+    case "dock_choose": {
+      const c = cmd.choice;
+      if (c.kind === "edge") dock.edge = c.edge;
+      else if (c.kind === "sounds") dock.sounds = c.on;
+      else if (c.kind === "size") dock.scale = c.percent;
+      else return false;
+      return true;
+    }
+    default:
+      return false;
+  }
+}
 
 export const fakeLink: Link = {
   ask: async (cmd) => {
     window.__nookAsked.push(cmd);
-    if (cmd.kind === "dock_hover" && chrome.dock.open !== cmd.open) {
-      chrome.dock.open = cmd.open;
-      chrome.seq += 1;
-    }
+    if (follow(cmd)) chrome.seq += 1;
     return {
       state,
       saved: null,
       chrome: { ...chrome, dock: { ...chrome.dock } },
+      inbox: null,
     };
   },
   onState: () => {},
