@@ -1,0 +1,129 @@
+/* The quick-ask box's mic (ask.css has the rest of the box): a 16 px icon in a 32 px circle at
+   the start of the pill, struck through while another recording has the microphone. Listening,
+   five 3 px bars rise and fall over 0.9 s, each a little after the one before, as the
+   reference's command box draws it; writing down what was heard, they lie low and breathe.
+   Without motion they stand still, each at its own height. */
+
+/* The mic: a 16 px icon in a 32 px circle; listening, five bars. */
+.na-mic {
+  all: unset;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard);
+}
+
+.na-mic:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+}
+
+.na-mic:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.na[data-mic="listening"] .na-mic,
+.na[data-mic="held"] .na-mic {
+  background: var(--accent-soft);
+  opacity: 1;
+}
+
+.na-mic-icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.na-mic-strike {
+  display: none;
+}
+
+.na[data-mic="busy"] .na-mic-strike {
+  display: inline;
+}
+
+.na-wave {
+  display: none;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+}
+
+.na[data-mic="listening"] .na-wave,
+.na[data-mic="held"] .na-wave,
+.na[data-mic="hearing"] .na-wave {
+  display: flex;
+}
+
+.na[data-mic="listening"] .na-mic-icon,
+.na[data-mic="held"] .na-mic-icon,
+.na[data-mic="hearing"] .na-mic-icon {
+  display: none;
+}
+
+/* Each bar rests at its own height, where it stands still without motion. */
+.na-wave i {
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: scaleY(var(--rest));
+  animation: na-wave 0.9s ease-in-out infinite;
+}
+
+.na-wave i:nth-child(1) {
+  --rest: 0.45;
+}
+.na-wave i:nth-child(2) {
+  --rest: 0.8;
+  animation-delay: 140ms;
+}
+.na-wave i:nth-child(3) {
+  --rest: 1;
+  animation-delay: 280ms;
+}
+.na-wave i:nth-child(4) {
+  --rest: 0.65;
+  animation-delay: 420ms;
+}
+.na-wave i:nth-child(5) {
+  --rest: 0.35;
+  animation-delay: 210ms;
+}
+
+@keyframes na-wave {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+/* Writing down what it heard: the bars lie low and breathe. */
+.na[data-mic="hearing"] .na-wave i {
+  --rest: 0.3;
+  background: var(--ink-muted);
+  animation: na-breathe 1.2s ease-in-out infinite;
+}
+
+@keyframes na-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}

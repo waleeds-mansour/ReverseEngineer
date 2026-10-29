@@ -677,7 +677,9 @@
       "repairPlaceholder": "Paste a new code to re-pair",
       "save": "Save",
       "check": "Check",
-      "unpair": "Unpair"
+      "unpair": "Unpair",
+      "doubleTap": "Double-tap Ctrl for Ask Pip",
+      "doubleTapHelp": "Press and let go of Ctrl twice, quickly, to open the Ask Pip box over any app, as its shortcut does. Hold Ctrl down on the second press to talk instead, and let go when you're done."
     }
   },
   "footer": {

@@ -469,6 +469,9 @@ pub struct AppSettings {
     /// Hearth pairing codes, by device ("desktop").
     #[serde(default = "default_hearth_keys")]
     pub hearth_keys: SecretMap,
+    /// A double-tap of Ctrl opens Ask Pip, as its shortcut does (Hearth's L2-17).
+    #[serde(default = "default_hearth_ask_double_tap")]
+    pub hearth_ask_double_tap: bool,
     #[serde(default = "default_post_process_models")]
     pub post_process_models: HashMap<String, String>,
     #[serde(default = "default_post_process_prompts")]
@@ -776,6 +779,10 @@ fn default_hearth_keys() -> SecretMap {
     SecretMap(HashMap::new())
 }
 
+fn default_hearth_ask_double_tap() -> bool {
+    true
+}
+
 fn default_post_process_api_keys() -> SecretMap {
     let mut map = HashMap::new();
     for provider in default_post_process_providers() {
@@ -1039,6 +1046,7 @@ pub fn get_default_settings() -> AppSettings {
         post_process_api_keys: default_post_process_api_keys(),
         hearth_url: default_hearth_url(),
         hearth_keys: default_hearth_keys(),
+        hearth_ask_double_tap: default_hearth_ask_double_tap(),
         post_process_models: default_post_process_models(),
         post_process_prompts: default_post_process_prompts(),
         post_process_selected_prompt_id: None,

@@ -1,17 +1,23 @@
 // What the quick-ask box (quick_ask_flow.rs) is given and gives: the app it opened over, where a
-// message was asked as chat.send's context takes it, what goes to Pip, what you typed and a
-// window's title tidied to a line, and where the box's window sits on a monitor.
+// message was asked as chat.send's context takes it, what goes to Pip and the conversation it
+// continues, what you typed and a window's title tidied to a line, and where the box's window
+// sits on a monitor.
 
 use serde::Serialize;
+use std::time::{Duration, Instant};
 
 /// The most the box sends of what you type; chat.send takes up to 20,000 characters.
 pub const MAX_TEXT: usize = 4_000;
 /// The box's window in logical px: ask.css's card, with a line of context that wraps to three
-/// lines at most, and room for its shadow.
-pub const BOX_SIZE: (i32, i32) = (560, 148);
+/// lines at most, its 48 px pill and a line below it, and room for its shadow.
+pub const BOX_SIZE: (i32, i32) = (560, 168);
+/// A quick ask this soon after the last one continues its conversation, unless Tab says not to.
+pub const FOLLOW_UP: Duration = Duration::from_secs(10 * 60);
 const APP_MAX: usize = 60;
 const TITLE_MAX: usize = 120;
 const WORDS_MAX: usize = 240;
+/// As long as Nook's own title for a conversation it starts from a message (chat.send).
+const THREAD_TITLE_MAX: usize = 60;
 
 /// The app the box opened over.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -65,6 +71,35 @@ impl Context {
 pub struct Outgoing {
     pub text: String,
     pub context: Option<Context>,
+    /// The conversation it continues; none starts a new one.
+    pub conversation: Option<String>,
+}
+
+/// The conversation the last quick ask went to, its title as the box shows it, and when.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Thread {
+    pub id: String,
+    pub title: String,
+    pub at: Instant,
+}
+
+impl Thread {
+    /// Whether an ask at `now` still continues it.
+    pub fn continues_at(&self, now: Instant) -> bool {
+        now.saturating_duration_since(self.at) < FOLLOW_UP
+    }
+}
+
+/// Whether chat.send turned an ask away because the conversation it was to follow is gone, or
+/// was never this PC's to write in: the kernel's not-found for a conversation, as client.rs
+/// words Nook's refusal. Nothing else lets the box send it again, into a new one.
+pub fn conversation_gone(error: &str) -> bool {
+    error.ends_with(": Conversation not found")
+}
+
+/// A conversation's title from its first message, as Nook makes one: a line, cut short.
+pub(super) fn title_of(text: &str) -> String {
+    one_line(text, THREAD_TITLE_MAX)
 }
 
 /// What you typed, as it goes: trimmed, without control characters, and not endlessly long.

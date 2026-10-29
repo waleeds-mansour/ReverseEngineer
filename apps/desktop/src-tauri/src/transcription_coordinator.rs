@@ -695,9 +695,10 @@ fn start(app: &AppHandle, binding_id: &str, hotkey_string: &str) -> bool {
         return false;
     };
     action.start(app, binding_id, hotkey_string);
+    // Hearth: this binding's recording, not just any (the Ask Pip box's mic has its own).
     let recording = app
         .try_state::<Arc<AudioRecordingManager>>()
-        .is_some_and(|a| a.is_recording());
+        .is_some_and(|a| a.is_recording_for(binding_id));
     if !recording {
         debug!("Start for '{binding_id}' did not begin recording; staying idle");
     }

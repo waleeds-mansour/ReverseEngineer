@@ -7,14 +7,16 @@
 //
 // It's also how Hearth lives on the PC (D53): Hearth's own window (window.rs, sight.rs),
 // hearth:// links (deeplink.rs), Windows notifications (notify.rs), and the tray's status line and
-// service controls (status.rs, services.rs). A fourth hotkey opens the quick-ask box over any app,
-// to ask Pip by typing (quick_ask.rs).
+// service controls (status.rs, services.rs). A fourth hotkey, or a double-tap of Ctrl
+// (double_tap.rs), opens the quick-ask box over any app, to ask Pip by typing or talking
+// (quick_ask.rs).
 
 pub mod bakeoff;
 pub mod capture;
 pub mod chunker;
 pub mod client;
 pub mod deeplink;
+pub mod double_tap;
 pub mod foreground;
 pub mod hello;
 pub mod links;
@@ -25,6 +27,9 @@ pub mod overlay_ready;
 pub mod quick_ask;
 pub mod quick_ask_flow;
 pub mod quick_ask_parts;
+pub mod quick_ask_talk;
+pub mod quick_ask_view;
+pub mod quick_ask_win;
 pub mod relay;
 pub mod selection;
 pub mod services;

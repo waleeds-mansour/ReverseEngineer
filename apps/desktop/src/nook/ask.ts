@@ -2,6 +2,7 @@
 
 import "./nook.css";
 import "./ask.css";
+import "./askMic.css";
 import { startAsk, tauriAsk } from "./askView";
 
 startAsk({ link: tauriAsk });

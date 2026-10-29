@@ -1,7 +1,8 @@
 // Hearth: the address of your Hearth and the pairing code from its Settings (Desktop app), which
 // "Connect Hearth on this PC" there fills in by itself (D53). Paired, dictation is cleaned with
 // your Hearth dictionary, snippets and styles and kept in your history there, and two more
-// hotkeys reach Jarvis. Hearth's own window, quick capture and Ask Jarvis have hotkeys too.
+// hotkeys reach Jarvis. Hearth's own window, quick capture and Ask Jarvis have hotkeys too, and
+// a double-tap of Ctrl opens Ask Pip as well, unless switched off here.
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commands } from "@/bindings";
@@ -10,6 +11,7 @@ import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { SettingContainer } from "../ui/SettingContainer";
 import { SettingsGroup } from "../ui/SettingsGroup";
+import { ToggleSwitch } from "../ui/ToggleSwitch";
 import { ShortcutInput } from "./ShortcutInput";
 
 export const HearthSettings: React.FC = () => {
@@ -20,6 +22,7 @@ export const HearthSettings: React.FC = () => {
   const [code, setCode] = useState("");
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [tapping, setTapping] = useState(false);
   const shownUrl = url ?? getSetting("hearth_url") ?? "http://localhost:4400";
 
   const save = async () => {
@@ -35,6 +38,16 @@ export const HearthSettings: React.FC = () => {
       await refreshSettings();
     } finally {
       setBusy(false);
+    }
+  };
+
+  const doubleTap = async (on: boolean) => {
+    setTapping(true);
+    try {
+      await commands.changeHearthAskDoubleTapSetting(on);
+      await refreshSettings();
+    } finally {
+      setTapping(false);
     }
   };
 
@@ -107,6 +120,15 @@ export const HearthSettings: React.FC = () => {
       <ShortcutInput shortcutId="hearth_open" grouped={true} />
       <ShortcutInput shortcutId="hearth_capture" grouped={true} />
       <ShortcutInput shortcutId="hearth_ask" grouped={true} />
+      <ToggleSwitch
+        checked={getSetting("hearth_ask_double_tap") ?? true}
+        onChange={(on) => void doubleTap(on)}
+        isUpdating={tapping}
+        label={t("settings.hearth.doubleTap")}
+        description={t("settings.hearth.doubleTapHelp")}
+        descriptionMode="inline"
+        grouped={true}
+      />
     </SettingsGroup>
   );
 };

@@ -264,6 +264,17 @@ async unpairHearth() : Promise<Result<null, string>> {
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * The setting: double-tap Ctrl to open Ask Pip, on unless turned off.
+ */
+async changeHearthAskDoubleTapSetting(enabled: boolean) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_hearth_ask_double_tap_setting", { enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async changePostProcessModelSetting(providerId: string, model: string) : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("change_post_process_model_setting", { providerId, model }) };
@@ -1096,7 +1107,11 @@ hearth_url?: string;
 /**
  * Hearth pairing codes, by device ("desktop").
  */
-hearth_keys?: SecretMap; post_process_models?: Partial<{ [key in string]: string }>; post_process_prompts?: LLMPrompt[]; post_process_selected_prompt_id?: string | null; mute_while_recording?: boolean; append_trailing_space?: boolean; app_language?: string; theme?: Theme; experimental_enabled?: boolean; lazy_stream_close?: boolean; keyboard_implementation?: KeyboardImplementation; show_tray_icon?: boolean; paste_delay_ms?: number; paste_delay_after_ms?: number; 
+hearth_keys?: SecretMap; 
+/**
+ * A double-tap of Ctrl opens Ask Pip, as its shortcut does (Hearth's L2-17).
+ */
+hearth_ask_double_tap?: boolean; post_process_models?: Partial<{ [key in string]: string }>; post_process_prompts?: LLMPrompt[]; post_process_selected_prompt_id?: string | null; mute_while_recording?: boolean; append_trailing_space?: boolean; app_language?: string; theme?: Theme; experimental_enabled?: boolean; lazy_stream_close?: boolean; keyboard_implementation?: KeyboardImplementation; show_tray_icon?: boolean; paste_delay_ms?: number; paste_delay_after_ms?: number; 
 /**
  * Debug-gated ("beta") receipt-sequenced paste: restore the clipboard only
  * after the target app actually reads the transcript, instead of after a
@@ -1137,7 +1152,7 @@ export type AskCmd =
  */
 { kind: "send"; text: string } | 
 /**
- * Undo, its button or Esc, while it says Sending…: the text goes back in the box.
+ * Undo, its Esc key or Esc, while the ring fills: the text goes back in the box.
  */
 { kind: "undo" } |
 /**
@@ -1151,10 +1166,46 @@ export type AskCmd =
 /**
  * A click on Pip's answer, or Enter on the empty box after it: Pip's conversation in Nook.
  */
-{ kind: "open_conversation" }
+{ kind: "open_conversation" } | 
+/**
+ * The mic: the box listens, and what is said goes into it as text.
+ */
+{ kind: "listen" } | 
+/**
+ * Space or a second click keeps what was said; Esc throws it away.
+ */
+{ kind: "stop_listening"; keep: boolean } | 
+/**
+ * Tab: the next ask starts a new conversation instead of continuing the last one, or back.
+ */
+{ kind: "fresh" }
+/**
+ * The box's mic.
+ */
+export type AskMic = 
+/**
+ * Click it to talk.
+ */
+"ready" | 
+/**
+ * Dictation, talk mode or the meeting recorder has the microphone.
+ */
+"busy" | 
+/**
+ * Listening until Space or a second click.
+ */
+"listening" | 
+/**
+ * Listening until Ctrl, held down on a double-tap's second press, is let go.
+ */
+"held" | 
+/**
+ * What was said is being written down.
+ */
+"hearing"
 export type AskPhase = "typing" | 
 /**
- * Sending… with Undo: nothing has gone yet.
+ * The ring fills with Esc to undo: nothing has gone yet.
  */
 "waiting" | 
 /**
@@ -1181,11 +1232,33 @@ from: string | null;
 /**
  * Text to put back in the box, after an Undo or a failure; none leaves the box as it is.
  */
-draft: string | null; note: string | null; 
+draft: string | null; 
+/**
+ * Sent, "Sent to Pip", or that an Undo came too late, until Pip's first words back come;
+ * failed, why.
+ */
+note: string | null; 
 /**
  * How long is left to undo, while waiting.
  */
 undo_ms: number; 
+/**
+ * The note is Pip's first words back.
+ */
+answered: boolean; mic: AskMic; 
+/**
+ * Words just heard, to type out at the end of what is in the box: given once, as draft is.
+ */
+heard: string | null; 
+/**
+ * The title of the conversation the next ask continues (the one waiting goes to, while it
+ * waits); none starts a new one.
+ */
+continuing: string | null; 
+/**
+ * Tab chose a new conversation over continuing one; Tab again continues it.
+ */
+fresh: boolean; 
 /**
  * Nook's theme, glass and motion, as its other pages draw them.
  */

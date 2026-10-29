@@ -103,7 +103,7 @@ fn nothing_goes_until_the_wait_for_an_undo_is_over() {
     // An Undo just too late says so, until Pip's own words come back.
     assert!(!flow.undo());
     assert_eq!(flow.view(now).note.as_deref(), Some(TOO_LATE));
-    assert!(flow.sent(id));
+    assert!(flow.sent(id, "c1", now));
     let v = flow.view(now);
     assert_eq!(
         (v.phase, v.note.as_deref()),
@@ -133,7 +133,7 @@ fn undo_puts_the_text_back_once_and_the_wait_comes_to_nothing() {
     assert_ne!(next, id);
     assert_eq!(flow.due(id), None);
     assert!(flow.due(next).is_some());
-    assert!(flow.sent(next));
+    assert!(flow.sent(next, "c1", now));
     assert_eq!(flow.view(now).note.as_deref(), Some(SENT));
 }
 
@@ -160,10 +160,10 @@ fn opened_again_mid_wait_it_shows_what_the_message_goes_with_and_the_x_drops_it(
     assert_eq!(flow.due(id2).unwrap().context, None);
     flow.drop_context();
     assert_eq!(flow.view(now).from, None, "too late to change once it goes");
-    flow.sent(id2);
+    flow.sent(id2, "c1", now);
     let next = flow.send("And this", now).unwrap().unwrap();
     assert_eq!(flow.due(next).unwrap().context, None);
-    flow.sent(next);
+    flow.sent(next, "c1", now);
     // Opened over an app again, the box has its context again.
     flow.opened(Some(slack()));
     assert_eq!(
@@ -204,7 +204,7 @@ fn an_empty_box_sends_nothing_and_an_answer_opens_empty() {
         .unwrap()
         .unwrap();
     assert_eq!(flow.due(id).unwrap().text, "x".repeat(MAX_TEXT));
-    flow.sent(id);
+    flow.sent(id, "c1", now);
     // Opened over the box itself, it keeps the app it remembers; after an answer it is empty.
     flow.opened(None);
     assert_eq!(flow.over(), Some(&chrome()));
@@ -239,9 +239,9 @@ fn the_page_reads_its_commands_and_the_view_in_snake_case() {
 #[test]
 fn the_box_sits_centred_a_quarter_down_its_monitor_at_the_size_its_page_is_drawn() {
     let work = (0, 0, 2560, 1400);
-    assert_eq!(box_rect(work, 96), (1000, 313, 560, 148));
+    assert_eq!(box_rect(work, 96), (1000, 308, 560, 168));
     // At 150 % (DPI times text size) it is half as big again.
-    assert_eq!(box_rect(work, 144), (860, 294, 840, 222));
+    assert_eq!(box_rect(work, 144), (860, 287, 840, 252));
     // A second monitor to the left, and one too small for it.
     assert_eq!(box_rect((-1920, 0, 0, 1040), 96).0, -1920 + 680);
     assert_eq!(box_rect((0, 0, 400, 100), 96), (0, 0, 400, 100));
