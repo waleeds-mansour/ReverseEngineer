@@ -249,4 +249,22 @@ describe("Pip asks you with choices", () => {
       status: "done",
     });
   });
+
+  it("recommends a choice only by a place the question has", async () => {
+    const pick = (recommended: number): ScriptStep => ({
+      call: "ask_owner",
+      input: {
+        question: "Which day works for the dentist?",
+        choices: ["Friday", "Monday"],
+        recommended,
+        why: "Monday's morning is free.",
+      },
+    });
+    const { q } = await chatThatAsks([pick(2), pick(1)]);
+    // The first was refused, so the second is the turn's only question.
+    expect(await questions()).toHaveLength(1);
+    expect(q).toMatchObject({ choices: ["Friday", "Monday"], recommended: 1 });
+    const tool = h.brain.requests[0]!.tools.find((t) => t.name === "ask_owner");
+    expect(tool?.input.shape).toHaveProperty("recommended");
+  });
 });

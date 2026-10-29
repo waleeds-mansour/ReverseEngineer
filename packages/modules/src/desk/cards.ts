@@ -1,11 +1,13 @@
 // The desk's cards (D84): what in the inbox waits for you at the desktop, a short line each. The
 // overlay shows them small and answers them from the keyboard, so a card carries a title and one
 // line, never a whole email, and says when its words are outside content's. A question's card
-// (D85) carries its choices, from lane O5b's question table.
+// (D85) carries its choices, from lane O5b's question table, and a finished card the ready
+// replies its turn offered (replies.ts).
 import { approval, type DbOrTx, notification, question } from "@hearth/db";
 import { and, count, desc, eq, gt, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
 import { live } from "../inbox/index.ts";
 import { isOutside, preview, writtenOutside } from "../shared.ts";
+import { cardReplies } from "./replies.ts";
 
 /** What the desk shows: Pip's asks and questions, finished work, the brief and your day. */
 export const DESK_KINDS = ["approval", "question", "finished", "brief", "wrap"] as const;
@@ -50,6 +52,10 @@ export interface DeskCard {
   /** A question's: what desk.answer takes, and the choices it numbers. */
   questionId?: string;
   choices?: string[];
+  /** The choice Pip recommends, by its place in `choices` (from 0); absent when it has none. */
+  recommended?: number;
+  /** A finished card's: the ready replies its turn offered (D85), which desk.reply sends by place. */
+  replies?: string[];
 }
 
 export interface DeskList {
@@ -109,6 +115,7 @@ export async function deskCards(db: DbOrTx, now: Date, limit = MAX_CARDS): Promi
       q: {
         id: question.id,
         choices: question.choices,
+        recommended: question.recommended,
         origin: question.origin,
         open: sql<boolean>`${openQuestion(now)}`,
       },
@@ -157,10 +164,20 @@ export async function deskCards(db: DbOrTx, now: Date, limit = MAX_CARDS): Promi
     if (kind === "question" && q?.id && q.open) {
       card.questionId = q.id;
       card.choices = (q.choices ?? []).map((c) => preview(c, LINE_MAX));
+      // Only a place the card has: the desktop marks that chip Recommended.
+      if (q.recommended != null && q.recommended < card.choices.length)
+        card.recommended = q.recommended;
       // Asked by a turn that had read outside content (D58).
       card.outside ||= q.origin === "untrusted";
     }
     return card;
   });
+  // A finished card's ready replies, when its own turn offered some that are still fresh.
+  for (const [at, { n }] of rows.entries()) {
+    const ready = n.kind === "finished" ? await cardReplies(db, n.dedupeKey) : null;
+    if (!ready) continue;
+    cards[at]!.replies = ready.replies;
+    cards[at]!.outside ||= ready.outside;
+  }
   return { cards, counts };
 }

@@ -226,6 +226,8 @@ describe("device tokens", () => {
       "desk.decide",
       "desk.mark",
       "desk.answer",
+      "desk.reply",
+      "desk.conversation",
     ]);
     const device = ownerCaller("device", { origin: "untrusted" });
     for (const name of DEVICE_SCOPES.desktop!.filter((s) => !s.includes(" "))) {

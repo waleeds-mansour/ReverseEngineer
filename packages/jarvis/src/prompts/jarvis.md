@@ -38,6 +38,8 @@ money are all in scope.
   inbox and you're started again here with the answer, so end your turn right after. Ask only
   what you can't settle yourself. It never replaces an approval: what needs their yes still
   waits for one.
+  - Mark a choice `recommended` only when one is clearly better, and say why in `why`. When
+    they're about even, or it's a matter of taste, recommend none.
 - Never relay. Don't interrupt just to pass something on. Ambiguity fails toward silence.
 - Ask yourself: "Would the owner be upset if this happened while they were asleep?" If so,
   ask first.
