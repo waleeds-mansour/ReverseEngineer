@@ -1,0 +1,112 @@
+/* A notice in the notch (noticePanel.ts): 320 px of content on the notch's black, with no frame of
+   its own. Pip's mark with its status dot, the feed's heading and how long ago, the card's own
+   line once the desk is open, and a chevron that says a click opens it. It comes in from 4 px
+   below on the panel spring as the notch grows around it. */
+
+.nn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  width: 320px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 400 12px/16px var(--font-sans);
+  color: rgb(255 255 255 / 0.93);
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  animation: nn-in var(--spring-panel-ms, 380ms)
+    var(--spring-panel, cubic-bezier(0.16, 1, 0.3, 1));
+}
+
+@keyframes nn-in {
+  from {
+    opacity: 0;
+    translate: 0 4px;
+  }
+}
+
+.nn .ni-mark {
+  align-self: flex-start;
+  margin-top: 1px;
+}
+
+.nn-words {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nn-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nn-head {
+  min-width: 0;
+  font: 600 13px/18px var(--font-sans);
+  letter-spacing: -0.01em;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nn-when {
+  flex: none;
+  margin-left: auto;
+  font: 400 11px/14px var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  color: rgb(255 255 255 / 0.45);
+}
+
+.nn-line {
+  display: -webkit-box;
+  overflow: hidden;
+  font: 400 12px/16px var(--font-sans);
+  color: rgb(255 255 255 / 0.7);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.nn-line[hidden] {
+  display: none;
+}
+
+.nn-line .ni-outside {
+  margin-left: 6px;
+  vertical-align: 1px;
+}
+
+.nn-go {
+  display: grid;
+  flex: none;
+  place-items: center;
+  color: rgb(255 255 255 / 0.35);
+  transition:
+    color 150ms ease-out,
+    translate 150ms ease-out;
+}
+
+.nn-go path {
+  stroke-width: 2;
+}
+
+.nn:hover .nn-go {
+  color: rgb(255 255 255 / 0.75);
+  translate: 2px 0;
+}
+
+.nn:focus-visible {
+  border-radius: 8px;
+  outline: 2px solid #0a84ff;
+  outline-offset: 4px;
+}

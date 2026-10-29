@@ -1,0 +1,90 @@
+/* The agent dock's menu (menuPanel.ts), on the notch's black: plain rows of white text, a soft
+   white disc behind the one under the pointer or the keyboard, Sounds' tick, and the sizes as a
+   small segmented row. No capsules and no gradients: it is drawn on the notch itself. */
+
+.nm {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  width: 236px;
+  font: 500 14px/20px var(--font-sans);
+  color: #fff;
+}
+
+.nm > * {
+  flex: none;
+}
+
+.nm-row {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+  cursor: default;
+  transition: background-color 120ms var(--ease-out);
+}
+
+.nm-row[data-at]:not(.nm-size) {
+  background: rgb(255 255 255 / 0.1);
+}
+
+.nm-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nm-tick {
+  width: 14px;
+  text-align: center;
+  color: rgb(255 255 255 / 0.85);
+}
+
+.nm-seg {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
+  background: rgb(255 255 255 / 0.08);
+}
+
+.nm-pick {
+  all: unset;
+  box-sizing: border-box;
+  min-width: 36px;
+  height: 24px;
+  padding: 0 4px;
+  border-radius: 7px;
+  font: 500 12px/24px var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: rgb(255 255 255 / 0.7);
+  cursor: default;
+  transition:
+    background-color 120ms var(--ease-out),
+    color 120ms var(--ease-out);
+}
+
+.nm-pick[aria-checked="true"] {
+  background: rgb(255 255 255 / 0.2);
+  color: #fff;
+}
+
+.nm-pick[data-at]:not([aria-checked="true"]) {
+  background: rgb(255 255 255 / 0.1);
+  color: #fff;
+}
+
+.nm-apart {
+  height: 1px;
+  margin: 4px 10px;
+  border: 0;
+  background: rgb(255 255 255 / 0.1);
+}

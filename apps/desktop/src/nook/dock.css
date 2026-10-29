@@ -1,13 +1,13 @@
-/* Nook's agent dock at rest: the edge tab, a solid black tab flush with a side of the screen that
-   grows out of it through two S-shaped flares (its outline is dockShape.ts's), with its dots and
-   its count badge, and the dots themselves, which the open pill (dockPill.css) shares. The window is
-   the tab and a little room around it for its badge until Nook widens it for the pill, and Nook
-   clips it to what is drawn (dockclip.rs), so shadows stay close: anything past 3 px is cut off.
-   Only the tab's painted outline takes the pointer. The sizes match docksize.rs. Its colours are its own and stay dark in every theme, as a black
-   bezel does. A working dot's arc spins and colours cross-fade over 500 ms; the tab springs out of
-   the edge when the dock first shows and back out as the pill closes. Nothing moves when Windows
-   or the page asks for less motion (nook.css), and the spinners stop while the page is hidden and
-   while what they sit on, the tab or the pill, is folded away. */
+/* Nook's agent dock: the notch, one black SVG path the size of the window, drawn again every frame
+   by dockNotch.ts, with a 1 px white/10 hairline along its outline except where it meets the
+   screen's edge; the agents' dots, which sit in the tab at rest and move into the column as it
+   opens; and the count badge. The column's buttons and the box beside it are dockColumn.css's.
+   Nook clips the window to what is drawn (dockclip.rs), so nothing here throws a shadow past it.
+   Only the painted shape takes the pointer, not the window round it. Its colours are its own and
+   stay dark in every theme, as a black bezel does. A working dot's arc spins and colours
+   cross-fade over 500 ms; the tab grows out of the edge with a bounce when the dock first shows.
+   Nothing moves when Windows or the page asks for less motion (nook.css), and the spinners stop
+   while the page is hidden and while the tab they sit in is folded away. */
 
 * {
   box-sizing: border-box;
@@ -30,16 +30,6 @@ body {
 }
 
 :root {
-  /* docksize.rs */
-  --tab-deep: 25px;
-  --tab-flare: 22px;
-  --tab-gap: 9px;
-  --tab-pad: 25px;
-  --pill-inset: 14px;
-  --pill-wide: 34px;
-  --pill-gap: 8px;
-  --label-gap: 12px;
-  --label-wide: 300px;
   /* The dots' and badge's colours. Idle is a neutral grey that reads as resting on black without
      competing with the amber and green. */
   --nd-working: #0a84ff;
@@ -49,65 +39,33 @@ body {
   --nd-idle: #6e6e73;
   --nd-badge: #ffc75c;
   --nd-badge-ink: #1c1c1e;
+  --nd-ink: rgb(255 255 255 / 0.88);
+  --nd-ink-soft: rgb(255 255 255 / 0.6);
+  --nd-hover: rgb(255 255 255 / 0.1);
+  --nd-press: rgb(255 255 255 / 0.16);
   /* dockSpring.ts puts the springs themselves here; these stand in until it does. */
   --spring-tab: cubic-bezier(0.34, 1.56, 0.64, 1);
   --spring-tab-ms: 600ms;
-  --spring-panel: cubic-bezier(0.2, 0.9, 0.3, 1);
-  --spring-panel-ms: 380ms;
-  --spring-general: cubic-bezier(0.2, 0.9, 0.3, 1);
-  --spring-general-ms: 360ms;
   --ease-out: cubic-bezier(0, 0, 0.58, 1);
-  --ease-in: cubic-bezier(0.42, 0, 1, 1);
-  --ease-quick: cubic-bezier(0.16, 1, 0.3, 1);
-  /* Toward the screen's edge: +1 on the right, -1 on the left. */
-  --out: 1;
-}
-
-:root[data-edge="left"] {
-  --out: -1;
 }
 
 .nd {
   position: relative;
   width: 100%;
   height: 100%;
-}
-
-/* The edge tab. */
-
-.nd-tab {
-  position: absolute;
-  top: 50%;
-  right: 0;
-  width: var(--tab-deep);
-  height: var(--tab-h, 82px);
-  translate: 0 -50%;
+  overflow: hidden;
   transform-origin: 100% 50%;
-  touch-action: none;
-  /* Its painted outline takes the pointer (below), not the clear corners beside its flares. */
-  pointer-events: none;
-  transition:
-    transform var(--spring-tab-ms) var(--spring-tab),
-    opacity 160ms var(--ease-out);
+  /* Growing out of the edge as it first shows, it never swings past its size: Nook's piece of the
+     region for the tab has only 3 px of room round it (dockclip.rs). */
+  transition: scale 420ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-:root[data-edge="left"] .nd-tab {
-  right: auto;
-  left: 0;
+:root[data-edge="left"] .nd {
   transform-origin: 0 50%;
 }
 
-:root[data-open] .nd-tab {
-  opacity: 0;
-  transform: scaleX(0.4);
-  pointer-events: none;
-  transition:
-    transform 220ms var(--ease-out),
-    opacity 220ms var(--ease-out);
-}
-
-:root[data-mount] .nd-tab {
-  transform: scaleX(0);
+:root[data-mount] .nd {
+  scale: 0 1;
   transition: none;
 }
 
@@ -117,34 +75,60 @@ body {
   width: 100%;
   height: 100%;
   overflow: visible;
-  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.45));
-}
-
-.nd-shape path {
-  fill: #000;
-  pointer-events: visiblePainted;
-}
-
-:root[data-open] .nd-shape path {
   pointer-events: none;
 }
 
-.nd-tab-dots {
-  position: absolute;
-  top: calc(var(--tab-flare) + var(--tab-pad) / 2);
-  left: 0;
-  right: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--tab-gap);
-  /* A nudge of a pixel toward the screen's edge. */
-  padding-left: 2px;
+.nd-fill {
+  fill: #000;
+  pointer-events: visiblePainted;
+  touch-action: none;
 }
 
-:root[data-edge="left"] .nd-tab-dots {
-  padding-left: 0;
-  padding-right: 2px;
+.nd-line {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.1);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+/* The dots: in the tab at rest, where a press on them is a press on the tab, and buttons in the
+   open column, with a soft disc while hovered. */
+
+.nd-dots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.nd-dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  pointer-events: none;
+  touch-action: none;
+}
+
+:root[data-open] .nd-dot {
+  pointer-events: auto;
+}
+
+/* Only dockView's hover, which leaves a dot that slides under a still pointer alone. */
+:root[data-open] .nd-dot[data-hover] {
+  background: var(--nd-hover);
+}
+
+.nd-dot:focus-visible {
+  outline: 2px solid var(--nd-working);
+  outline-offset: -2px;
 }
 
 /* A dot: a ring whose blue arc spins while its agent works, and a solid for the other states. */
@@ -210,8 +194,7 @@ body {
 }
 
 :root[data-hidden] .nd-ring,
-:root:not([data-open]) .nd-pill .nd-ring,
-:root[data-open] .nd-tab .nd-ring {
+:root[data-mount] .nd-ring {
   animation-play-state: paused;
 }
 
@@ -221,10 +204,13 @@ body {
   }
 }
 
-/* The count badge: amber, cut out of what it sits on by a ring of that colour. */
+/* The count badge: amber, cut out of the black it sits on by a ring of it. dockNotch.ts puts its
+   side toward the middle of the screen where it goes; it grows toward the edge. */
 
 .nd-badge {
   position: absolute;
+  left: 0;
+  top: 0;
   display: none;
   height: 16px;
   min-width: 16px;
@@ -235,24 +221,13 @@ body {
   font: 700 10px/16px var(--font-sans);
   font-variant-numeric: tabular-nums;
   text-align: center;
-  box-shadow: 0 0 0 2px var(--nd-badge-ring, #1c1c1e);
+  box-shadow: 0 0 0 2px #000;
   pointer-events: none;
 }
 
 .nd-badge[data-n] {
   display: block;
   animation: nd-pop 400ms var(--ease-out);
-}
-
-.nd-tab .nd-badge {
-  --nd-badge-ring: #000;
-  top: 15px;
-  left: -8px;
-}
-
-:root[data-edge="left"] .nd-tab .nd-badge {
-  left: auto;
-  right: -8px;
 }
 
 @keyframes nd-pop {

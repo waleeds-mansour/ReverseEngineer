@@ -1,30 +1,33 @@
 // What the agent dock should be doing, decided without touching a window so it can be tested
-// anywhere; dockwin.rs carries the decisions out. At rest the dock is the edge tab: a solid black
-// tab flush with a side of the primary monitor, the right unless the owner chose the left, as far
-// down it as they last dragged it (dockplace.rs), topmost and never activated, holding a dot for
-// Pip, one for what waits for the owner's yes, and one for each of Hearth's services that needs
-// the owner (agents.rs), with a count badge for what waits. Its sizes are docksize.rs's. It is
-// made with its switch, which starts on, and shown once its page says it drew (the readiness
-// handshake: a page that never says so is made again once). Over something fullscreen or a game it
-// hides: Windows' own notification state says when, and while Nook observes for the bar or the
-// panel, nook-wm's game guard and the window in front say it too, monitor by monitor. Its menu can
-// hide it for an hour, after which it comes back on its own, and turn its sounds off. Hovering the
-// tab opens the pill: the page asks for room, the window widens toward the middle of the screen
-// for the column of capsules and the status label beside it, and while it is open the pointer is
-// watched too, so a pill the page never heard the pointer leave still closes. Its sizes are the
-// page's CSS px, and WebView2 draws those at the monitor's DPI scale times Windows' text size, so
-// the window is sized by both (drawn_at). It stays within the monitor's work area, so its pill
-// never opens under the taskbar, and the window is clipped to what its page draws (dockclip.rs),
-// so the room around the tab and the pill takes no clicks. The disabled file and safe start keep
-// it off, as they keep the bar off. It needs no hook and no observer of its own.
+// anywhere; dockwin.rs carries the decisions out. The dock is the notch: one black shape on a side
+// of the primary monitor, the right unless the owner chose the left, that everything opens inside
+// (docksize.rs). At rest it is the edge tab, as far down the side as the owner last dragged it
+// (dockplace.rs), topmost and never activated, with a dot for Pip, one for what waits for the
+// owner's yes and one for each of Hearth's services that needs the owner (agents.rs), and a count
+// badge for what waits. Its page grows the same shape into a column of icons when hovered, and
+// round a panel when one opens (notchPanel.ts), and says so (shape): whether it is open, whether a
+// panel holds it open, and the outlines it draws, which the window's region follows (dockclip.rs).
+// While it is open and nothing holds it, the pointer is watched too, so a notch whose page never
+// heard the pointer leave still folds; a panel that wants the keyboard gets it (dockkeys.rs).
+// It is made with its switch, which starts on, and shown once its page says it drew (the readiness
+// handshake: a page that never says so is made again once). Over something fullscreen or a game
+// it hides: Windows' own notification state says when, and while Nook observes for the bar or the
+// panel, nook-wm's game guard and the window in front say it too, monitor by monitor. Its menu
+// can hide it for an hour, after which it comes back on its own. WebView2 draws the page's CSS px
+// at the monitor's DPI scale times Windows' text size, zoomed by the owner's size for the dock
+// (less where the window wouldn't fit the work area), so the window is sized by all three
+// (drawn_at). It is made once at its biggest, as tall as the work area, so the notch never opens
+// under the taskbar, and only moves or resizes when the monitor, the side or the size changes. The
+// disabled file and safe start keep it off, as they keep the bar off.
 
 use super::bar::{in_front, Place};
-use super::chrome::{DockView, Edge};
-use super::dockclip::{ClipKey, LabelBox};
-use super::dockplace::{along_at, top_at, usable, window_at, DockPlace};
+use super::chrome::DockView;
+use super::dockclip::Shape;
+use super::dockplace::{usable, DockPlace};
+use super::docksize::{fitting, scale, window_rect, SCALE};
 use super::probe::{Hwnd, Rect};
 use super::start::Status;
-use super::view::{ModeName, NookState};
+use super::view::{FrontWindow, ModeName, NookState};
 use std::time::Instant;
 
 pub const DOCK_LABEL: &str = "nook_dock";
@@ -34,29 +37,36 @@ pub const RESTING: &str = "Hidden from the dock's menu for an hour; it comes bac
 /// Windows' text size runs from 100 % to 225 % (Settings > Accessibility > Text size).
 pub const TEXT_SIZES: (u32, u32) = (100, 225);
 
+/// Whether the agent dock is on the screen now: made, drawn and shown, and not hidden for a game,
+/// something fullscreen, a busy state or an hour's rest. Hearth's notifications go to it then.
+pub fn showing(app: &tauri::AppHandle) -> bool {
+    super::host::shared(app).is_some_and(|s| {
+        let run = s.dock();
+        run.shown && run.visible()
+    })
+}
+
 /// Windows' text size in percent, from the TextScaleFactor it keeps: 100 % when it has none.
 pub fn text_size(raw: Option<u32>) -> u32 {
     raw.unwrap_or(TEXT_SIZES.0)
         .clamp(TEXT_SIZES.0, TEXT_SIZES.1)
 }
 
-/// The monitor as the dock's page is drawn on it. WebView2 draws a page at its rasterization
-/// scale, the monitor's DPI scale times Windows' text size, so above 100 % every CSS px of the
-/// page is bigger than the monitor's DPI alone says: a window sized by the DPI alone clips its
-/// tab and pill. Sizing by both keeps the window and its page the same size.
+/// The monitor as a page of Nook's (the bar's, say) is drawn on it at Windows' text size.
 pub fn drawn_at(at: &Place, text: u32) -> Place {
-    let text = text.clamp(TEXT_SIZES.0, TEXT_SIZES.1);
-    Place {
-        rect: at.rect,
-        dpi: (at.dpi.max(1) * text + 50) / 100,
-    }
+    dock_at(at, text, 100)
 }
 
-/// Whether the pointer, in physical px, is over the dock's window where it was last placed.
-pub fn holds(placed: Option<Rect>, cursor: Option<(i32, i32)>) -> bool {
-    match (placed, cursor) {
-        (Some(r), Some((x, y))) => x >= r.left && x < r.right && y >= r.top && y < r.bottom,
-        _ => false,
+/// The monitor as the dock's page is drawn on it. WebView2 draws a page at the monitor's DPI scale
+/// times Windows' text size, and the dock zooms its page by the owner's size for it (`size`, in
+/// percent), so every CSS px is bigger than the DPI alone says: a window sized by the DPI alone
+/// clips the notch. Sizing by all three keeps the window and its page the same size.
+pub fn dock_at(at: &Place, text: u32, size: u32) -> Place {
+    let text = u64::from(text.clamp(TEXT_SIZES.0, TEXT_SIZES.1));
+    let dpi = u64::from(at.dpi.max(1)) * text * u64::from(size.max(1));
+    Place {
+        rect: at.rect,
+        dpi: ((dpi + 5000) / 10000) as u32,
     }
 }
 
@@ -73,17 +83,11 @@ pub fn wanted(on: bool, status: Status) -> Result<(), &'static str> {
     }
 }
 
-/// Whether Windows' notification state (SHQueryUserNotificationState) says something fullscreen
-/// is in front, a presentation is on, or nobody is there to see the dock.
-pub fn busy(quns: i32) -> bool {
-    // QUNS_NOT_PRESENT, _BUSY, _RUNNING_D3D_FULL_SCREEN, _PRESENTATION_MODE and _APP; not
-    // _ACCEPTS_NOTIFICATIONS or _QUIET_TIME.
-    matches!(quns, 1..=4 | 7)
-}
-
 /// One thing to do to the dock's window, in order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DockStep {
+    /// Its page is zoomed to the owner's size for the dock, in percent.
+    Zoom(u32),
     Place(Rect),
     /// Its webview is visible again, at normal memory, and gets the latest state.
     Wake,
@@ -109,17 +113,25 @@ pub struct DockRun {
     pub place: DockPlace,
     /// Hidden from its menu until then.
     pub resting: Option<Instant>,
-    /// Being dragged along its edge: the window's top and the pointer's height when it began.
+    /// Being dragged along its edge: the tab's middle and the pointer's height when it began, and
+    /// where its middle was a move ago, so the region keeps both until the page has drawn it.
     pub drag: Option<(i32, i32)>,
+    pub trail: Option<i32>,
     /// How many dots the page shows, and whether its count badge shows (anything waits).
     pub dots: usize,
     pub waiting: bool,
-    /// The pointer is over the dock, so its open pill has room.
+    /// The page says the notch is open, unfolded from the tab under the pointer, and whether a
+    /// panel holds it open wherever the pointer goes.
     pub open: bool,
-    /// Where the open pill's status label is, as its page last said; it counts only while open.
-    pub label: Option<LabelBox>,
-    /// The owner's switch for its sounds, as last read or saved.
+    pub hold: bool,
+    /// The outlines the page draws, in CSS px from the window's top-left (dockclip.rs).
+    pub outlines: Vec<Vec<(f64, f64)>>,
+    /// A panel has the keyboard, and the window that had it before (dockkeys.rs).
+    pub keys: bool,
+    pub before: Option<FrontWindow>,
+    /// The owner's switches for its sounds and its size in percent, as last read or saved.
     pub sounds: bool,
+    pub scale: u32,
     /// Windows' text size in percent, as last read; below 100 reads as 100 (drawn_at).
     pub text: u32,
     /// The primary monitor: nook-wm's while it observes, otherwise as the dock read it; and its
@@ -138,7 +150,8 @@ pub struct DockRun {
     pub shown: bool,
     pub asleep: bool,
     pub placed: Option<Rect>,
-    pub clipped: Option<ClipKey>,
+    pub zoomed: Option<u32>,
+    pub clipped: Option<Vec<Shape>>,
     /// The window was made a second time because its page didn't draw the first.
     pub remade: bool,
 }
@@ -148,6 +161,7 @@ impl DockRun {
         DockRun {
             setting,
             sounds: true,
+            scale: SCALE,
             ..DockRun::default()
         }
     }
@@ -168,23 +182,20 @@ impl DockRun {
     }
 
     /// What decides where the window goes and whether it shows, to tell when that changed.
-    pub fn seen(&self) -> (bool, Option<Place>, usize, bool, u32, DockPlace) {
+    pub fn seen(&self) -> (bool, Option<Place>, usize, bool, u32, DockPlace, u32) {
+        let (v, m) = (self.visible(), self.monitor);
         (
-            self.visible(),
-            self.monitor,
-            self.dots,
-            self.open,
-            self.text,
-            self.place,
+            v, m, self.dots, self.open, self.text, self.place, self.scale,
         )
     }
 
-    /// A run with no window yet, keeping what the owner chose (the switches, the place and a
-    /// rest) and the dots it shows, so a window made again is as long as they need at once.
+    /// A run with no window yet, keeping what the owner chose (the switches, the place, the size
+    /// and a rest) and the dots it shows, so a window made again shows them at once.
     pub fn kept(&self) -> DockRun {
         DockRun {
             setting: self.setting,
             sounds: self.sounds,
+            scale: self.scale,
             place: self.place,
             resting: self.resting,
             dots: self.dots,
@@ -193,23 +204,28 @@ impl DockRun {
         }
     }
 
-    /// The monitor as the page is drawn on it, kept to its work area (dockplace.rs's usable).
-    pub fn at(&self) -> Option<Place> {
+    /// The monitor as the page is drawn on it, kept to its work area (dockplace.rs's usable),
+    /// and the zoom it is drawn at: the owner's size, or as much as fits (docksize.rs's fitting).
+    fn fitted(&self) -> Option<(Place, u32)> {
         let at = usable(&self.monitor?, self.work);
-        Some(drawn_at(&at, self.text))
+        let zoom = fitting(self.scale, &at, self.text);
+        Some((dock_at(&at, self.text, zoom), zoom))
+    }
+
+    pub fn at(&self) -> Option<Place> {
+        self.fitted().map(|(at, _)| at)
+    }
+
+    /// The tab's middle in the page's CSS px down its window, as the page is told it.
+    pub fn mid(&self) -> Option<i32> {
+        let (px, at) = (self.mid_px()?, self.at()?);
+        Some((f64::from(px) * 96.0 / f64::from(at.dpi.max(1))).round() as i32)
     }
 
     /// The owner's switch. Turning it either way ends a rest, so the switch is what counts.
     pub fn switch(&mut self, on: bool) {
         self.setting = on;
         self.resting = None;
-    }
-
-    /// Moves it to `edge`, at that side's own spot. The place to keep.
-    pub fn move_to(&mut self, edge: Edge) -> DockPlace {
-        self.place = self.place.on(edge);
-        self.open = false;
-        self.place
     }
 
     /// Hidden from its menu until `until`.
@@ -225,37 +241,6 @@ impl DockRun {
             self.resting = None;
         }
         over
-    }
-
-    /// The tab or pill was pressed and moved with the pointer at height `y`: from now the tab
-    /// follows the pointer along its edge, with its pill closed. Whether it can (it shows, where it
-    /// was put). It starts from where the resting window's top is, never the open window's, which
-    /// reaches higher.
-    pub fn drag_start(&mut self, y: i32) -> bool {
-        let (Some(_), Some(at)) = (self.placed.filter(|_| self.visible()), self.at()) else {
-            return false;
-        };
-        let top = top_at(&at, self.place.edge, self.dots, self.place.along());
-        self.drag = Some((top, y));
-        self.open = false;
-        true
-    }
-
-    /// The pointer is at height `y` while dragging: the tab moves with it, kept on the work area.
-    /// Whether it moved.
-    pub fn drag_to(&mut self, y: i32) -> bool {
-        let (Some((top, from)), Some(at)) = (self.drag, self.at()) else {
-            return false;
-        };
-        let along = along_at(&at, self.place.edge, self.dots, top + y - from);
-        let was = self.place;
-        self.place = self.place.moved(along);
-        self.place != was
-    }
-
-    /// The button came up: the place to keep, if it was being dragged.
-    pub fn drag_end(&mut self) -> Option<DockPlace> {
-        self.drag.take().map(|_| self.place)
     }
 
     /// A state from nook-wm. While it observes, its primary monitor and what is in front of it
@@ -280,7 +265,7 @@ impl DockRun {
         }
         self.game_here = seen.game_here;
         self.covered = seen.covered;
-        self.open = self.open && self.visible();
+        self.folds();
     }
 
     /// The dock's own reading of Windows, every few seconds: the primary monitor and its work
@@ -291,20 +276,31 @@ impl DockRun {
             self.monitor = Some(at);
             self.work = Some(work);
         }
+        self.folds();
+    }
+
+    /// A dock that doesn't show is neither open nor held open.
+    fn folds(&mut self) {
         self.open = self.open && self.visible();
+        self.hold = self.hold && self.visible();
     }
 
-    /// The pointer came over the dock, or left it. No pill while the tab is dragged.
-    pub fn hover(&mut self, open: bool) {
+    /// What the page says of the notch: open or not, held open by a panel or not, and the outlines
+    /// it draws. Not open while the tab is dragged or the dock doesn't show. Whether that opened
+    /// it, so the pointer is watched.
+    pub fn shape(&mut self, open: bool, hold: bool, outlines: Vec<Vec<(f64, f64)>>) -> bool {
+        let was = self.open;
         self.open = open && self.visible() && self.drag.is_none();
+        self.hold = hold && self.visible();
+        self.outlines = outlines;
+        self.open && !was
     }
 
-    /// Where the pointer is, read while the pill is open. One that has left what the window's
-    /// region covers closes the pill, whatever its page heard: a pointer that leaves fast, or a
-    /// window that shrinks or hides under it, can leave the page none the wiser. Whether that
-    /// closed it.
+    /// Where the pointer is, read while the notch is open and nothing holds it. Leaving
+    /// what the window's region covers folds it, whatever its page heard: a pointer that leaves
+    /// fast, or a dock that hides under it, can leave the page none the wiser. Whether it folded.
     pub fn pointer(&mut self, cursor: Option<(i32, i32)>) -> bool {
-        if !self.open || self.reach().into_iter().any(|r| holds(Some(r), cursor)) {
+        if !self.open || self.hold || self.covers(cursor) {
             return false;
         }
         self.open = false;
@@ -317,9 +313,12 @@ impl DockRun {
         if !self.made {
             return steps;
         }
-        if let Some(at) = self.at() {
-            let (edge, along) = (self.place.edge, self.place.along());
-            let rect = window_at(&at, edge, self.dots, self.open, along);
+        if let Some((at, zoom)) = self.fitted() {
+            if self.zoomed != Some(zoom) {
+                steps.push(DockStep::Zoom(zoom));
+                self.zoomed = Some(zoom);
+            }
+            let rect = window_rect(&at, self.place.edge);
             if self.placed != Some(rect) {
                 steps.push(DockStep::Place(rect));
                 self.placed = Some(rect);
@@ -381,6 +380,9 @@ impl DockRun {
             sounds: self.sounds,
             // look.rs knows where the dots come from.
             feed: false,
+            mid: self.mid().unwrap_or(0),
+            scale: scale(self.scale),
+            keys: self.keys,
         }
     }
 }

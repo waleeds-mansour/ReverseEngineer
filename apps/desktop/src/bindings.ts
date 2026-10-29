@@ -594,6 +594,74 @@ async askPip(cmd: AskCmd) : Promise<Result<AskView, string>> {
 }
 },
 /**
+ * The panel opened, or wants the switcher fresh: the conversation it last showed, read again,
+ * and the desk's recent conversations.
+ */
+async chatList() : Promise<Result<ChatView, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("chat_list") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Shows a conversation from the switcher, or with none a new one, which your first message
+ * starts.
+ */
+async chatOpen(conversation: string | null) : Promise<Result<ChatView, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("chat_open", { conversation }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Your words to Pip. A failure comes back as Err, so the page keeps what you typed.
+ */
+async chatSend(text: string) : Promise<Result<ChatView, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("chat_send", { text }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The panel closed; with `nook`, the conversation goes on in Hearth's window.
+ */
+async chatClose(nook: boolean) : Promise<Result<ChatView, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("chat_close", { nook }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Windows Hello opens the desk, and with it the rest of your conversations.
+ */
+async chatUnlock() : Promise<Result<ChatView, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("chat_unlock") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Lines older than those shown.
+ */
+async chatOlder() : Promise<Result<ChatView, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("chat_older") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * The overlay's page answers: with no show when it starts listening, which sends it the show on
  * screen, and with each show it draws.
  */
@@ -1290,6 +1358,96 @@ popover: boolean;
 quiet: boolean }
 export type BindingResponse = { success: boolean; binding: ShortcutBinding | null; error: string | null }
 /**
+ * A conversation in the switcher.
+ */
+export type ChatItem = { id: string; title: string;
+/**
+ * When it last moved, as an ISO time; empty when not known.
+ */
+at: string; working: boolean }
+export type ChatLine = {
+/**
+ * Its place in the conversation's log.
+ */
+idx: number; who: ChatWho; text: string }
+/**
+ * What the chat panel draws, sent as 'nook://chat' to the dock's window and given back by each
+ * chat command.
+ */
+export type ChatView = {
+/**
+ * Counts up with each view that changed, so the page drops one that comes late.
+ */
+seq: number; open: boolean;
+/**
+ * Windows Hello has the desk open, so any of your conversations can be shown.
+ */
+desk: boolean;
+/**
+ * Windows Hello is up.
+ */
+unlocking: boolean;
+/**
+ * The conversation shown; None for a new one, which your first message starts.
+ */
+conversation: string | null; title: string;
+/**
+ * Oldest first.
+ */
+lines: ChatLine[];
+/**
+ * Older lines can be had.
+ */
+older: boolean;
+/**
+ * Pip is on it: the working arc and `status` show.
+ */
+working: boolean;
+/**
+ * "Thinking about what you asked", as the dock says it.
+ */
+status: string | null;
+/**
+ * Up to two ready replies (D85).
+ */
+replies: string[];
+/**
+ * Written after Pip read outside content: marked, as the Inbox marks them.
+ */
+replies_outside: boolean;
+/**
+ * It read outside content, and this says what, as Nook's badge does.
+ */
+outside: string | null;
+/**
+ * It isn't the app's own and the desk is shut: Windows Hello opens it.
+ */
+locked: boolean;
+/**
+ * The switcher: the desk's recent conversations, or without it the app's own.
+ */
+recent: ChatItem[];
+/**
+ * Where "Open in Nook" goes.
+ */
+link: string;
+/**
+ * What went wrong, plainly.
+ */
+trouble: string | null }
+/**
+ * Who said a line.
+ */
+export type ChatWho = "you" | "pip" |
+/**
+ * One of Nook's notes in the conversation: stopped, picked up again.
+ */
+"notice" |
+/**
+ * Pip's turn failed.
+ */
+"error"
+/**
  * Script applied to Mandarin and Cantonese output. Other languages are never
  * converted.
  */
@@ -1318,9 +1476,34 @@ agents: AgentDot[]; dock: DockView }
 export type ClipboardHandling = "dont_modify" | "copy_to_clipboard"
 export type CustomSounds = { start: boolean; stop: boolean }
 /**
+ * What the agent dock's menu (menuPanel.ts) does.
+ */
+export type DockChoice =
+/**
+ * Over to the other edge.
+ */
+{ kind: "edge"; edge: Edge } |
+/**
+ * Hidden for an hour.
+ */
+{ kind: "rest" } |
+{ kind: "sounds"; on: boolean } |
+/**
+ * The dock's size, in percent.
+ */
+{ kind: "size"; percent: number } |
+/**
+ * Nook's panel, where the dock's settings are.
+ */
+{ kind: "settings" } |
+/**
+ * The dock's switch, off.
+ */
+{ kind: "off" }
+/**
  * What the agent dock's status label or Pip's mark opens in Hearth's window.
  */
-export type DockPage = 
+export type DockPage =
 /**
  * Pip's conversation, with its Stop.
  */
@@ -1354,7 +1537,19 @@ open: boolean; edge: Edge;
  * The dock's short tones, from its menu: something new waits, a service has trouble, Pip
  * finished.
  */
-sounds: boolean; 
+sounds: boolean;
+/**
+ * The tab's middle, in the page's CSS px down its window; 0 until it has a place.
+ */
+mid: number;
+/**
+ * The owner's size for the dock, in percent.
+ */
+scale: number;
+/**
+ * One of its panels has the keyboard (dockkeys.rs); the page closes it once this goes.
+ */
+keys: boolean;
 /**
  * The dots' counts and services come from Hearth's notify feed, not the tray. The sounds
  * start over when this changes, so the feed coming back is no news.
@@ -1399,6 +1594,97 @@ export type ImplementationChangeResult = { success: boolean;
  * List of binding IDs that were reset to defaults due to incompatibility
  */
 reset_bindings: string[] }
+/**
+ * What the Inbox page asks.
+ */
+export type InboxAct = 
+/**
+ * The Inbox opened: the dock's window takes the keyboard, and the desk is listed.
+ */
+{ kind: "open" } | 
+/**
+ * The Inbox closed: the keyboard goes back to the app you were in.
+ */
+{ kind: "close" } | 
+/**
+ * Windows Hello opens the desk.
+ */
+{ kind: "unlock" } | 
+/**
+ * A yes or a no to what Pip asks; never Always allow.
+ */
+{ kind: "decide"; approval_id: string; yes: boolean } | 
+/**
+ * One of a question's choices, from 0, words of your own, or both.
+ */
+{ kind: "answer"; question_id: string; choice: number | null; text: string | null } | 
+/**
+ * One of the ready replies a finished card offers, from 0.
+ */
+{ kind: "reply"; id: string; choice: number } | 
+/**
+ * Finished work, the brief or the evening wrap is done with.
+ */
+{ kind: "clear"; id: string } | 
+/**
+ * A card was shown.
+ */
+{ kind: "seen"; id: string } | 
+/**
+ * Opens a card where it lives, in Hearth's window.
+ */
+{ kind: "show"; url: string } | 
+/**
+ * Opens Today in Hearth's window, when the desk can't open here.
+ */
+{ kind: "today" }
+export type InboxCard = { id: string; 
+/**
+ * approval, question, finished, brief or wrap.
+ */
+kind: string; title: string; line: string; at: string; url: string; outside: boolean; seen: boolean; approval_id: string | null; risk: string | null; question_id: string | null; choices: string[];
+/**
+ * The choice Pip recommends, from 0, when it does.
+ */
+recommended: number | null; replies: string[] }
+/**
+ * Where the desk is.
+ */
+export type InboxPhase = 
+/**
+ * Windows Hello opens it.
+ */
+"shut" | 
+/**
+ * Windows Hello is up.
+ */
+"opening" | "open" | 
+/**
+ * It can't open here: no Windows Hello, not connected, Hearth not answering.
+ */
+"trouble"
+export type InboxTrouble = { 
+/**
+ * desk_parts.rs's DeskError::word.
+ */
+word: string; says: string }
+export type InboxView = { 
+/**
+ * Goes up with every view, so a page can drop one that arrives late.
+ */
+seq: number; 
+/**
+ * The Inbox is open: Nook closes it when its window loses the keyboard.
+ */
+open: boolean; phase: InboxPhase; cards: InboxCard[]; 
+/**
+ * How many wait on the desk in all.
+ */
+total: number; trouble: InboxTrouble | null; 
+/**
+ * Hearth said no to the page's last act, in its words.
+ */
+refused: string | null }
 export type KeyboardDiagnosticReport = { secure_input_enabled: boolean; culprit_pid: number | null; culprit_name: string | null; 
 /**
  * Counts only — key identity is deliberately never captured.
@@ -1654,17 +1940,9 @@ export type UiCmd =
  */
 { kind: "set_dock"; on: boolean } |
 /**
- * The pointer came over the agent dock, or left it: its open pill gets room, or gives it back.
- */
-{ kind: "dock_hover"; open: boolean } | 
-/**
  * The side the agent dock sits on, left or right.
  */
 { kind: "set_dock_edge"; edge: Edge } | 
-/**
- * A right click on the agent dock, or its "…": its menu, at the pointer.
- */
-{ kind: "dock_menu" } | 
 /**
  * The agent dock was pressed and moved: it follows the pointer until let go.
  */
@@ -1678,16 +1956,31 @@ export type UiCmd =
  */
 { kind: "dock_talk" } | 
 /**
- * Where the agent dock's status label is, in CSS px from the window's top: anywhere from
- * `top` to `bottom` while it glides between dots, and `wide`; 0 wide once it is gone. The
- * window takes the pointer only there and on what else it draws.
+ * The agent dock's Inbox (inboxview.rs): answered with the Inbox's view.
  */
-{ kind: "dock_label"; top: number; bottom: number; wide: number }
+/**
+ * What the agent dock's notch is: open or folded, held open by a panel or not, and the
+ * outlines it draws, in CSS px from the window's top-left, which its window's region follows.
+ */
+{ kind: "dock_shape"; open: boolean; hold: boolean; outlines: ([number, number])[][] } |
+/**
+ * A panel in the agent dock's notch that wants the keyboard opened, or closed (dockkeys.rs).
+ */
+{ kind: "dock_keys"; take: boolean } |
+/**
+ * Something chosen from the agent dock's menu.
+ */
+{ kind: "dock_choose"; choice: DockChoice } |
+{ kind: "inbox"; act: InboxAct }
 export type UiReply = { state: NookState; 
 /**
  * Where a saved file went.
  */
-saved: string | null; chrome: ChromeView }
+saved: string | null; chrome: ChromeView; 
+/**
+ * The Inbox's view, for UiCmd::Inbox.
+ */
+inbox: InboxView | null }
 export type VadBackend = "silero" | "earshot"
 export type VerdictName = "tile" | "float" | "ignore"
 export type WindowState = "normal" | "minimized" | "maximized"

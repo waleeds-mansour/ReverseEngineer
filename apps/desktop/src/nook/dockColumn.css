@@ -1,0 +1,180 @@
+/* The open notch's column and the box beside it (dockNotch.ts places both every frame). The
+   column's buttons are glyphs on the black, about 20 px in 40 px circles, with a soft white/10 disc
+   while hovered: no capsules, no gradients. The box is the part of the notch that grows toward the
+   middle of the screen, for a panel's content (notchPanel.ts) or a hovered dot's label, and keeps
+   what it holds to its outline. */
+
+.nd-col {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.nd-item {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--nd-ink);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.nd-item[hidden] {
+  display: none;
+}
+
+.nd-item:hover {
+  background: var(--nd-hover);
+  color: #fff;
+}
+
+.nd-item:active {
+  background: var(--nd-press);
+}
+
+.nd-item:focus-visible {
+  outline: 2px solid var(--nd-working);
+  outline-offset: -2px;
+}
+
+.nd-item[data-item="talk"][data-on] {
+  color: var(--nd-working);
+}
+
+.nd-item[aria-expanded="true"] {
+  background: var(--nd-hover);
+}
+
+/* The box: its corners toward the middle of the screen are the notch's, and the side against the
+   column is straight. */
+
+.nd-box {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: hidden;
+  border-radius: var(--r, 0) 0 0 var(--r, 0);
+  visibility: hidden;
+  color: var(--nd-ink);
+}
+
+:root[data-edge="left"] .nd-box {
+  border-radius: 0 var(--r, 0) var(--r, 0) 0;
+}
+
+/* A panel's content: PANEL.pad in from the box's top and from the column, as wide as it asks and
+   no taller than the box holds (dockPanels.ts's max-height). Its root shrinks to fit, and scrolls
+   its own middle while its header and its field stay in view. */
+.nd-content {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.nd-content > * {
+  flex: 0 1 auto;
+  min-height: 0;
+}
+
+:root[data-edge="left"] .nd-content {
+  right: auto;
+  left: 16px;
+}
+
+/* A dot's label, against the column, as wide as its words: dockLayout.ts's lip is this wide. */
+.nd-lip {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: none;
+  align-items: center;
+  gap: 7px;
+  width: max-content;
+  max-width: 300px;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+:root[data-edge="left"] .nd-lip {
+  right: auto;
+  left: 0;
+}
+
+.nd-box[data-lip] .nd-lip {
+  display: flex;
+}
+
+.nd-lip:focus-visible {
+  outline: 2px solid var(--nd-working);
+  outline-offset: -4px;
+  border-radius: 12px;
+}
+
+.nd-lip-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--nd-idle);
+}
+
+.nd-lip[data-state="working"] .nd-lip-dot {
+  background: var(--nd-working);
+}
+
+.nd-lip[data-state="needs_you"] .nd-lip-dot {
+  background: var(--nd-needs);
+}
+
+.nd-lip[data-state="done"] .nd-lip-dot {
+  background: var(--nd-done);
+}
+
+.nd-lip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nd-lip-head {
+  font-weight: 650;
+  color: #fff;
+}
+
+.nd-lip-tail {
+  color: var(--nd-ink-soft);
+}
+
+.nd-lip-tail:not(:empty)::before {
+  content: "  ·  ";
+  white-space: pre;
+  color: rgb(255 255 255 / 0.35);
+}
+
+.nd-chev {
+  flex: none;
+  color: var(--nd-ink-soft);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.nd-lip:hover .nd-chev {
+  color: #fff;
+}

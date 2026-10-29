@@ -49,6 +49,19 @@ pub struct NookSettings {
     /// The dock's short tones (its menu's Sounds): something new waits, a service has trouble,
     /// Pip finished. Quiet and rare, so they start on.
     pub dock_sounds: bool,
+    /// The dock's size, in percent (its menu's Size): 100, 125, 150 or 175, and 150 to start, so
+    /// it reads at a glance on a big screen.
+    #[serde(deserialize_with = "lenient_scale")]
+    pub dock_scale: u32,
+}
+
+/// The dock's size as stored, which never fails the rest of Nook's settings: a whole number reads
+/// as the nearest of its sizes, and anything else (a fraction, a string) as the size it starts at.
+fn lenient_scale<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
+    let v = serde_json::Value::deserialize(d)?;
+    Ok(v.as_u64()
+        .and_then(|n| u32::try_from(n).ok())
+        .map_or(super::docksize::SCALE, super::docksize::scale))
 }
 
 impl Default for NookSettings {
@@ -79,6 +92,7 @@ impl NookSettings {
             observe: false,
             dock: false,
             dock_sounds: false,
+            dock_scale: super::docksize::SCALE,
         }
     }
 
@@ -102,6 +116,7 @@ impl NookSettings {
             bar: _,
             dock: _,
             dock_sounds: _,
+            dock_scale: _,
         } = self;
         [
             enabled,
@@ -171,12 +186,31 @@ pub fn save_dock_sounds(app: &AppHandle, on: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// The dock's size, the same way.
+pub fn save_dock_scale(app: &AppHandle, percent: u32) -> Result<(), String> {
+    let store = store(app)?;
+    let size = serde_json::Value::from(super::docksize::scale(percent));
+    store.set(
+        STORE_KEY,
+        with_value(store.get(STORE_KEY), "dock_scale", size),
+    );
+    Ok(())
+}
+
 pub fn with_switch(value: Option<serde_json::Value>, key: &str, on: bool) -> serde_json::Value {
+    with_value(value, key, serde_json::Value::Bool(on))
+}
+
+pub fn with_value(
+    value: Option<serde_json::Value>,
+    key: &str,
+    v: serde_json::Value,
+) -> serde_json::Value {
     let mut map = match value {
         Some(serde_json::Value::Object(map)) => map,
         _ => serde_json::Map::new(),
     };
-    map.insert(key.into(), serde_json::Value::Bool(on));
+    map.insert(key.into(), v);
     serde_json::Value::Object(map)
 }
 
@@ -223,6 +257,14 @@ mod tests {
         assert!(!off.dock && off.dock_sounds);
         let quiet = from_value(Some(json!({ "dock_sounds": false })));
         assert!(quiet.dock && !quiet.dock_sounds);
+        // The dock starts at 150 %, and a store from before its size had one keeps that.
+        assert_eq!((settings.dock_scale, older.dock_scale), (150, 150));
+        let small = from_value(Some(json!({ "dock_scale": 100 })));
+        assert_eq!(small.dock_scale, 100);
+        assert_eq!(
+            with_value(Some(json!({ "dock": true })), "dock_scale", json!(125)),
+            json!({ "dock": true, "dock_scale": 125 })
+        );
         assert!(!NookSettings::off().dock_sounds);
         assert_eq!(
             with_switch(Some(json!({ "bar": true })), "dock", false),
@@ -244,6 +286,29 @@ mod tests {
         assert_eq!(settings, NookSettings::off());
         assert!(!settings.dock);
         assert_eq!(from_value(Some(json!("on"))), NookSettings::off());
+    }
+
+    #[test]
+    fn a_dock_size_that_does_not_read_is_the_one_it_starts_at_and_the_rest_stand() {
+        let odd = from_value(Some(json!({ "bar": true, "dock_scale": 1.5 })));
+        assert!(odd.bar && odd.dock, "a fraction fails nothing else");
+        assert_eq!(odd.dock_scale, 150);
+        assert_eq!(
+            from_value(Some(json!({ "dock_scale": "big" }))).dock_scale,
+            150
+        );
+        assert_eq!(
+            from_value(Some(json!({ "dock_scale": -5 }))).dock_scale,
+            150
+        );
+        assert_eq!(
+            from_value(Some(json!({ "dock_scale": 130 }))).dock_scale,
+            125
+        );
+        assert_eq!(
+            from_value(Some(json!({ "dock_scale": 175 }))).dock_scale,
+            175
+        );
     }
 
     #[test]

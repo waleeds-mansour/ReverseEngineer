@@ -770,6 +770,12 @@ pub fn run(cli_args: CliArgs) {
             nook::prepare_update,
             nook::nook_ui,
             hearth::quick_ask::ask_pip,
+            hearth::chat::chat_list,
+            hearth::chat::chat_open,
+            hearth::chat::chat_send,
+            hearth::chat::chat_close,
+            hearth::chat::chat_unlock,
+            hearth::chat::chat_older,
             overlay::overlay_ready,
             commands::cancel_operation,
             commands::is_portable,
@@ -1191,8 +1197,11 @@ pub fn run(cli_args: CliArgs) {
                 }
             }
             // Hearth's small windows (quick capture, the quick-ask box) tuck away on clicking
-            // elsewhere.
-            tauri::WindowEvent::Focused(false) => hearth::window::blurred(window),
+            // elsewhere, and so does the agent dock's Inbox.
+            tauri::WindowEvent::Focused(false) => {
+                hearth::window::blurred(window);
+                nook::blurred(window.app_handle(), window.label());
+            }
             // Hearth: a click that activated Nook's bar hands the foreground back.
             tauri::WindowEvent::Focused(true) => nook::focused(window.app_handle(), window.label()),
             // Minimized, Hearth's page rests as it does in the tray.
@@ -1236,6 +1245,8 @@ pub fn run(cli_args: CliArgs) {
         // A restore Nook is still running gets a moment to finish.
         tauri::RunEvent::ExitRequested { .. } => {
             hearth::sight::quitting(app);
+            // The desk at Hearth shuts with the app (hearth/desk.rs).
+            hearth::desk::quit(app);
             nook::shutdown(app);
         }
         // Teardown transcribe.cpp before exit

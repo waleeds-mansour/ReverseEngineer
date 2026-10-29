@@ -1,22 +1,20 @@
-// What the owner does to the agent dock itself, as dock.rs decides it: its menu (dockmenu.rs),
-// dragging the edge tab along its edge, moving it to the other side, hiding it for an hour, its
-// sounds, the buttons on its open pill and status label, which open a page of Hearth's own window,
-// and the pill's mic, which starts talking to Pip just as talk mode's hotkey does. None of it acts
-// on Hearth: a button only opens a page, where the owner's own session does whatever is done
-// there, and the mic only starts listening. Where the dock sits, and whether it sounds, are kept
-// as soon as they change (dockplace.rs, settings.rs).
+// What the owner does to the agent dock itself, as dock.rs decides it: its menu (menuPanel.ts, a
+// panel in its notch), dragging the edge tab along its edge, moving it to the other side, hiding
+// it for an hour, its sounds and its size, the notch's buttons and status label, which open a page
+// of Hearth's own window, and its mic, which starts talking to Pip just as talk mode's hotkey
+// does. None of it acts on Hearth: a button only opens a page, where the owner's own session does
+// whatever is done there, and the mic only starts listening. Where the dock sits, whether it
+// sounds and its size are kept as soon as they change (dockplace.rs, settings.rs).
 
 use super::chrome::Edge;
-use super::dock::DOCK_LABEL;
-use super::dockmenu::{self, Choice};
 use super::dockplace::{self, DockPlace};
 use super::dockwin::{self, nudge};
-use super::host::{self, Shared};
-use super::view::DockPage;
-use super::{look, settings, ui};
+use super::host::Shared;
+use super::view::{DockChoice, DockPage};
+use super::{docksize, look, settings, ui};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON};
 use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_SWAPBUTTON};
 
@@ -49,51 +47,28 @@ pub fn talk(app: &AppHandle) {
     crate::signal_handle::send_transcription_input(app, crate::hearth::TALK_BINDING, "Nook's dock");
 }
 
-/// A right click on the tab or the pill, or the pill's "…": the menu, at the pointer, on the main
-/// thread. What the owner chooses is carried out off it.
-pub fn menu(shared: &Arc<Shared>) {
-    let (edge, shown, sounds) = {
-        let run = shared.dock();
-        (run.place.edge, run.shown, run.sounds)
-    };
-    let Some(at) = dockwin::cursor().filter(|_| shown) else {
-        return;
-    };
-    let app = shared.app.clone();
-    let _ = shared.app.run_on_main_thread(move || {
-        let Some(w) = app.get_webview_window(DOCK_LABEL) else {
-            return;
-        };
-        if let Some(choice) = dockmenu::show(&w, edge, sounds, at) {
-            let app = app.clone();
-            tauri::async_runtime::spawn_blocking(move || chose(&app, choice));
-        }
-    });
-}
-
-fn chose(app: &AppHandle, choice: Choice) {
-    let Some(shared) = host::shared(app) else {
-        return;
-    };
+/// What the owner chose from the dock's menu.
+pub fn choose(shared: &Arc<Shared>, choice: DockChoice) {
     let done = match choice {
-        Choice::Edge(edge) => to_edge(&shared, edge),
-        Choice::Rest => {
+        DockChoice::Edge { edge } => to_edge(shared, edge),
+        DockChoice::Rest => {
             shared.dock().rest(Instant::now() + REST_FOR);
             log::info!("Nook's agent dock is hidden for an hour from its menu");
             Ok(())
         }
-        Choice::Sounds(on) => sounds(&shared, on),
-        Choice::Settings => {
-            ui::open_panel(app);
+        DockChoice::Sounds { on } => sounds(shared, on),
+        DockChoice::Size { percent } => size(shared, percent),
+        DockChoice::Settings => {
+            ui::open_panel(&shared.app);
             Ok(())
         }
-        Choice::Off => switch(&shared, false),
+        DockChoice::Off => switch(shared, false),
     };
     if let Err(e) = done {
         log::warn!("The dock's menu couldn't do that: {e}");
     }
-    nudge(app);
-    look::emit(&shared);
+    nudge(&shared.app);
+    look::emit(shared);
 }
 
 /// The owner's switch, from Nook's panel or the dock's menu.
@@ -111,6 +86,14 @@ pub fn sounds(shared: &Shared, on: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// The dock's size, from its menu: the page is zoomed and the window made to match (dock.rs).
+pub fn size(shared: &Shared, percent: u32) -> Result<(), String> {
+    let percent = docksize::scale(percent);
+    settings::save_dock_scale(&shared.app, percent)?;
+    shared.dock().scale = percent;
+    Ok(())
+}
+
 /// Over to `edge`, from Nook's panel or the dock's menu.
 pub fn to_edge(shared: &Shared, edge: Edge) -> Result<(), String> {
     if edge == Edge::Top {
@@ -125,9 +108,10 @@ fn keep(app: &AppHandle, place: DockPlace) -> Result<(), String> {
     dockplace::save(app, place).inspect_err(|e| log::warn!("Couldn't keep where the dock is: {e}"))
 }
 
-/// The page saw the tab or the pill pressed and moved past a click: from here the tab follows the
+/// The page saw the tab or the notch pressed and moved past a click: from here the tab follows the
 /// pointer along its edge until the button comes up, read from Windows rather than from the page,
-/// which moves under the pointer.
+/// which moves under the pointer. The window stays put: the page draws the tab where the chrome's
+/// dock.mid says, so it hears every move.
 pub fn drag(shared: &Arc<Shared>) {
     let Some((_, y)) = dockwin::cursor() else {
         return;
@@ -151,6 +135,7 @@ pub fn drag(shared: &Arc<Shared>) {
             };
             if moved {
                 nudge(&s.app);
+                look::emit(&s);
             }
             if let Some(place) = ended {
                 if let Some(place) = place {

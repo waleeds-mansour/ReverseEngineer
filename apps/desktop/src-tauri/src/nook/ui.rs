@@ -13,7 +13,7 @@ use super::dock::DOCK_LABEL;
 use super::host::{self, Shared};
 use super::view::{NookState, UiCmd, UiReply, STATE_EVENT};
 use super::wm::Cmd;
-use super::{barwin, dockact, dockwin, look, observe, settings};
+use super::{barwin, dockact, dockkeys, dockwin, look, observe, settings};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, Url, WebviewUrl, WebviewWindowBuilder};
 
@@ -42,12 +42,13 @@ fn allowed(label: &str, cmd: &UiCmd) -> bool {
         | UiCmd::SaveFixtures
         | UiCmd::ExportDiag => label == PANEL,
         UiCmd::Drawn | UiCmd::OpenToday | UiCmd::Popover { .. } => chrome,
-        UiCmd::DockHover { .. }
-        | UiCmd::DockMenu
+        UiCmd::DockShape { .. }
+        | UiCmd::DockKeys { .. }
+        | UiCmd::DockChoose { .. }
         | UiCmd::DockDrag
         | UiCmd::DockOpen { .. }
         | UiCmd::DockTalk
-        | UiCmd::DockLabel { .. } => label == DOCK_LABEL,
+        | UiCmd::Inbox { .. } => label == DOCK_LABEL,
     }
 }
 
@@ -198,10 +199,17 @@ pub async fn command(webview: tauri::Webview, cmd: UiCmd) -> Result<UiReply, Str
     let Some(shared) = host::shared(&app) else {
         return Err("Nook didn't start".into());
     };
+    // The Inbox waits on Hearth's desk, and on Windows Hello while it opens the desk.
+    let inbox = match &cmd {
+        UiCmd::Inbox { act } => Some(super::dockinbox::act(&shared, act.clone()).await),
+        _ => None,
+    };
     // Stopping the observer can wait up to a second, which mustn't hold up the IPC thread.
-    tauri::async_runtime::spawn_blocking(move || handle(&shared, &label, cmd))
+    let mut reply = tauri::async_runtime::spawn_blocking(move || handle(&shared, &label, cmd))
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())??;
+    reply.inbox = inbox;
+    Ok(reply)
 }
 
 fn handle(shared: &Arc<Shared>, label: &str, cmd: UiCmd) -> Result<UiReply, String> {
@@ -247,12 +255,24 @@ fn handle(shared: &Arc<Shared>, label: &str, cmd: UiCmd) -> Result<UiReply, Stri
             barwin::drawn(shared, label);
             None
         }
-        UiCmd::DockHover { open } => {
-            dockwin::hover(shared, open);
+        UiCmd::DockShape {
+            open,
+            hold,
+            outlines,
+        } => {
+            dockwin::shape(shared, open, hold, outlines);
             None
         }
-        UiCmd::DockMenu => {
-            dockact::menu(shared);
+        UiCmd::DockKeys { take } => {
+            if take {
+                dockkeys::take(shared);
+            } else {
+                dockkeys::release(shared, true);
+            }
+            None
+        }
+        UiCmd::DockChoose { choice } => {
+            dockact::choose(shared, choice);
             None
         }
         UiCmd::DockDrag => {
@@ -267,10 +287,7 @@ fn handle(shared: &Arc<Shared>, label: &str, cmd: UiCmd) -> Result<UiReply, Stri
             dockact::talk(&shared.app);
             None
         }
-        UiCmd::DockLabel { top, bottom, wide } => {
-            dockwin::label(shared, top, bottom, wide);
-            None
-        }
+        UiCmd::Inbox { .. } => None,
         UiCmd::Popover { open } => {
             barwin::popover(shared, open);
             None
@@ -293,6 +310,7 @@ fn handle(shared: &Arc<Shared>, label: &str, cmd: UiCmd) -> Result<UiReply, Stri
         },
         saved,
         chrome: look::fresh(shared),
+        inbox: None,
     })
 }
 
@@ -304,92 +322,5 @@ fn ask(shared: &Shared, make: impl FnOnce(super::wm::Reply) -> Cmd) -> Result<St
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn only_nooks_labels_pass() {
-        for ok in [
-            "nook_panel",
-            "nook_popover",
-            "nook_palette",
-            "nook_bar_1",
-            "nook_dock",
-        ] {
-            assert!(is_nook_label(ok), "{ok}");
-        }
-        for no in [
-            "hearth",
-            "main",
-            "hearth_ask",
-            "recording_overlay",
-            "nook",
-            "nook_bar",
-            "xnook_panel",
-        ] {
-            assert!(!is_nook_label(no), "{no}");
-        }
-    }
-
-    #[test]
-    fn the_bar_may_ask_only_what_it_draws() {
-        for cmd in [UiCmd::Ready, UiCmd::Drawn, UiCmd::Popover { open: true }] {
-            assert!(allowed(BAR_LABEL, &cmd), "{cmd:?}");
-        }
-        for cmd in [
-            UiCmd::Refresh,
-            UiCmd::SetObserve { on: true },
-            UiCmd::SetBar { on: false },
-            UiCmd::SetDock { on: false },
-            UiCmd::SaveFixtures,
-            UiCmd::ExportDiag,
-        ] {
-            assert!(!allowed(BAR_LABEL, &cmd), "{cmd:?}");
-            assert!(!allowed(POPOVER_LABEL, &cmd), "{cmd:?}");
-            assert!(!allowed(DOCK_LABEL, &cmd), "{cmd:?}");
-            assert!(allowed(PANEL, &cmd), "{cmd:?}");
-        }
-        assert!(allowed(POPOVER_LABEL, &UiCmd::OpenToday));
-        assert!(!allowed(PANEL, &UiCmd::Drawn));
-        assert!(stays(BAR_LABEL) && stays(POPOVER_LABEL) && !stays(PANEL));
-    }
-
-    #[test]
-    fn the_dock_may_ask_what_it_draws_and_opens_and_nothing_else() {
-        let page = super::super::view::DockPage::Approvals;
-        let own = [
-            UiCmd::DockHover { open: true },
-            UiCmd::DockMenu,
-            UiCmd::DockDrag,
-            UiCmd::DockOpen { page },
-            UiCmd::DockTalk,
-            UiCmd::DockLabel {
-                top: 0,
-                bottom: 32,
-                wide: 200,
-            },
-        ];
-        let mut all = vec![
-            UiCmd::Ready,
-            UiCmd::Drawn,
-            UiCmd::OpenToday,
-            UiCmd::Popover { open: true },
-        ];
-        all.extend(own.clone());
-        for cmd in all {
-            assert!(allowed(DOCK_LABEL, &cmd), "{cmd:?}");
-        }
-        for cmd in own {
-            assert!(
-                !allowed(BAR_LABEL, &cmd) && !allowed(PANEL, &cmd),
-                "{cmd:?}"
-            );
-        }
-        // Its side is the panel's to set; the dock's own menu sets it without asking.
-        let side = UiCmd::SetDockEdge {
-            edge: super::super::chrome::Edge::Left,
-        };
-        assert!(allowed(PANEL, &side) && !allowed(DOCK_LABEL, &side));
-        assert!(stays(DOCK_LABEL));
-    }
-}
+#[path = "ui_tests.rs"]
+mod tests;

@@ -193,7 +193,7 @@ pub struct DockView {
     pub shown: bool,
     /// Why there is no dock although the switch is on.
     pub why_not: Option<String>,
-    /// The pointer is over the dock, and its open pill has room.
+    /// The notch is open, as its page last said, and Nook hasn't folded it since.
     pub open: bool,
     pub edge: Edge,
     /// The dock's short tones, from its menu: something new waits, a service has trouble, Pip
@@ -202,6 +202,12 @@ pub struct DockView {
     /// The dots' counts and services come from Hearth's notify feed, not the tray. The sounds
     /// start over when this changes, so the feed coming back is no news.
     pub feed: bool,
+    /// The tab's middle, in the page's CSS px down its window; 0 until it has a place.
+    pub mid: i32,
+    /// The owner's size for the dock, in percent.
+    pub scale: u32,
+    /// A panel of its own has the keyboard (dockkeys.rs); the page closes it once this goes.
+    pub keys: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Type)]

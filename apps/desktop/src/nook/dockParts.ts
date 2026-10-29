@@ -1,13 +1,13 @@
-// The agent dock's page, built once (dockView.ts draws into it): the edge tab, with its outline,
-// its dots and its count badge; the open pill, a column of four capsules (the Inbox button with
-// its badge, the agents' dots, the tools, and "…"); and the status label that shows beside a
-// hovered dot, which is itself the button that opens where that dot's agent is. The tools are Pip's own mark, which opens Hearth's window, the mic, which talks to
-// Pip, and a slot for "point at it", which lane O7 fills and which stays hidden until then. Every
-// dot is a ring that spins while its agent works and a solid that takes the other states' colours,
-// cross-fading as the state changes.
+// The agent dock's page, built once (dockView.ts and dockNotch.ts draw into it): the notch, one
+// black SVG path the size of the window with its hairline; the agents' dots, which sit in the tab
+// at rest and move into the column as it opens; the column's buttons (the Inbox, Pip's mark, the
+// mic, a slot for "point at it", which lane O7 fills and which stays hidden until then, and "…");
+// the count badge, which moves from the tab to the Inbox; and the box beside the column, which
+// holds a panel's content or a hovered dot's label. Every dot is a ring that spins while its agent
+// works and a solid that takes the other states' colours, cross-fading as the state changes.
 
 import type { AgentDot } from "@/bindings";
-import { icon, svg } from "./dockShape";
+import { icon, NOTCH, svg } from "./dockShape";
 
 export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string) {
   const e = document.createElement(tag);
@@ -41,89 +41,91 @@ function button(cls: string, label: string) {
 }
 
 export interface DockParts {
-  tab: HTMLElement;
   shape: SVGSVGElement;
-  outline: SVGPathElement;
-  tabDots: HTMLElement;
-  tabBadge: HTMLElement;
-  pill: HTMLElement;
+  fill: SVGPathElement;
+  line: SVGPathElement;
+  dots: HTMLElement;
+  /** The column's buttons, which fade in as it opens. */
+  column: HTMLElement;
   inbox: HTMLButtonElement;
-  inboxBadge: HTMLElement;
-  agents: HTMLElement;
   pip: HTMLButtonElement;
   talk: HTMLButtonElement;
   /** "Point at it": lane O7's, hidden until then. */
   point: HTMLButtonElement;
   more: HTMLButtonElement;
+  badge: HTMLElement;
+  /** Beside the column: a panel's content, or the lip with a dot's label. */
+  box: HTMLElement;
   /** The status label: one button, which opens where the hovered dot's agent is. */
-  label: HTMLButtonElement;
-  labelHead: HTMLElement;
-  labelTail: HTMLElement;
+  lip: HTMLButtonElement;
+  lipHead: HTMLElement;
+  lipTail: HTMLElement;
 }
 
 export function buildDock(nav: HTMLElement): DockParts {
-  const tab = el("div", "nd-tab");
   const shape = svg("svg", { class: "nd-shape" });
   shape.setAttribute("aria-hidden", "true");
-  const outline = svg("path");
-  shape.append(outline);
-  const tabDots = el("div", "nd-tab-dots");
-  const tabBadge = el("span", "nd-badge");
-  tabBadge.setAttribute("aria-hidden", "true");
-  tab.append(shape, tabDots, tabBadge);
+  const fill = svg("path", { class: "nd-fill" });
+  const line = svg("path", { class: "nd-line" });
+  shape.append(fill, line);
 
-  const pill = el("div", "nd-pill");
-  const inbox = button("nd-cap nd-round nd-inbox", "Inbox");
-  const inboxBadge = el("span", "nd-badge");
-  inbox.append(icon("inbox", 16), inboxBadge);
-  const agents = el("div", "nd-cap nd-agents");
-  agents.setAttribute("role", "group");
-  agents.setAttribute("aria-label", "Agents");
-  const tools = el("div", "nd-cap nd-tools");
-  const pip = button("nd-tool", "Open Pip in Hearth");
-  pip.dataset.tool = "pip";
-  const talk = button("nd-tool", "Talk to Pip");
-  talk.dataset.tool = "talk";
-  talk.append(icon("mic", 17));
-  const point = button("nd-tool", "Point at it");
-  point.dataset.tool = "point";
+  const dots = el("div", "nd-dots");
+  dots.setAttribute("role", "group");
+  dots.setAttribute("aria-label", "Agents");
+
+  const column = el("div", "nd-col");
+  const inbox = button("nd-item", "Inbox");
+  inbox.dataset.item = "inbox";
+  inbox.append(icon("inbox", NOTCH.glyph));
+  const pip = button("nd-item", "Pip");
+  pip.dataset.item = "pip";
+  const talk = button("nd-item", "Talk to Pip");
+  talk.dataset.item = "talk";
+  talk.append(icon("mic", NOTCH.glyph));
+  const point = button("nd-item", "Point at it");
+  point.dataset.item = "point";
   point.hidden = true;
-  point.append(icon("point", 17));
-  tools.append(pip, talk, point);
-  const more = button("nd-cap nd-round nd-more", "More");
-  more.append(icon("more", 18));
-  pill.append(inbox, agents, tools, more);
+  point.append(icon("point", NOTCH.glyph));
+  const more = button("nd-item", "More");
+  more.dataset.item = "more";
+  more.setAttribute("aria-haspopup", "menu");
+  more.append(icon("more", NOTCH.glyph));
+  column.append(inbox, pip, talk, point, more);
 
-  const label = el("button", "nd-label");
-  label.type = "button";
-  label.id = "nd-label";
-  const labelText = el("span", "nd-label-text");
-  const labelHead = el("b", "nd-label-head");
-  const labelTail = el("span", "nd-label-tail");
-  labelText.append(labelHead, labelTail);
+  const badge = el("span", "nd-badge");
+  badge.setAttribute("aria-hidden", "true");
+
+  const box = el("div", "nd-box");
+  const lip = el("button", "nd-lip");
+  lip.type = "button";
+  lip.id = "nd-lip";
+  const words = el("span", "nd-lip-text");
+  const lipHead = el("b", "nd-lip-head");
+  const lipTail = el("span", "nd-lip-tail");
+  words.append(lipHead, lipTail);
   const chevron = el("span", "nd-chev");
   chevron.textContent = "›";
   chevron.setAttribute("aria-hidden", "true");
-  label.append(el("i", "nd-label-dot"), labelText, chevron);
+  lip.append(el("i", "nd-lip-dot"), words, chevron);
+  box.append(lip);
 
-  nav.append(tab, pill, label);
+  nav.append(shape, box, dots, column, badge);
   return {
-    tab,
     shape,
-    outline,
-    tabDots,
-    tabBadge,
-    pill,
+    fill,
+    line,
+    dots,
+    column,
     inbox,
-    inboxBadge,
-    agents,
     pip,
     talk,
     point,
     more,
-    label,
-    labelHead,
-    labelTail,
+    badge,
+    box,
+    lip,
+    lipHead,
+    lipTail,
   };
 }
 

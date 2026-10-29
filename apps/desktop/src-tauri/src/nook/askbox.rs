@@ -54,7 +54,7 @@ pub fn page_link(page: DockPage) -> Option<String> {
 /// notification state, and nook-wm's game guard while it observes. Nothing opens a process.
 #[cfg(windows)]
 pub fn game_in_front(app: &AppHandle) -> bool {
-    if super::game::notification_state().is_some_and(super::dock::busy) {
+    if super::game::notification_state().is_some_and(super::dockread::busy) {
         return true;
     }
     super::host::shared(app).is_some_and(|s| {

@@ -1,15 +1,15 @@
-// The agent dock's sizes, in its page's CSS px (dock.css keeps the same numbers as custom
-// properties), and the window they make on a monitor. At rest the dock is the edge tab: a solid
-// black tab TAB_DEEP px out from the side of the screen, flush with it, whose straight body grows
-// with its dots (a 13 px slot each, 9 px between, 60 px for two) between two 22 px S-shaped flares
-// that meet the edge tangentially, so the tab grows out of the edge rather than sitting on it. Its
-// window is the tab plus TAB_ROOM beside and around it, where its count badge falls; the window is
-// clipped to what it draws (dockclip.rs), so that room takes no clicks.
-// Hovered, the window widens toward the middle of the screen for the open pill, a column of 34 px
-// capsules PILL_INSET px in from the edge (the Inbox button, the agents' dots, the tools, and "…"),
-// and the status label that shows beside a hovered dot. The open window is centred on the resting
-// one, so the tab stays exactly where it was, and dockplace.rs keeps the tab low and high enough
-// that the open window always fits on the monitor.
+// The agent dock's sizes, in its page's CSS px at 100 % (dockShape.ts keeps the same numbers), and
+// the window they make on a monitor. The dock is the notch: one black shape on a side of the
+// screen that everything opens inside. At rest it is the edge tab, TAB_DEEP px out from the edge,
+// flush with it, whose straight body grows with its dots (a 13 px slot each, 9 px between, 60 px
+// for two) between two 22 px S-shaped flares that meet the edge tangentially. Hovered, the same
+// shape grows NOTCH_DEEP deep into a column of icons, and grows again toward the middle of the
+// screen to hold a panel (notchPanel.ts) of at most PANEL_WIDE with its padding.
+// The window is made once at the size of the biggest of these: WINDOW_DEEP from the edge and as
+// tall as the work area, so hovering, opening and closing never resize it; only its region changes
+// (dockclip.rs). The tab sits anywhere along it, EDGE_ROOM in from the work area's top and bottom
+// (dockplace.rs). The owner's size for the dock (SCALES, 150 % to start) zooms the page as a whole,
+// and dock.rs's drawn_at folds it into the scale every size here is drawn at.
 
 use super::bar::{strip_rect, Place};
 use super::chrome::Edge;
@@ -24,36 +24,20 @@ pub const TAB_SLOT: i32 = 13;
 pub const TAB_GAP: i32 = 9;
 /// The body's room above its first slot and below its last, together: 60 px for two dots.
 pub const TAB_PAD: i32 = 25;
-/// Room beside the tab, toward the middle, and above and below it, for its count badge.
-pub const TAB_ROOM: (i32, i32) = (14, 20);
-/// How deep the dock's window is at rest: the tab and the room beside it.
-pub const DOCK_DEEP: i32 = TAB_DEEP + TAB_ROOM.0;
-/// The tab is flush with the screen's edge.
-pub const DOCK_INSET: i32 = 0;
-
-/// The open pill: a column PILL_WIDE across, PILL_INSET in from the edge, PILL_GAP between its
-/// capsules.
-pub const PILL_INSET: i32 = 14;
-pub const PILL_WIDE: i32 = 34;
-pub const PILL_GAP: i32 = 8;
-/// The round Inbox and "…" buttons.
-pub const PILL_BUTTON: i32 = 34;
-/// The agents capsule: AGENTS_PAD above its first dot and below its last, AGENT_SLOT per dot,
-/// AGENT_GAP between.
-pub const AGENTS_PAD: i32 = 12;
-pub const AGENT_SLOT: i32 = 11;
-pub const AGENT_GAP: i32 = 9;
-/// The tools capsule: Pip's mark (18) and the mic (17), 12 between, 11 above and below. The
-/// "point at it" camera (17, and 12 more between) joins it with lane O7, and this grows by 29.
-pub const TOOLS_LONG: i32 = 11 + 18 + 12 + 17 + 11;
-/// The status label beside the column, toward the middle: LABEL_GAP from it, at most LABEL_WIDE.
-pub const LABEL_GAP: i32 = 12;
-pub const LABEL_WIDE: i32 = 300;
-/// Room past the label, and above and below the column, for the Inbox badge and the springs. Their
-/// shadows are close (0 1 2), since the window's region cuts off anything wider.
-pub const PILL_ROOM: (i32, i32) = (24, 30);
-/// How deep the dock's window is while the pill is open.
-pub const OPEN_DEEP: i32 = PILL_INSET + PILL_WIDE + LABEL_GAP + LABEL_WIDE + PILL_ROOM.0;
+/// How deep the open column is: 40 px circles round 20 px icons, 6 px in from either side.
+pub const NOTCH_DEEP: i32 = 52;
+/// The biggest panel and the 16 px the notch pads it by on each side (notchPanel.ts's PANEL_MAX
+/// and PANEL_PAD).
+pub const PANEL_WIDE: i32 = 420 + 2 * 16;
+/// Room past the widest panel, for its hairline and a spring's overshoot.
+pub const WINDOW_ROOM: i32 = 16;
+/// How deep the dock's window is, always.
+pub const WINDOW_DEEP: i32 = NOTCH_DEEP + PANEL_WIDE + WINDOW_ROOM;
+/// How far inside the work area's top and bottom the notch stays.
+pub const EDGE_ROOM: i32 = 12;
+/// The sizes the owner can pick for the dock, in percent, and the one it starts at.
+pub const SCALES: [u32; 4] = [100, 125, 150, 175];
+pub const SCALE: u32 = 150;
 
 /// `dots` slots of `slot` px with `gap` between them; one even with none.
 fn slots(dots: usize, slot: i32, gap: i32) -> i32 {
@@ -66,42 +50,54 @@ pub fn tab_long(dots: usize) -> i32 {
     2 * TAB_FLARE + TAB_PAD + slots(dots, TAB_SLOT, TAB_GAP)
 }
 
-/// How long the dock's window is at rest: the tab and the room above and below it.
-pub fn rest_long(dots: usize) -> i32 {
-    tab_long(dots) + 2 * TAB_ROOM.1
+/// The size the owner picked, as one of SCALES: the nearest, so an odd stored value still reads.
+pub fn scale(percent: u32) -> u32 {
+    SCALES
+        .into_iter()
+        .min_by_key(|s| s.abs_diff(percent))
+        .unwrap_or(SCALE)
 }
 
-/// How long the open pill is: the Inbox button, the agents, the tools and "…".
-pub fn pill_long(dots: usize) -> i32 {
-    2 * PILL_BUTTON
-        + 3 * PILL_GAP
-        + 2 * AGENTS_PAD
-        + slots(dots, AGENT_SLOT, AGENT_GAP)
-        + TOOLS_LONG
+/// The zoom the dock's page is drawn at on the work area `at` (at its own DPI) with Windows' text
+/// size at `text` percent: the owner's size, unless the window, WINDOW_DEEP CSS px across, would
+/// then be wider than the work area, and then as much as fits it, never below 50 %.
+pub fn fitting(size: u32, at: &Place, text: u32) -> u32 {
+    let (lo, hi) = super::dock::TEXT_SIZES;
+    let per = u64::from(at.dpi.max(1)) * u64::from(text.clamp(lo, hi)) * WINDOW_DEEP as u64;
+    let most = u64::try_from(at.rect.width().max(0)).unwrap_or(0) * 96 * 10_000 / per;
+    scale(size).min(u32::try_from(most).unwrap_or(u32::MAX).max(50))
 }
 
-/// How long the dock's window is while the pill is open.
-pub fn open_long(dots: usize) -> i32 {
-    rest_long(dots).max(pill_long(dots) + 2 * PILL_ROOM.1)
+/// The dock's window on `edge` of `at`, the work area as the page is drawn on it: WINDOW_DEEP
+/// from the edge and the work area's whole height.
+pub fn window_rect(at: &Place, edge: Edge) -> Rect {
+    strip_rect(at, edge, WINDOW_DEEP, None, 0)
 }
 
-/// The dock's window at rest on `edge`, centred along it.
-pub fn dock_rect(at: &Place, edge: Edge, dots: usize) -> Rect {
-    strip_rect(at, edge, DOCK_DEEP, Some(rest_long(dots)), DOCK_INSET)
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::nook::dock::dock_at;
 
-/// The dock's window: the tab's at rest, and while the pill is open, OPEN_DEEP from the edge and
-/// centred on the tab's, so the tab stays where it was.
-pub fn window_rect(at: &Place, edge: Edge, dots: usize, open: bool) -> Rect {
-    let rest = dock_rect(at, edge, dots);
-    if !open {
-        return rest;
-    }
-    let wide = strip_rect(at, edge, OPEN_DEEP, Some(open_long(dots)), DOCK_INSET);
-    let dy = (rest.top + rest.bottom - wide.top - wide.bottom) / 2;
-    Rect {
-        top: wide.top + dy,
-        bottom: wide.bottom + dy,
-        ..wide
+    #[test]
+    fn the_dock_zooms_no_more_than_its_window_fits_the_work_area() {
+        let work = |w: i32, dpi: u32| Place {
+            rect: Rect {
+                left: 0,
+                top: 0,
+                right: w,
+                bottom: 1032,
+            },
+            dpi,
+        };
+        assert_eq!(fitting(150, &work(2560, 96), 100), 150, "as it fits");
+        assert_eq!(fitting(150, &work(1920, 120), 100), 150);
+        // 1080p at 125 % with Windows' text at 225 %: 175 % would be 2.4 screens wide.
+        let small = work(1920, 120);
+        let zoom = fitting(175, &small, 225);
+        assert!(zoom < 175, "{zoom}");
+        let window = window_rect(&dock_at(&small, 225, zoom), Edge::Right);
+        assert!(window.width() <= 1920, "{}", window.width());
+        assert_eq!(fitting(175, &work(200, 240), 225), 50, "never below half");
     }
 }

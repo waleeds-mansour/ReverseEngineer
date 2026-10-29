@@ -1,83 +1,68 @@
-// The agent dock's sizes and drawn shapes (dockView.ts). The sizes are docksize.rs's, in CSS px, so
-// the page lays out exactly the window Nook makes for it: the edge tab, 25 px out from the side of
-// the screen, whose straight body grows with its dots between two 22 px flares, and the open pill,
-// a column of 34 px capsules 14 px in from the edge. The tab's outline is our own: each flare is a
-// cubic curve from the screen's edge, where it leaves the edge going straight along it, to the
-// body, which it meets going straight along too, with both handles at 85 % of the flare's length,
-// so the tab grows out of the edge with no corner anywhere. It is drawn for the right edge and
-// mirrored for the left. The icons (the Inbox tray, "…", the mic and the camera) are drawn here
-// too, with createElementNS, since Nook's pages allow no inline markup or styles.
+// The agent dock's sizes, in CSS px at 1x (the page's zoom, the dock's size setting, scales them
+// with everything else), and its icons. The edge tab's are docksize.rs's TAB_* consts, so the tab
+// the page draws is the one Nook keeps in the window's region before the page says anything: 25 px
+// out from the side of the screen, a straight body that grows with its dots, and a 22 px S-shaped
+// flare at each end. Hovered, the same black shape grows into the open notch, 52 px deep with 36 px
+// flares (NOTCH), around a column of icons: the Inbox, the agents' dots, Pip's mark, the mic and
+// "…", each glyph about 20 px in a 40 px circle. A panel or a dot's label grows out of its middle
+// side (PANEL, LIP). The icons are drawn with createElementNS, since Nook's pages allow no inline
+// markup or styles.
 
-import type { Edge } from "@/bindings";
-
-/** The edge tab: docksize.rs's TAB_* consts. */
+/** The edge tab at rest: docksize.rs's TAB_* consts. */
 export const TAB = {
   deep: 25,
   flare: 22,
   slot: 13,
   gap: 9,
   pad: 25,
-  room: [14, 20],
 } as const;
 
-/** The open pill and its label: docksize.rs's PILL_*, AGENT_*, TOOLS_LONG and LABEL_* consts. */
-export const PILL = {
-  inset: 14,
-  wide: 34,
-  gap: 8,
-  button: 34,
-  agentsPad: 12,
-  slot: 11,
-  slotGap: 9,
-  tools: 11 + 18 + 12 + 17 + 11,
-  labelGap: 12,
-  labelWide: 300,
-  room: [24, 30],
+/** The open notch: docksize.rs's NOTCH_DEEP and EDGE_ROOM, and the column's pitches. */
+export const NOTCH = {
+  deep: 52,
+  flare: 36,
+  /** Black before the first icon and after the last, in the straight part. */
+  pad: 4,
+  /** The pitch of the Inbox, Pip's mark, the mic and "…". */
+  button: 44,
+  /** Their hit circles, and the glyphs in them. */
+  hit: 40,
+  glyph: 20,
+  /** The pitch of the agents' dots. */
+  dot: 28,
+  /** Between the Inbox, the dots and the tools. */
+  sep: 6,
+  /** The least room kept between the notch and the work area's top and bottom. */
+  room: 12,
 } as const;
+
+/** A panel's frame: its outer corners, the concave fillets where it meets the column, padding. */
+export const PANEL = { r: 22, fillet: 10, pad: 16 } as const;
+
+/** A hovered dot's status label, a lip of the notch. */
+export const LIP = { tall: 32, r: 16, fillet: 8, pad: 12, most: 300 } as const;
 
 const slots = (dots: number, slot: number, gap: number) => {
   const n = Math.max(1, dots);
   return n * slot + (n - 1) * gap;
 };
 
-/** How long the tab is along its edge, flares and all. */
-export const tabLong = (dots: number) =>
-  2 * TAB.flare + TAB.pad + slots(dots, TAB.slot, TAB.gap);
+/** The tab's straight body between its flares. */
+export const tabBody = (dots: number) =>
+  TAB.pad + slots(dots, TAB.slot, TAB.gap);
 
-/** How long the open pill is. */
-export const pillLong = (dots: number) =>
-  2 * PILL.button +
-  3 * PILL.gap +
-  2 * PILL.agentsPad +
-  slots(dots, PILL.slot, PILL.slotGap) +
-  PILL.tools;
+/** How long the tab is along its edge, flares and all: docksize.rs's tab_long. */
+export const tabLong = (dots: number) => 2 * TAB.flare + tabBody(dots);
 
-/** The dock's window, wide by long, at rest and with the pill open, as Nook makes it. */
-export function windowSize(dots: number, open: boolean): [number, number] {
-  const rest = tabLong(dots) + 2 * TAB.room[1];
-  if (!open) return [TAB.deep + TAB.room[0], rest];
-  const wide =
-    PILL.inset + PILL.wide + PILL.labelGap + PILL.labelWide + PILL.room[0];
-  return [wide, Math.max(rest, pillLong(dots) + 2 * PILL.room[1])];
-}
+/** The open column's straight part, which holds its icons. */
+export const notchBody = (dots: number) =>
+  2 * NOTCH.pad +
+  4 * NOTCH.button +
+  2 * NOTCH.sep +
+  Math.max(1, dots) * NOTCH.dot;
 
-const n = (v: number) => String(Math.round(v * 100) / 100);
-
-/** The tab's outline, `long` px along the edge, in a box TAB.deep wide. */
-export function tabPath(long: number, edge: Edge): string {
-  const { deep: w, flare: f } = TAB;
-  const h = 0.85 * f;
-  const end = long - f;
-  // x for the right edge, where x = w is the screen's edge; the left edge mirrors it.
-  const x = (v: number) => n(edge === "left" ? w - v : v);
-  return [
-    `M${x(w)} 0`,
-    `C${x(w)} ${n(h)} ${x(0)} ${n(f - h)} ${x(0)} ${n(f)}`,
-    `L${x(0)} ${n(end)}`,
-    `C${x(0)} ${n(end + h)} ${x(w)} ${n(long - h)} ${x(w)} ${n(long)}`,
-    "Z",
-  ].join(" ");
-}
+/** How long the open notch is along its edge, flares and all. */
+export const notchLong = (dots: number) => 2 * NOTCH.flare + notchBody(dots);
 
 const NS = "http://www.w3.org/2000/svg";
 

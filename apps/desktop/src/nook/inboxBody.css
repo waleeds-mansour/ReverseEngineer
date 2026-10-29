@@ -1,0 +1,373 @@
+/* The Inbox panel's card (inbox.css is its header): Pip's row with its mark and a status dot, what
+   Pip asks or did, the rows 1, 2 and 3 pick with their keycaps and the Recommended chip (the
+   chosen one turns green and its keycap pops to a check while the others dim), the "Reply to
+   Pip…" field, and Open and Clear. Moving between cards, the old content leaves 24 px to one side
+   over 160 ms while the new one springs in from 24 px on the other, on a still frame. */
+
+.ni-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* In a notch shorter than the card, its choices scroll first, then the question, while the reply
+   field and the buttons stay in view. */
+.ni-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.ni-body > * {
+  flex: none;
+}
+
+.ni-body > .ni-ask,
+.ni-body > .ni-rows {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ni-body > .ni-rows {
+  flex-shrink: 1000;
+}
+
+.ni-leaving {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  animation: ni-leave-next 160ms var(--ni-in) forwards;
+}
+
+.ni-leaving[data-dir="prev"] {
+  animation-name: ni-leave-prev;
+}
+
+.ni-stage[data-in="next"] {
+  animation: ni-come-next var(--ni-spring-ms) var(--ni-spring);
+}
+
+.ni-stage[data-in="prev"] {
+  animation: ni-come-prev var(--ni-spring-ms) var(--ni-spring);
+}
+
+@keyframes ni-leave-next {
+  to {
+    opacity: 0;
+    translate: -24px 0;
+  }
+}
+
+@keyframes ni-leave-prev {
+  to {
+    opacity: 0;
+    translate: 24px 0;
+  }
+}
+
+@keyframes ni-come-next {
+  from {
+    opacity: 0;
+    translate: 24px 0;
+  }
+}
+
+@keyframes ni-come-prev {
+  from {
+    opacity: 0;
+    translate: -24px 0;
+  }
+}
+
+.ni-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ni-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: #2a2a2e;
+}
+
+.ni-who-dot {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5px #000;
+}
+
+.ni-who-dot[data-tone="asking"] {
+  display: block;
+  background: #ffc75c;
+}
+
+.ni-who-dot[data-tone="done"] {
+  display: block;
+  background: #33d499;
+}
+
+.ni-names {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ni-name {
+  font: 600 12px/16px var(--font-sans);
+  color: #fff;
+}
+
+.ni-sub {
+  font: 400 10.5px/14px var(--font-sans);
+  color: rgb(255 255 255 / 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ni-ask {
+  margin: 10px 0 0;
+  font: 600 12.5px/1.4 var(--font-sans);
+  color: #fff;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.ni[data-card="finished"] .ni-ask,
+.ni[data-card="brief"] .ni-ask,
+.ni[data-card="wrap"] .ni-ask {
+  font-weight: 400;
+  color: rgb(255 255 255 / 0.85);
+  text-wrap: pretty;
+}
+
+.ni-line {
+  display: -webkit-box;
+  margin: 4px 0 0;
+  overflow: hidden;
+  font: 400 11.5px/1.4 var(--font-sans);
+  color: rgb(255 255 255 / 0.6);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.ni-outside,
+.ni-rec {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font: 600 9px/14px var(--font-sans);
+  color: #ffc75c;
+  background: rgb(255 199 92 / 0.15);
+  white-space: nowrap;
+  transition:
+    color 200ms var(--ni-out),
+    background-color 200ms var(--ni-out);
+}
+
+.ni-outside {
+  margin-left: 6px;
+  vertical-align: 1px;
+}
+
+.ni-rec {
+  flex: none;
+  margin-left: auto;
+}
+
+.ni-label {
+  margin: 8px 0 0;
+  font: 600 10px/14px var(--font-sans);
+  color: rgb(255 255 255 / 0.45);
+}
+
+.ni-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.ni-label:not([hidden]) + .ni-rows {
+  margin-top: 6px;
+}
+
+.ni-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  margin: 0;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.055);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.09);
+  font: 400 11.5px/1.3 var(--font-sans);
+  color: rgb(255 255 255 / 0.93);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 200ms var(--ni-out),
+    box-shadow 200ms var(--ni-out),
+    opacity 200ms var(--ni-out);
+}
+
+.ni-row:hover {
+  background: rgb(255 255 255 / 0.09);
+}
+
+.ni-row-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ni-key {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font: 600 9.5px/1 var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  color: rgb(255 255 255 / 0.8);
+  background: rgb(255 255 255 / 0.12);
+  box-shadow: inset 0 -1px 0 rgb(0 0 0 / 0.35);
+  vertical-align: 1px;
+  transition:
+    background-color 200ms var(--ni-out),
+    color 200ms var(--ni-out);
+}
+
+.ni-check {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  color: #0b0b0c;
+  opacity: 0;
+}
+
+.ni-check path {
+  stroke-width: 2.6;
+}
+
+.ni-row[data-chosen] {
+  color: #fff;
+  background: rgb(51 212 153 / 0.2);
+  box-shadow: inset 0 0 0 1px rgb(51 212 153 / 0.5);
+}
+
+.ni-row[data-chosen] .ni-key {
+  color: transparent;
+  background: #33d499;
+  animation: ni-pop 280ms var(--ni-out);
+}
+
+.ni-row[data-chosen] .ni-check {
+  opacity: 1;
+}
+
+.ni-row[data-chosen] .ni-rec {
+  color: #33d499;
+  background: rgb(51 212 153 / 0.15);
+}
+
+.ni-rows[data-picked] .ni-row:not([data-chosen]) {
+  opacity: 0.45;
+}
+
+@keyframes ni-pop {
+  0% {
+    scale: 0.78;
+  }
+  60% {
+    scale: 1.1;
+  }
+  100% {
+    scale: 1;
+  }
+}
+
+.ni-reply {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  margin-top: 10px;
+  padding: 0 10px;
+  border-radius: 9px;
+  background: rgb(255 255 255 / 0.06);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+}
+
+.ni-reply:focus-within {
+  box-shadow: inset 0 0 0 1px rgb(76 141 255 / 0.7);
+}
+
+.ni-input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  font: 400 11px/1 var(--font-sans);
+  color: #fff;
+}
+
+.ni-input::placeholder {
+  color: rgb(255 255 255 / 0.4);
+}
+
+.ni-send {
+  color: rgb(255 255 255 / 0.6);
+}
+
+.ni-acts {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.ni-act,
+.ni-gate-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  border: 0;
+  font: 500 11.5px/1 var(--font-sans);
+  cursor: pointer;
+}
+
+.ni-act {
+  height: 26px;
+  padding: 0 6px 0 10px;
+  border-radius: 8px;
+  color: rgb(255 255 255 / 0.9);
+  background: rgb(255 255 255 / 0.07);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.09);
+}
+
+.ni-act:hover {
+  background: rgb(255 255 255 / 0.11);
+}

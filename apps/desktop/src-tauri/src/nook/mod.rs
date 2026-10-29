@@ -25,15 +25,19 @@ mod coalesce;
 #[cfg(windows)]
 mod diag;
 #[cfg(windows)]
-mod dock;
+pub mod dock;
 #[cfg(windows)]
 mod dockact;
 #[cfg(windows)]
 mod dockclip;
 #[cfg(windows)]
-mod dockmenu;
+mod dockinbox;
+#[cfg(windows)]
+mod dockkeys;
 #[cfg(windows)]
 mod dockplace;
+#[cfg(windows)]
+mod dockread;
 #[cfg(windows)]
 mod docksize;
 #[cfg(windows)]
@@ -52,6 +56,7 @@ mod gates;
 mod hooks;
 #[cfg(windows)]
 mod host;
+pub mod inboxview;
 #[cfg(all(test, windows))]
 mod itest;
 pub mod live;
@@ -154,6 +159,8 @@ pub async fn nook_ui(webview: tauri::Webview, cmd: UiCmd) -> Result<UiReply, Str
 pub fn may_invoke(label: &str, command: &str) -> bool {
     match label {
         crate::hearth::quick_ask::LABEL => command == "ask_pip",
+        // The notch's chat panel talks to Pip through chat's own commands (hearth/chat.rs).
+        dock::DOCK_LABEL => command == "nook_ui" || crate::hearth::chat::may_call(command),
         _ => !label.starts_with("nook_") || command == "nook_ui",
     }
 }
@@ -184,6 +191,17 @@ pub fn focused(app: &AppHandle, label: &str) {
     barwin::focused(app, label);
 }
 
+/// A window of Hearth's lost the keyboard: the agent dock's panel lets it go.
+pub fn blurred(app: &AppHandle, label: &str) {
+    dockkeys::blurred(app, label);
+}
+
+/// Windows Hello's prompt is gone, which the chat in the notch opened: the notch takes the
+/// keyboard back while its panel still wants it.
+pub fn retake_keys(app: &AppHandle) {
+    dockkeys::retake_app(app);
+}
+
 /// hearth://theme/<id>, from one of Hearth's own windows only.
 pub fn theme(app: &AppHandle, id: ThemeId) {
     look::theme(app, id);
@@ -212,6 +230,7 @@ pub fn pip_ended(app: &AppHandle) {
 /// Hearth sent this PC a notification, like an approval waiting.
 pub fn pip_notified(app: &AppHandle) {
     look::pip(app, |p| (p.notified(), None));
+    dockinbox::arrived(app);
 }
 
 /// What Hearth's server says Pip and Nook are doing, from a status on the notify feed; None once
@@ -241,6 +260,27 @@ mod host {
 #[cfg(not(windows))]
 mod barwin {
     pub fn focused(_app: &tauri::AppHandle, _label: &str) {}
+}
+
+/// The agent dock is Windows' only.
+#[cfg(not(windows))]
+pub mod dock {
+    pub const DOCK_LABEL: &str = "nook_dock";
+
+    pub fn showing(_app: &tauri::AppHandle) -> bool {
+        false
+    }
+}
+
+#[cfg(not(windows))]
+mod dockinbox {
+    pub fn arrived(_app: &tauri::AppHandle) {}
+}
+
+#[cfg(not(windows))]
+mod dockkeys {
+    pub fn blurred(_app: &tauri::AppHandle, _label: &str) {}
+    pub fn retake_app(_app: &tauri::AppHandle) {}
 }
 
 #[cfg(not(windows))]
@@ -314,6 +354,9 @@ fn nooks_pages_may_call_nook_ui_and_nothing_else() {
         assert!(!may_invoke("nook_ask", other), "{other}");
     }
     assert!(!may_invoke("nook_dock", "ask_pip"));
+    // The notch's chat panel calls chat's own commands, and nothing else of Hearth's.
+    assert!(crate::hearth::chat::may_call("chat_send") && may_invoke("nook_dock", "chat_send"));
+    assert!(!may_invoke("nook_dock", "get_app_settings"));
 }
 
 #[cfg(all(test, windows))]

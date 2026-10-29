@@ -1,0 +1,371 @@
+/* The notch's chat with Pip, its lines and its foot (chatPanel.ts; the frame, header and switcher
+   are chatPanel.css's): your words in a bubble, Pip's as text with light markdown, Nook's notes
+   small; "New messages" while you read further up; and at the foot Pip's working arc and status,
+   the ready replies and the box you type in. */
+
+/* The lines. */
+
+.nc-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.18) transparent;
+}
+
+.nc-inner {
+  padding: 2px 2px 8px;
+}
+
+.nc-older {
+  display: block;
+  margin: 0 auto 10px;
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 11.5px;
+  color: var(--nc-muted);
+  background: rgb(255 255 255 / 0.06);
+  cursor: pointer;
+}
+
+.nc-older[hidden],
+.nc-empty[hidden],
+.nc-locked[hidden],
+.nc-working[hidden],
+.nc-replies[hidden],
+.nc-trouble[hidden] {
+  display: none;
+}
+
+.nc-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nc-line {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.nc-line[data-who="you"] {
+  align-items: flex-end;
+}
+
+.nc-bubble {
+  max-width: 82%;
+  margin: 0;
+  padding: 7px 11px;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 0.09);
+  white-space: pre-wrap;
+}
+
+.nc-line[data-who="pip"] > * {
+  max-width: 100%;
+  margin: 0;
+}
+
+.nc-line[data-who="pip"] > * + * {
+  margin-top: 6px;
+}
+
+.nc-h {
+  font-weight: 600;
+}
+
+.nc-list {
+  padding-left: 18px;
+}
+
+.nc-list li + li {
+  margin-top: 2px;
+}
+
+.nc code,
+.nc-pre {
+  font:
+    12px/1.45 ui-monospace,
+    "Cascadia Mono",
+    Consolas,
+    monospace;
+  border-radius: 5px;
+  background: rgb(255 255 255 / 0.08);
+}
+
+.nc code {
+  padding: 1px 4px;
+}
+
+.nc-pre {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.nc-link {
+  color: #64b5ff;
+  text-decoration: underline;
+  text-decoration-color: rgb(100 181 255 / 0.4);
+  text-underline-offset: 2px;
+  cursor: help;
+}
+
+.nc-host {
+  color: var(--nc-faint);
+}
+
+.nc-note {
+  align-self: center;
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--nc-muted);
+  text-align: center;
+}
+
+.nc-line[data-who="notice"],
+.nc-line[data-who="error"] {
+  align-items: center;
+}
+
+.nc-line[data-who="error"] .nc-note {
+  color: var(--nc-bad);
+}
+
+.nc-empty {
+  margin: 14px 0 6px;
+  color: var(--nc-muted);
+  text-align: center;
+}
+
+.nc-locked {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 6px;
+  color: var(--nc-muted);
+  text-align: center;
+}
+
+.nc-locked p {
+  margin: 0;
+}
+
+.nc-unlock {
+  height: 30px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--nc-working);
+  cursor: pointer;
+}
+
+.nc-unlock:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* "New messages", over the bottom of the lines while you read further up. */
+
+.nc-newer {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: #2c2c2e;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, 4px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    visibility 0s 160ms;
+  cursor: pointer;
+}
+
+.nc-newer[data-show] {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+/* Pip working, the ready replies, and the box. */
+
+.nc-foot {
+  position: relative;
+  flex: none;
+  padding-top: 8px;
+}
+
+.nc-working {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--nc-muted);
+}
+
+.nc-ring {
+  flex: none;
+  box-sizing: border-box;
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--nc-track);
+  border-top-color: var(--nc-working);
+  border-radius: 50%;
+  animation: nc-spin 0.95s linear infinite;
+}
+
+.nc-ring-small {
+  width: 10px;
+  height: 10px;
+}
+
+@keyframes nc-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+
+.nc-replies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.nc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  height: 26px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 13px;
+  font-size: 12px;
+  background: rgb(255 255 255 / 0.08);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.nc-chip:hover {
+  background: rgb(255 255 255 / 0.13);
+}
+
+.nc-trouble {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--nc-bad);
+}
+
+.nc-field {
+  position: relative;
+}
+
+.nc-box {
+  display: block;
+  width: 100%;
+  height: 36px;
+  min-height: 36px;
+  max-height: 96px;
+  box-sizing: border-box;
+  padding: 8px 40px 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  font: inherit;
+  color: var(--nc-ink);
+  background: rgb(255 255 255 / 0.06);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+  outline: none;
+  resize: none;
+}
+
+.nc-box::placeholder {
+  color: var(--nc-faint);
+}
+
+.nc-box:focus {
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16);
+}
+
+/* The box's own ring brightens instead of the panel's focus outline. */
+.nc-box:focus-visible {
+  outline: none;
+}
+
+.nc-box:disabled {
+  opacity: 0.5;
+}
+
+.nc-mic {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+}
+
+.nc-mic svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.nc-mic:disabled {
+  color: var(--nc-faint);
+  cursor: default;
+}
+
+/* Nothing turns or slides when Windows asks for less motion, nor while the page is hidden. */
+
+@media (prefers-reduced-motion: reduce) {
+  .nc-ring {
+    animation: none;
+  }
+
+  .nc-newer {
+    transition: none;
+  }
+}
+
+:root[data-reduced] .nc-ring {
+  animation: none;
+}
+
+:root[data-hidden] .nc-ring {
+  animation-play-state: paused;
+}
