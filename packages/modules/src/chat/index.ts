@@ -223,8 +223,7 @@ export const chatModule = defineModule({
             .select({ startedVia: conversation.startedVia })
             .from(conversation)
             .where(eq(conversation.entityId, conversationId));
-          // At its desk the desktop app may also write here (D84, D86); it reads through
-          // desk.conversation, never through this.
+          // At its desk the desktop app may also write here (D84, D86), never read (D42).
           if (!deviceMay(ctx.caller.via, c?.startedVia) && ctx.caller.desk !== true)
             throw notFound("Conversation");
           // Your turn there would resume the member's agent session with your data in it, and
