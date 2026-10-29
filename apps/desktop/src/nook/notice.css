@@ -70,23 +70,31 @@
   color: rgb(255 255 255 / 0.45);
 }
 
+/* One line: the card's words cut short with an ellipsis, and the "from outside" tag after them
+   always in view. */
 .nn-line {
-  display: -webkit-box;
-  overflow: hidden;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
   font: 400 11px/15px var(--font-sans);
   color: rgb(255 255 255 / 0.7);
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-  overflow-wrap: anywhere;
 }
 
 .nn-line[hidden] {
   display: none;
 }
 
+.nn-said {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .nn-line .ni-outside {
-  margin-left: 6px;
-  vertical-align: 1px;
+  flex: none;
+  margin-left: 0;
 }
 
 .nn-go {

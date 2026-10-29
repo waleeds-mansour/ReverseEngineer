@@ -95,8 +95,11 @@ export function noticePanel(
   top.append(head, when);
   const line = el("span", "nn-line");
   const said = lineOf(card);
-  line.append(document.createTextNode(said));
-  // Words someone else wrote (an email's, a page's) are marked as theirs, never as Pip's.
+  const saidText = el("span", "nn-said");
+  saidText.textContent = said;
+  line.append(saidText);
+  // Words someone else wrote (an email's, a page's) are marked as theirs, never as Pip's: the tag
+  // keeps its room on the one line, and the words are cut short instead.
   if (card?.outside) {
     const outside = el("span", "ni-outside");
     outside.textContent = "from outside";

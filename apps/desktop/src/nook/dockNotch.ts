@@ -13,8 +13,8 @@
 //
 // The window's region follows (dockclip.rs): as a morph starts, two boxes around all it may cover
 // until it settles (dockOutline.ts's envelope), and once it has, the outline itself, or nothing at
-// rest, where Nook's own piece for the tab does. A morph from rest starts once Nook has set the
-// region round it, so none of its frames is cut off.
+// rest, where Nook's own piece for the tab does. A morph from rest that grows starts once Nook
+// has set the region round it, so none of its frames is cut off.
 
 import type { DockParts } from "./dockParts";
 import {
@@ -222,8 +222,9 @@ export function startNotch(
   const go = () => {
     if (!holding) run.kick();
   };
-  /** A morph from rest waits for Nook to set the region round it, at most REGION_WAIT_MS: its first
-   * frames would otherwise be cut to the old region, a hiccup that grew with the dock's size. */
+  /** A morph from rest that grows waits for Nook to set the region round it, at most
+   * REGION_WAIT_MS: its first frames would otherwise be cut to the old region, a hiccup that grew
+   * with the dock's size. */
   function hold(set: Promise<void>) {
     const mine = ++holds;
     holding = mine;
@@ -235,6 +236,14 @@ export function startNotch(
     void set.then(release, release);
     setTimeout(release, REGION_WAIT_MS);
   }
+
+  /** Whether a spring is sent past where it is, outward: the column opening, or the box wider,
+   * higher or lower. */
+  const grows = () =>
+    p.target > p.value + 1e-3 ||
+    box.wide.target > box.wide.value + 0.5 ||
+    box.top.target < box.top.value - 0.5 ||
+    box.bottom.target > box.bottom.value + 0.5;
 
   /** Puts every spring where it goes, at once. */
   function jump() {
@@ -294,6 +303,8 @@ export function startNotch(
           box.bottom.to(at.top + stub(a, at), SPRINGS.general);
         }
       }
+      // Only what grows past where it is waits for its region: folding or shrinking never does.
+      const growing = grows() || (!!was && a.dots > was.dots);
       if (!was || document.visibilityState !== "visible") {
         jump();
         return;
@@ -306,7 +317,7 @@ export function startNotch(
         for (const s of all) s.snap();
       }
       const set = covering();
-      if (set && !run.running()) hold(set);
+      if (set && growing && !run.running()) hold(set);
       else go();
     },
     /** A panel's content just came into the box: it comes in from toward the edge. */
@@ -332,8 +343,10 @@ export function startNotch(
     moving: () => run.running() || holding !== 0,
     /** Draws it again where it is, after the dots changed. */
     redraw: () => {
+      // A held morph draws once its region is set.
+      if (holding) return;
       draw();
-      if (!run.running() && !holding) settle();
+      if (!run.running()) settle();
     },
   };
 }

@@ -318,8 +318,9 @@ fn handle(shared: &Arc<Shared>, label: &str, cmd: UiCmd) -> Result<UiReply, Stri
     })
 }
 
-/// The most an answer to the dock's shape waits for its region.
-const REGION_WAIT: Duration = Duration::from_millis(50);
+/// The most an answer to the dock's shape waits for its region: less than the page's 50 ms hold
+/// (dockNotch.ts's REGION_WAIT_MS), so the answer still comes before the page gives up on it.
+const REGION_WAIT: Duration = Duration::from_millis(40);
 
 /// Waits, at most `most`, for the main thread to run what was handed to it before now. It runs
 /// them in order, so a region an earlier nudge set (dockwin.rs) is in place once this returns.
