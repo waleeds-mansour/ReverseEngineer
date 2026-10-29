@@ -41,7 +41,8 @@ export interface Caller {
   /**
    * Set by the server's sign-in check, and only there, on the desktop app's call while its desk is
    * open: Windows Hello unlocked it in the last 8 hours, Windows hasn't locked since, and the call
-   * came straight from this PC (D84). Only the desk's actions read it; it vouches for nothing else.
+   * came straight from this PC (D84). Only the desk's actions read it, and chat.send, which lets the
+   * app at its desk write where it didn't start (D84, D86); it vouches for nothing else.
    */
   desk?: boolean;
   /**

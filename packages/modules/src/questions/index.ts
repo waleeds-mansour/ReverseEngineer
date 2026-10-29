@@ -195,6 +195,15 @@ export const questionsModule = defineModule({
           .max(3)
           .describe('Short answers the owner can pick, like "Friday" or "Skip it".'),
         why: z.string().trim().max(200).optional().describe("Why you ask, in one sentence."),
+        recommended: z
+          .number()
+          .int()
+          .min(0)
+          .max(2)
+          .optional()
+          .describe(
+            "The choice you'd pick, by its place in choices (from 0), only when one is clearly better; say why in why.",
+          ),
       }),
       risk: "internal",
       callers: ["agent"],
@@ -204,6 +213,13 @@ export const questionsModule = defineModule({
           throw new ActionError("invalid_input", "Only one of Pip's turns can ask the owner.");
         if (new Set(i.choices.map((c) => c.toLowerCase())).size !== i.choices.length)
           throw new ActionError("invalid_input", "Give choices that differ from each other.");
+        // A recommendation names one of these choices, or the Inbox would mark nothing (or the
+        // wrong thing) as Recommended.
+        if (i.recommended !== undefined && i.recommended >= i.choices.length)
+          throw new ActionError(
+            "invalid_input",
+            `Recommend one of your ${i.choices.length} choices by its place, from 0 to ${i.choices.length - 1}.`,
+          );
         // Questions are asked one at a time, so the limits below hold with two turns asking.
         await ctx.tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('hearth_questions'))`);
         const [asked] = await ctx.tx
@@ -233,6 +249,7 @@ export const questionsModule = defineModule({
           question: i.question,
           choices: i.choices,
           why: i.why || null,
+          recommended: i.recommended ?? null,
           origin,
           createdAt: ctx.now,
           expiresAt,

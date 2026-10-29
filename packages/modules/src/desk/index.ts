@@ -1,5 +1,5 @@
 // The desk (D84): the desktop app's inbox, answered from the keyboard. Approve or deny what Pip
-// asks, answer its questions, clear finished work.
+// asks, answer its questions, clear finished work, or send one of the replies Pip offers after it.
 //
 // These actions answer only the desktop app, and only while Windows Hello has its desk open. The
 // server's sign-in check, which alone knows the app's token, sets `desk` on the app's caller then
@@ -18,9 +18,12 @@ import {
 } from "@hearth/kernel";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import { live } from "../inbox/index.ts";
 import { answerQuestion } from "../questions/index.ts";
 import { id } from "../shared.ts";
 import { cardQuestion, deskCards, isDeskKind, MAX_CARDS, openQuestion } from "./cards.ts";
+import { deskConversation } from "./conversation.ts";
+import { cardReplies } from "./replies.ts";
 
 export const DESK_SERVICE = "desk";
 
@@ -41,6 +44,7 @@ export const deskDecisions = (kernel: Pick<Kernel, "decideApproval">): DeskDecis
 const CLOSED = "Open Nook's desk with Windows Hello first.";
 const NEEDS_DECISION = "This one needs a yes or a no first.";
 const NEEDS_ANSWER = "Pip is waiting for an answer to this one first.";
+const STALE = "Those replies aren't offered any more. Open it in Hearth to see where things are.";
 
 /** Refuses anyone but the desktop app with its desk open. */
 function atTheDesk(caller: Caller) {
@@ -172,6 +176,34 @@ export const deskModule = defineModule({
         return { answered: true };
       },
     }),
+    defineAction({
+      name: "desk.reply",
+      description:
+        "Send one of the ready replies a finished-work card offers (from 0) as your message in its conversation, and clear the card.",
+      input: z.strictObject({ id, choice: z.number().int().min(0).max(1) }),
+      risk: "internal",
+      callers: ["owner"],
+      async handler(i, ctx) {
+        atTheDesk(ctx.caller);
+        const [card] = await ctx.tx
+          .select({ dedupeKey: notification.dedupeKey })
+          .from(notification)
+          .where(and(eq(notification.id, i.id), eq(notification.kind, "finished"), live(ctx.now)));
+        if (!card) throw new ActionError("not_found", "That card isn't on the desk.");
+        // Only words Pip offered after the card's own turn, and only while they're fresh: once
+        // you've written there, or Pip has started again, they'd answer something else.
+        const ready = await cardReplies(ctx.tx, card.dedupeKey);
+        const text = ready?.replies[i.choice];
+        if (!ready || text === undefined) throw new ActionError("conflict", STALE);
+        // Through chat.send, with its rules: kept as the desktop's (heard), so Pip's turn after it
+        // runs as anything the desktop starts does (D42), and never in a Slack member's thread.
+        await ctx.call("chat.send", { conversationId: ready.conversationId, text });
+        await ctx.call("inbox.mark", { ids: [i.id], state: "done" });
+        return { sent: true };
+      },
+    }),
+    // Any of your conversations, read at the desk (D86): conversation.ts.
+    deskConversation(atTheDesk),
   ],
 });
 

@@ -2555,10 +2555,11 @@ signature opens a desk for the app's token.
   paired before the desk gets its scopes with the next deploy. Scopes taken off the list go too.
   Only API sessions are touched. With the database out of reach it tries again in the
   background, waiting longer each time, and the server starts meanwhile.
-- **The desk's actions:** `desk.list`, `desk.decide`, `desk.mark` and `desk.answer`. Each refuses
-  unless its caller is the desktop app with its desk open. The server's sign-in check, which alone
-  sees the token and the secret, sets `desk` on the app's caller then, and the kernel hands that
-  caller to each action. The actions are the owner's only, so Pip never has them as tools.
+- **The desk's actions:** `desk.list`, `desk.decide`, `desk.mark`, `desk.answer` and
+  `desk.reply`. Each refuses unless its caller is the desktop app with its desk open. The server's
+  sign-in check, which alone sees the token and the secret, sets `desk` on the app's caller then,
+  and the kernel hands that caller to each action. The actions are the owner's only, so Pip never
+  has them as tools.
 - **What the actions do:**
   - `desk.list` gives at most 30 cards, with counts. Approvals that wait for a yes or no come
     first, then Pip's open questions, then the rest, each newest first, so no pile of finished
@@ -2573,6 +2574,12 @@ signature opens a desk for the app's token.
     question's, is done only once it has its answer. Seen never reopens a card that's done. It
     reaches only the desk's own cards.
   - `desk.answer` answers through the questions' own `answerQuestion` (D85).
+  - A finished card in `desk.list` carries `replies`: the ready replies (D85) its own turn offered,
+    while they're fresh; none from a later turn in the same conversation, whose words the card
+    doesn't show. `desk.reply` sends one by its place through `chat.send`, so it's kept as the
+    desktop's words (heard) and Pip's turn after it runs as anything the desktop starts does, then
+    clears the card; stale replies are refused as a conflict. With the desk open, `chat.send` lets
+    the app write in a conversation it didn't start, for this; reading there stays refused (D42).
 - **The notification feed:** each notification now says its card's `kind`, so the overlay knows
   which card arrived and which sound to play, and its `tag` is the card's id. Pip's questions and
   finished work reach the feed as a heading only ("Pip asks you something", "Pip finished
@@ -2649,3 +2656,58 @@ answer, and change the prompt every turn caches).
 **Why:** The desktop's inbox (lane O5a, D84) answers cards from the keyboard: 1, 2 or 3 picks a
 choice and finished work can be cleared, and after Pip answers it offers ready replies. Pip could
 only ask through an approval or in its reply text, and nothing said when its own work was done.
+
+## D86. At the desk, the desktop's notch may read any of your conversations with Pip (2026-10-29)
+
+*This amends D42 for the desk (D84). The token on its own still reads only the conversations the
+desktop app started, through `conversation.get`; with Windows Hello's desk open, the app may read
+the rest through one desk action. It never reads a Slack member's conversation.*
+
+**Decision:** The desktop's dock is becoming the notch: one black shape on the screen's edge that
+grows to hold panels. Clicking Pip's mark opens a chat with Pip there instead of Hearth's window.
+While the desk is open, that chat may show, and continue, any of the owner's conversations, as
+Nook's window does.
+- **The action:** `desk.conversation`, the desk's sixth action, with the same gate as the others:
+  it refuses unless its caller is the desktop app with its desk open (`ctx.caller.desk`, set only
+  by the server's sign-in check). It's the owner's only, so Pip never has it as a tool, and it's
+  added to `DEVICE_SCOPES`, so a PC paired before it gets it with the next deploy.
+- **The recent ones:** without an `id`, it lists the 20 most recently active conversations: each
+  one's title, when it last moved (its log's last line, or when it was made or renamed), whether
+  Pip has a turn there that hasn't ended (queued or running), and whether the app started it.
+  Pip's own routine runs are left out, as `conversation.list` leaves them out, and so are Slack
+  members' conversations.
+- **One conversation:** with an `id`, it gives the conversation's title, how it started and its
+  outside-content mark (`taintedAt`, `taintSource`, which the notch shows as Nook does), and its
+  lines, oldest first: your words, Pip's, and its notices and errors. Tool calls, approvals asked
+  and turn marks stay in Nook. A page is the newest 50 lines; `before` gives the 50 before a
+  line, and `after` the lines after one, oldest first, which the notch asks for each second while
+  Pip works. `more` says whether more lie past the page in that direction. It also says what Pip
+  is doing there, as the dock says it (`thinking` about what you asked, or `working` on something
+  else, with a few words of label, never a prompt), and the ready replies to offer (D85), from the
+  entries that decide them.
+- **A member's conversation** (D62) is refused with the same not-found that `conversation.get`
+  gives the app for a conversation it didn't start: its words are a Slack member's, and the owner
+  reads it in Nook.
+- **No audit row** for a look that went through, as `desk.list` leaves none (D56): the notch looks
+  every second while Pip works. A refused look still leaves one.
+- **Writing** stays `chat.send`'s, which already lets the app at its desk write where it didn't
+  start (D84), and never in a member's conversation. What the app sends is kept as the desktop's
+  words, so Pip's turn after it runs as anything the desktop starts does (D42).
+- **Pip's reply as it comes:** the only live route, `GET /api/events`, is the whole event feed and
+  stays closed to the token. The notch asks for what came after its last line each second while
+  the panel is open and Pip works, and stops once Pip's turn has ended, after 5 failed looks in a
+  row, or after 5 minutes with no new line, since every look counts as use of the desk and would
+  otherwise keep it from its 2-hour idle close. With the desk shut it does the same through
+  `conversation.get`'s `afterIdx`, for the app's own conversations.
+
+**Alternatives:** Letting `conversation.get` read everything when the desk is open: one action
+would then answer two ways, and `chat/` would carry the desk's rule. Opening `/api/events` to the
+token for the streaming words: it carries every event in Hearth, to a token D42 keeps to a few
+actions. A conversation-only stream route: more server to hold open for a panel that is open for
+minutes; a page of new lines each second while Pip works costs one indexed read. Returning Nook's
+folded items (`foldConversation`): the fold needs the whole log, and the notch pages it.
+
+**Why:** The owner wants to talk to Pip without opening Hearth's window ("I don't want native
+windows stuff or opening the window if I don't need to"). The coordinator decided the reach on
+2026-10-29 (L2-24 on the Decision Tree): the desk, already opened with Windows Hello for a sitting
+of at most 8 hours, also opens the owner's conversations to the notch; the token alone doesn't.

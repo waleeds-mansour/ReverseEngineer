@@ -38,6 +38,9 @@ export const DEVICE_SCOPES: Record<string, string[]> = {
     "desk.decide",
     "desk.mark",
     "desk.answer",
+    "desk.reply",
+    // The notch's chat with Pip reads any of your conversations at the desk (D86).
+    "desk.conversation",
   ],
 };
 
