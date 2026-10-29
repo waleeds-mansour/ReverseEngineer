@@ -17,6 +17,8 @@ export type PanelKind = "inbox" | "notice" | "chat" | "menu";
 export interface PanelSize {
   wide: number;
   tall: number;
+  /** The black round it on every side, PANEL_PAD unless it says: a notice keeps less. */
+  pad?: number;
 }
 
 /** The biggest panel the notch holds, so the dock's window is made once, at that size. */

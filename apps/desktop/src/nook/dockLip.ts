@@ -55,7 +55,7 @@ export function boxFor(
   if (size) {
     const w = Math.min(PANEL_MAX.wide, size.wide);
     const h = Math.min(PANEL_MAX.tall, size.tall, panelRoom(high));
-    return { kind: "panel", at: panelBox(col, w, h, high) };
+    return { kind: "panel", at: panelBox(col, w, h, high, size.pad) };
   }
   if (!open || !hovered) return null;
   const i = c.agents.findIndex((a) => a.id === hovered);

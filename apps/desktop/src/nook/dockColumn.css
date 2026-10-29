@@ -71,13 +71,14 @@
   border-radius: 0 var(--r, 0) var(--r, 0) 0;
 }
 
-/* A panel's content: PANEL.pad in from the box's top and from the column, as wide as it asks and
-   no taller than the box holds (dockPanels.ts's max-height). Its root shrinks to fit, and scrolls
-   its own middle while its header and its field stay in view. */
+/* A panel's content: its pad (dockPanels.ts's --pad, PANEL.pad unless it says) in from the box's
+   top and from the column, as wide as it asks and no taller than the box holds (dockPanels.ts's
+   max-height). Its root shrinks to fit, and scrolls its own middle while its header and its field
+   stay in view. */
 .nd-content {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  top: var(--pad, 16px);
+  right: var(--pad, 16px);
   display: flex;
   flex-direction: column;
 }
@@ -89,7 +90,7 @@
 
 :root[data-edge="left"] .nd-content {
   right: auto;
-  left: 16px;
+  left: var(--pad, 16px);
 }
 
 /* A dot's label, against the column, as wide as its words: dockLayout.ts's lip is this wide. */

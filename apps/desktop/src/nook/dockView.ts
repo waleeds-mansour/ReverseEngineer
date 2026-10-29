@@ -87,7 +87,7 @@ export function startDock({ link, ticker }: { link: Link; ticker?: Ticker }) {
     ticker,
     region: (o) => {
       outlines = o;
-      tell();
+      return tell();
     },
   });
 

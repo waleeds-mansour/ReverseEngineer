@@ -1,18 +1,20 @@
 // The panel open in the agent dock's notch (notchPanel.ts), as dockView.ts hosts it: one at a time,
-// its content placed in the box beside the column, PANEL.pad px in from the box's sides, against
-// the column and the box's top, as wide as the panel asks and never taller than the box can hold in
-// the window (dockLayout.ts's panelRoom): its element is kept to that, and the panel's root shrinks
-// to fit it, its middle scrolling while its header and its field stay (dockColumn.css). The keys it
-// asks for go one ask at a time, in order (dockAsk.ts). A panel opened in place of another keeps
-// the frame, which morphs to the new size (dockNotch.ts), while the old content leaves over 160 ms
-// (120 with less motion). A panel that wants the keyboard asks Nook for it as it opens and lets it
-// go as it closes, so Nook hands the foreground back to the app you were in; one that loses it to a
-// click elsewhere closes without handing anything back. Esc closes a panel unless its key() used it.
+// its content placed in the box beside the column, its pad (PANEL.pad unless it says) in from the
+// box's sides, against the column and the box's top, as wide as the panel asks and never taller
+// than the box can hold in the window (dockLayout.ts's panelRoom): its element is kept to that, and
+// the panel's root shrinks to fit it, its middle scrolling while its header and its field stay
+// (dockColumn.css). The keys it asks for go one ask at a time, in order (dockAsk.ts). A panel
+// opened in place of another keeps the frame, which morphs to the new size (dockNotch.ts), while
+// the old content leaves over 160 ms (120 with less motion). A panel that wants the keyboard asks
+// Nook for it as it opens and lets it go as it closes, so Nook hands the foreground back to the app
+// you were in; one that loses it to a click elsewhere closes without handing anything back. Esc
+// closes a panel unless its key() used it.
 
 import { el } from "./dockParts";
 import {
   type NotchPanel,
   PANEL_MAX,
+  PANEL_PAD,
   type PanelKind,
   panelMaker,
   setCurrentPanel,
@@ -52,10 +54,11 @@ export function panelHost({
 
   const wide = (p: NotchPanel) =>
     Math.min(PANEL_MAX.wide, Math.max(0, p.size().wide));
-  /** Its element as wide as it asks, and no taller than the box holds. */
+  /** Its element as wide as it asks, no taller than the box holds, and as far in as its pad. */
   const fit = (p: NotchPanel, e: HTMLElement) => {
     e.style.width = `${wide(p)}px`;
     e.style.maxHeight = `${room()}px`;
+    e.style.setProperty("--pad", `${p.size().pad ?? PANEL_PAD}px`);
   };
 
   /** The open panel's content leaves, and is unmounted once it has. */
@@ -96,6 +99,8 @@ export function panelHost({
     const mine: Open = { kind, panel, el: e };
     open = mine;
     panel.mount(e);
+    // A panel as wide as its words knows how wide only once they are in.
+    fit(panel, e);
     panel.onResize(() => {
       if (open !== mine) return;
       fit(panel, e);
