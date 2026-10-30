@@ -14,7 +14,8 @@ use super::host::{self, Shared};
 use super::view::{NookState, UiCmd, UiReply, STATE_EVENT};
 use super::wm::Cmd;
 use super::{barwin, dockact, dockkeys, dockwin, look, observe, settings};
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, Url, WebviewUrl, WebviewWindowBuilder};
 
 pub const PANEL: &str = "nook_panel";
@@ -261,6 +262,9 @@ fn handle(shared: &Arc<Shared>, label: &str, cmd: UiCmd) -> Result<UiReply, Stri
             outlines,
         } => {
             dockwin::shape(shared, open, hold, outlines);
+            // Answered once the region is set, so a notch that grows from rest draws no frame the
+            // region cuts off: the page holds the morph until then (dockNotch.ts).
+            caught_up(&shared.app, REGION_WAIT);
             None
         }
         UiCmd::DockKeys { take } => {
@@ -312,6 +316,24 @@ fn handle(shared: &Arc<Shared>, label: &str, cmd: UiCmd) -> Result<UiReply, Stri
         chrome: look::fresh(shared),
         inbox: None,
     })
+}
+
+/// The most an answer to the dock's shape waits for its region: less than the page's 50 ms hold
+/// (dockNotch.ts's REGION_WAIT_MS), so the answer still comes before the page gives up on it.
+const REGION_WAIT: Duration = Duration::from_millis(40);
+
+/// Waits, at most `most`, for the main thread to run what was handed to it before now. It runs
+/// them in order, so a region an earlier nudge set (dockwin.rs) is in place once this returns.
+fn caught_up(app: &AppHandle, most: Duration) {
+    let (done, ran) = mpsc::channel();
+    if app
+        .run_on_main_thread(move || {
+            let _ = done.send(());
+        })
+        .is_ok()
+    {
+        let _ = ran.recv_timeout(most);
+    }
 }
 
 /// A command that writes a file, asked of nook-wm without holding the observer's lock.

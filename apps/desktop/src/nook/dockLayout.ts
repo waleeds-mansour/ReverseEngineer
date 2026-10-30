@@ -116,18 +116,20 @@ const straight = (c: Notch) => ({
 });
 
 /**
- * A panel's frame beside `col` (the column it will sit by): `wide` by `tall` of content and
- * PANEL.pad round it, top-aligned with the column's straight part and moved up only as far as it
- * takes to stay NOTCH.room px inside the work area, flares and all.
+ * A panel's frame beside `col` (the column it will sit by): `wide` by `tall` of content and `pad`
+ * round it, top-aligned with the column's straight part and moved up only as far as it takes to
+ * stay NOTCH.room px inside the work area, flares and all. A frame too short for PANEL.r's
+ * corners is a capsule.
  */
 export function panelBox(
   col: Notch,
   wide: number,
   tall: number,
   high: number,
+  pad: number = PANEL.pad,
 ): NotchBox {
-  const w = wide + 2 * PANEL.pad;
-  const h = tall + 2 * PANEL.pad;
+  const w = wide + 2 * pad;
+  const h = tall + 2 * pad;
   const edge = col.flare + PANEL.fillet + NOTCH.room;
   const most = high - edge;
   let top = straight(col).top + PANEL.fillet;
@@ -136,7 +138,7 @@ export function panelBox(
     wide: w,
     top,
     bottom: Math.min(top + h, Math.max(top, most)),
-    r: PANEL.r,
+    r: Math.min(PANEL.r, h / 2),
     fillet: PANEL.fillet,
   };
 }

@@ -1,19 +1,20 @@
-// The agent dock's notch on screen (dockView.ts says where it should be): one black SVG path,
-// drawn again every frame from numbers on springs, never two shapes crossfading. How open it is
-// (dockLayout.ts's p) opens on 380/32 and closes on 420/18, which swings the tab a little back
-// into the edge before it settles; the box beside the column, for a panel or a dot's label, grows
-// out of the column's top from nothing (a notice drops out of the tab this way, the column growing
-// with it), morphs from one size to the next with its frame kept, and folds back into the column
-// on 420/34, which never swings it out again. A label follows the dot under the pointer on 420/34.
-// The dots and the count badge move with the shape, from the tab into the column; the column's
-// buttons fade in as it opens, and a panel's content comes in from 14 px toward the edge on 380/32
-// (it leaves over 160 ms in dockPanels.ts). With less motion asked for, the shape is where it goes
-// at once and what comes in fades in over 120 ms. Nothing moves while the page is hidden: it is put
-// where it goes.
+// The agent dock's notch on screen (dockView.ts says where it should be): one black SVG path, drawn
+// again every frame from numbers on springs, never two shapes crossfading. How open it is
+// (dockLayout.ts's p) opens on 380/32 and closes on 420/18, which swings the tab a little back into
+// the edge before it settles, never more than SWING_PX device px whatever the size; the box beside
+// the column, for a panel or a dot's label, grows out of the column's top from nothing (a notice
+// drops out of the tab this way, the column growing with it), morphs from one size to the next with
+// its frame kept, and folds back into the column on 420/34, which never swings it out again. A
+// label follows the dot under the pointer on 420/34. The dots and the count badge move with the
+// shape, from the tab into the column; the column's buttons fade in as it opens, and a panel's
+// content comes in from 14 px toward the edge on 380/32 (it leaves over 160 ms in dockPanels.ts).
+// With less motion asked for, the shape is where it goes at once and what comes in fades in over
+// 120 ms. Nothing moves while the page is hidden: it is put where it goes.
 //
 // The window's region follows (dockclip.rs): as a morph starts, two boxes around all it may cover
 // until it settles (dockOutline.ts's envelope), and once it has, the outline itself, or nothing at
-// rest, where Nook's own piece for the tab does.
+// rest, where Nook's own piece for the tab does. A morph from rest that grows starts once Nook
+// has set the region round it, so none of its frames is cut off.
 
 import type { DockParts } from "./dockParts";
 import {
@@ -33,8 +34,8 @@ import {
   region,
 } from "./dockOutline";
 import { animator, Spring, type Ticker, type Tuning } from "./dockMotion";
-import { LIP, NOTCH } from "./dockShape";
-import { SPRINGS } from "./dockSpring";
+import { LIP, NOTCH, TAB } from "./dockShape";
+import { SPRINGS, swingAtMost } from "./dockSpring";
 
 /** Where the notch should be. */
 export interface Aim {
@@ -54,6 +55,14 @@ export type Outline = [number, number][];
 
 const FADE_S = 0.12;
 const ENTER_X = 14;
+/** The most a morph from rest waits for its region (ui.rs's REGION_WAIT). */
+const REGION_WAIT_MS = 50;
+/** Closing, the tab swings past its rest into the edge by at most this many device px, as it does
+ * at 125 %: at 150 % and up its spring is damped more instead of swinging further. */
+const SWING_PX = 7.5;
+/** The tab's depth from open to closed, in CSS px: what its swing is a part of. */
+const TAB_SWING = NOTCH.deep - TAB.deep;
+const dpr = () => window.devicePixelRatio || 1;
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
 export function startNotch(
@@ -64,8 +73,9 @@ export function startNotch(
     ticker,
   }: {
     reduced: () => boolean;
-    /** What the window's region takes in for the page's part, CSS px on the window. */
-    region: (outlines: Outline[]) => void;
+    /** What the window's region takes in for the page's part, CSS px on the window: settles once
+     * Nook has set it, or null when nothing new was sent. */
+    region: (outlines: Outline[]) => Promise<void> | null;
     ticker?: Ticker;
   },
 ) {
@@ -103,11 +113,11 @@ export function startNotch(
     box: b,
   });
 
-  const send = (outlines: Outline[]) => {
+  const send = (outlines: Outline[]): Promise<void> | null => {
     const key = JSON.stringify(outlines);
-    if (key === sent) return;
+    if (key === sent) return null;
     sent = key;
-    onRegion(outlines);
+    return onRegion(outlines);
   };
 
   /** Puts `e`'s middle at (d, y): in from the edge, down the window. */
@@ -170,9 +180,9 @@ export function startNotch(
     else send([region(notchAt(a, p.value, b), frameOf(a))]);
   }
 
-  function covering() {
+  function covering(): Promise<void> | null {
     const a = aim;
-    if (!a) return;
+    if (!a) return null;
     const span = (s: Spring) => s.reach(near(s));
     const shapes = morphShapes(
       a.dots,
@@ -187,7 +197,7 @@ export function startNotch(
         fillet: box.fillet.target,
       },
     );
-    send(envelope(shapes, frameOf(a)));
+    return send(envelope(shapes, frameOf(a)));
   }
 
   let fadeLeft = 0;
@@ -206,6 +216,35 @@ export function startNotch(
     return !still || fadeLeft > 0;
   }, ticker);
 
+  /** The latest hold's number while a morph waits for its region, else 0. */
+  let holding = 0;
+  let holds = 0;
+  const go = () => {
+    if (!holding) run.kick();
+  };
+  /** A morph from rest that grows waits for Nook to set the region round it, at most
+   * REGION_WAIT_MS: its first frames would otherwise be cut to the old region, a hiccup that grew
+   * with the dock's size. */
+  function hold(set: Promise<void>) {
+    const mine = ++holds;
+    holding = mine;
+    const release = () => {
+      if (holding !== mine) return;
+      holding = 0;
+      run.kick();
+    };
+    void set.then(release, release);
+    setTimeout(release, REGION_WAIT_MS);
+  }
+
+  /** Whether a spring is sent past where it is, outward: the column opening, or the box wider,
+   * higher or lower. */
+  const grows = () =>
+    p.target > p.value + 1e-3 ||
+    box.wide.target > box.wide.value + 0.5 ||
+    box.top.target < box.top.value - 0.5 ||
+    box.bottom.target > box.bottom.value + 0.5;
+
   /** Puts every spring where it goes, at once. */
   function jump() {
     for (const s of all) s.snap();
@@ -215,7 +254,10 @@ export function startNotch(
     settle();
   }
 
-  const tune = (open: boolean): Tuning => (open ? SPRINGS.panel : SPRINGS.tab);
+  const tune = (open: boolean): Tuning =>
+    open
+      ? SPRINGS.panel
+      : swingAtMost(SPRINGS.tab, SWING_PX / TAB_SWING / dpr());
   /** How tall a box is as it comes out of the column or goes back in: the column's straight part
    * beside it, but never less than a label. */
   const stub = (a: Aim, b: NotchBox) => {
@@ -261,6 +303,8 @@ export function startNotch(
           box.bottom.to(at.top + stub(a, at), SPRINGS.general);
         }
       }
+      // Only what grows past where it is waits for its region: folding or shrinking never does.
+      const growing = grows() || (!!was && a.dots > was.dots);
       if (!was || document.visibilityState !== "visible") {
         jump();
         return;
@@ -272,8 +316,9 @@ export function startNotch(
         }
         for (const s of all) s.snap();
       }
-      covering();
-      run.kick();
+      const set = covering();
+      if (set && growing && !run.running()) hold(set);
+      else go();
     },
     /** A panel's content just came into the box: it comes in from toward the edge. */
     entering(e: HTMLElement | null) {
@@ -287,16 +332,19 @@ export function startNotch(
         enter.to(1, SPRINGS.panel);
       }
       draw();
-      run.kick();
+      // The aim that follows may hold the frames for its region; with none, they start here.
+      queueMicrotask(go);
     },
     /** The page was hidden: it is put where it goes. */
     jump,
     /** Whether the column is out, or on its way out. */
     opened: () => p.target === 1,
     /** Whether anything still moves: the dots may be sliding under a pointer that stays put. */
-    moving: () => run.running(),
+    moving: () => run.running() || holding !== 0,
     /** Draws it again where it is, after the dots changed. */
     redraw: () => {
+      // A held morph draws once its region is set.
+      if (holding) return;
       draw();
       if (!run.running()) settle();
     },

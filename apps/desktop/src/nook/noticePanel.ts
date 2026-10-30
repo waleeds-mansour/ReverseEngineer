@@ -1,9 +1,9 @@
-// A notice of something new, as a panel in the agent dock's notch (notchPanel.ts): one compact
-// card for a card that just came to the desk, in place of a Windows notification while the dock
-// shows (src-tauri's hearth/notify.rs decides, and sends "nook://dock-notice" to the dock's window
-// with the card's id, kind and the feed's heading). It says that heading ("Pip asks you
-// something"), as Hearth's feed never carries a question's words, and under it what the card says
-// only when the Inbox's own view has the card, with the desk open.
+// A notice of something new, as a panel in the agent dock's notch (notchPanel.ts): a small pill out
+// of the tab, as wide as its words, for a card that just came to the desk, in place of a Windows
+// notification while the dock shows (src-tauri's hearth/notify.rs decides, and sends
+// "nook://dock-notice" to the dock's window with the card's id, kind and the feed's heading). It
+// says that heading ("Pip asks you something"), as Hearth's feed never carries a question's words,
+// and under it what the card says only when the Inbox's own view has the card, with the desk open.
 //
 // It plays the dock's tone for its kind (dockSound.ts), closes itself after six seconds unless
 // the pointer rests on it, and a click opens the Inbox at its card. It never takes the keyboard,
@@ -32,8 +32,11 @@ export const NOTICE_EVENT = "nook://dock-notice";
 export const NOTICE_MS = 6000;
 /** The least it stays once the pointer has left it. */
 const AFTER_HOVER_MS = 1500;
-/** The panel's width, in CSS px at 1x. */
-export const NOTICE_WIDE = 320;
+/** The widest a notice gets, in CSS px at 1x (notice.css's max-width): it is as wide as its
+ * words. */
+export const NOTICE_MOST = 260;
+/** The black round a notice, less than a panel's, so it reads as a small pill out of the tab. */
+export const NOTICE_PAD = 10;
 const CHEVRON = "M6 3.5L10.5 8 6 12.5";
 
 /** What notify.rs sends: the card's id, its kind and the feed's heading. */
@@ -92,8 +95,11 @@ export function noticePanel(
   top.append(head, when);
   const line = el("span", "nn-line");
   const said = lineOf(card);
-  line.append(document.createTextNode(said));
-  // Words someone else wrote (an email's, a page's) are marked as theirs, never as Pip's.
+  const saidText = el("span", "nn-said");
+  saidText.textContent = said;
+  line.append(saidText);
+  // Words someone else wrote (an email's, a page's) are marked as theirs, never as Pip's: the tag
+  // keeps its room on the one line, and the words are cut short instead.
   if (card?.outside) {
     const outside = el("span", "ni-outside");
     outside.textContent = "from outside";
@@ -110,12 +116,18 @@ export function noticePanel(
   let timer: ReturnType<typeof setTimeout> | undefined;
   let left = NOTICE_MS;
   let armedAt: number | null = null;
+  let wide = 0;
   let tall = 0;
-  const ro = new ResizeObserver(() => {
+  /** Takes its size as drawn; true when it changed. */
+  const measure = () => {
+    const w = Math.ceil(root.offsetWidth);
     const h = Math.ceil(root.offsetHeight);
-    if (h === tall) return;
-    tall = h;
-    resized();
+    if (w === wide && h === tall) return false;
+    [wide, tall] = [w, h];
+    return true;
+  };
+  const ro = new ResizeObserver(() => {
+    if (measure()) resized();
   });
 
   /** The clock runs while the pointer is off the notice, and holds while it rests there. */
@@ -137,10 +149,14 @@ export function noticePanel(
   return {
     kind: "notice",
     wantsKeys: false,
-    size: () => ({ wide: NOTICE_WIDE, tall: tall || 40 }),
+    size: () => ({
+      wide: wide || NOTICE_MOST,
+      tall: tall || 18,
+      pad: NOTICE_PAD,
+    }),
     mount(host) {
       host.append(root);
-      tall = Math.ceil(root.offsetHeight);
+      measure();
       ro.observe(root);
       if (!root.matches(":hover")) arm();
       if (!played.has(n.id)) {

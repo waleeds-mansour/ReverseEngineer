@@ -7,6 +7,8 @@
 // (420/18, about 21 % past its mark before it settles), and the status label following the dot
 // under the pointer (420/34).
 
+import type { Tuning } from "./dockMotion";
+
 /** Where a spring from 0 to 1 is after `t` seconds. */
 export function springAt(
   stiffness: number,
@@ -59,6 +61,24 @@ export function springCss(
     easing: `linear(${points.join(", ")})`,
     ms: Math.round(seconds * 1000),
   };
+}
+
+/** How far past its mark a spring swings, as a part of the way it goes. */
+export function overshoot([k, c]: Tuning): number {
+  const zeta = c / (2 * Math.sqrt(k));
+  return zeta >= 1
+    ? 0
+    : Math.exp((-zeta * Math.PI) / Math.sqrt(1 - zeta * zeta));
+}
+
+/** The spring, damped more if it would swing past its mark by more than `most` of the way. */
+export function swingAtMost(tuning: Tuning, most: number): Tuning {
+  const [k] = tuning;
+  if (overshoot(tuning) <= most) return tuning;
+  if (most <= 0) return [k, 2 * Math.sqrt(k)];
+  const l = Math.log(most);
+  const zeta = -l / Math.sqrt(Math.PI * Math.PI + l * l);
+  return [k, 2 * zeta * Math.sqrt(k)];
 }
 
 /** The dock's springs: stiffness and damping, by the name dock.css knows them by. */

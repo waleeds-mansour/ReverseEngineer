@@ -1,7 +1,14 @@
 // The agent dock's springs (dockSpring.ts): how far each swings past its mark and how they read as
 // CSS. Run: bun src/nook/dockSpring.test.ts
 import assert from "node:assert/strict";
-import { SPRINGS, settleTime, springAt, springCss } from "./dockSpring";
+import {
+  SPRINGS,
+  overshoot,
+  settleTime,
+  springAt,
+  springCss,
+  swingAtMost,
+} from "./dockSpring";
 
 /** The furthest a spring gets, sampled every millisecond until it settles. */
 const peak = (k: number, c: number) => {
@@ -38,3 +45,18 @@ assert.equal(css.easing.split(",").length, 49);
 assert.ok(css.ms > 400 && css.ms < 800, `the tab's spring runs ${css.ms} ms`);
 
 console.log("dockSpring: all assertions passed");
+
+// overshoot() says what the sampled peak shows.
+assert.ok(Math.abs(1 + overshoot(SPRINGS.tab) - tab) < 0.005);
+assert.equal(overshoot([400, 40]), 0);
+// Kept to a swing it already keeps, a spring is as it was; kept to less, it is damped to swing
+// just that far; kept to none, it is critically damped.
+assert.deepEqual(swingAtMost(SPRINGS.tab, 0.3), SPRINGS.tab);
+const held = swingAtMost(SPRINGS.tab, 0.15);
+assert.equal(held[0], SPRINGS.tab[0]);
+assert.ok(held[1] > SPRINGS.tab[1]);
+assert.ok(
+  Math.abs(peak(...held) - 1.15) < 0.005,
+  `held peaks at ${peak(...held)}`,
+);
+assert.equal(overshoot(swingAtMost(SPRINGS.tab, 0)), 0);
